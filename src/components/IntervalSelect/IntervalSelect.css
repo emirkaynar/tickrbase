@@ -1,0 +1,70 @@
+/* interval selector (Ark UI Select) */
+.sc-interval-root {
+    position: relative;
+}
+
+.sc-interval-trigger {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    font-family: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition:
+        background 0.1s,
+        color 0.1s;
+}
+
+.sc-interval-trigger:hover,
+.sc-interval-trigger[data-state="open"] {
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+}
+
+.sc-interval-content {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    padding: 4px;
+    min-width: 70px;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    outline: none;
+}
+
+.sc-interval-content[data-state="closed"] {
+    display: none;
+}
+
+.sc-interval-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    outline: none;
+}
+
+.sc-interval-item[data-highlighted] {
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+}
+
+.sc-interval-item[data-state="checked"] {
+    color: var(--color-text);
+}
+
+.sc-interval-indicator {
+    font-size: 10px;
+    color: var(--color-bull);
+}

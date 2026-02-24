@@ -1,0 +1,24 @@
+:root {
+    /* layout */
+    --topbar-height: 24px;
+
+    /* backgrounds */
+    --color-bg: hsl(0, 0%, 0%);
+    --color-bg-elevated: hsl(0, 0%, 4%);
+    --color-bg-surface: hsl(0, 0%, 12%);
+
+    /* borders */
+    --color-border: hsl(0, 0%, 14%);
+
+    /* text */
+    --color-text: #ccc;
+    --color-text-muted: #888;
+    --color-text-subtle: #666;
+
+    /* status */
+    --color-error: #c44;
+
+    /* candles */
+    --color-bull: #26a69a;
+    --color-bear: #ef5350;
+}
