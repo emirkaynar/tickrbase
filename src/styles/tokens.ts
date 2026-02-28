@@ -11,6 +11,7 @@ export const colors = {
     textMuted: "#888",
     textSubtle: "#666",
     error: "#c44",
+    warning: "#f9a825",
     bull: "#26a69a",
     bear: "#ef5350",
 } as const;

@@ -1,4 +1,3 @@
-import { db } from "../db";
 import type { Bar, Interval } from "./types";
 import { INTERVAL_CONFIG } from "./types";
 
@@ -7,14 +6,13 @@ export function cacheKey(symbol: string, interval: Interval): string {
     return `${symbol}|${interval}`;
 }
 
+const memoryCache = new Map<string, { bars: Bar[]; fetchedAt: number }>();
+
 export async function readCache(
     symbol: string,
     interval: Interval,
 ): Promise<{ bars: Bar[]; fetchedAt: number } | undefined> {
-    const record = await db.ohlc.get(cacheKey(symbol, interval));
-    return record
-        ? { bars: record.bars, fetchedAt: record.fetchedAt }
-        : undefined;
+    return memoryCache.get(cacheKey(symbol, interval));
 }
 
 export async function writeCache(
@@ -22,8 +20,7 @@ export async function writeCache(
     interval: Interval,
     bars: Bar[],
 ): Promise<void> {
-    await db.ohlc.put({
-        id: cacheKey(symbol, interval),
+    memoryCache.set(cacheKey(symbol, interval), {
         bars,
         fetchedAt: Date.now(),
     });

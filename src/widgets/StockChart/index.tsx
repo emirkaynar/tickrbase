@@ -5,15 +5,18 @@ import type {
     IChartApi,
     ISeriesApi,
     UTCTimestamp,
+    Time,
 } from "lightweight-charts";
 import { db } from "../../db";
-import { queryOhlc } from "../../data/query";
 import type { Bar, Interval } from "../../data/types";
-import { INTERVALS, INTERVAL_CONFIG } from "../../data/types";
+import { INTERVALS } from "../../data/types";
 import { colors } from "../../styles/tokens";
 import { SymbolSelect } from "../../components/SymbolSelect/SymbolSelect";
 import { IntervalSelect } from "../../components/IntervalSelect/IntervalSelect";
 import { useSymbols } from "../../data/symbols";
+
+import { updateWatchlist } from "../../data/watchlist";
+import { API_BASE } from "../../data/api";
 import "./StockChart.css";
 
 // Tracks which widget IDs have ever successfully rendered data.
@@ -41,11 +44,14 @@ export function StockChart({ id }: Props) {
     const _prev = lastState.get(id);
     const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
     const [errorMsg, setErrorMsg] = useState("");
+    const [warning, setWarning] = useState("");
     const [symbol, setSymbol] = useState(_prev?.symbol ?? "ASELS.IS");
     const [interval, selectInterval] = useState<Interval>(
         _prev?.interval ?? "1d",
     );
     const [stateReady, setStateReady] = useState(false);
+    const lastBarTimeRef = useRef<number | null>(null);
+    const chartStateRef = useRef<{ from: Time; to: Time } | null>(null);
 
     // Restore persisted symbol+interval from DB on mount
     useEffect(() => {
@@ -65,6 +71,25 @@ export function StockChart({ id }: Props) {
         if (!stateReady) return;
         db.widgetState.put({ id, symbol, interval });
     }, [id, symbol, interval, stateReady]);
+
+    // Load persisted chart state on mount
+    useEffect(() => {
+        db.chartState
+            .get(id)
+            .then((saved) => {
+                if (saved?.timeScale) {
+                    chartStateRef.current = saved.timeScale;
+                }
+            })
+            .catch(() => {});
+    }, [id]);
+
+    useEffect(() => {
+        if (!stateReady) return;
+        updateWatchlist([{ ticker: symbol, interval }]).catch(() => {
+            // ignore watchlist sync failures
+        });
+    }, [symbol, interval, stateReady]);
 
     // Create chart once on mount
     useEffect(() => {
@@ -200,9 +225,19 @@ export function StockChart({ id }: Props) {
         if (!series || !stateReady) return;
 
         let isCancelled = false;
-        const cancelled = () => isCancelled;
-        // Only show loading overlay on true first-ever load
-        if (!everLoaded.has(id)) setStatus("loading");
+
+        // Determine poll interval: 1 minute for intraday, 5 minutes for daily+
+        const getPollInterval = (): number => {
+            if (["1m", "5m", "15m"].includes(interval)) return 60000; // 1 minute
+            return 300000; // 5 minutes
+        };
+
+        // Helper to get period for backend call
+        const getPeriod = (): string => {
+            if (interval === "1d") return "1y";
+            if (interval === "1wk") return "5y";
+            return "5d";
+        };
 
         function applyBars(bars: Bar[], fit = false) {
             if (isCancelled) return;
@@ -212,51 +247,143 @@ export function StockChart({ id }: Props) {
                 timeVisible: !["1d", "1wk", "1mo"].includes(interval),
                 secondsVisible: false,
             });
-            if (fit) chartRef.current?.timeScale().fitContent();
+            if (fit) {
+                chartRef.current?.timeScale().fitContent();
+            } else if (chartStateRef.current) {
+                // Restore saved zoom/pan state
+                chartRef.current
+                    ?.timeScale()
+                    .setVisibleRange(chartStateRef.current);
+            }
             lastState.set(id, { bars, interval, symbol });
             everLoaded.add(id);
             setStatus("ok");
         }
 
+        function appendBars(newBars: Bar[]) {
+            if (isCancelled || !newBars.length) return;
+            // Update the last bar in the chart (in case it was incomplete)
+            const lastBar = newBars[newBars.length - 1];
+            series!.update(lastBar as CandlestickData<UTCTimestamp>);
+        }
+
+        async function saveChartState() {
+            if (chartRef.current) {
+                try {
+                    const range = chartRef.current
+                        .timeScale()
+                        .getVisibleRange();
+                    chartStateRef.current = range || null;
+                    await db.chartState.put({
+                        widget_id: id,
+                        timeScale: range || null,
+                    });
+                } catch (err) {
+                    // Ignore save errors
+                }
+            }
+        }
+
         async function initialLoad() {
             try {
-                const bars = await queryOhlc(
-                    symbol,
-                    interval,
-                    (fresh) => applyBars(fresh, false),
-                    cancelled,
+                if (!everLoaded.has(id)) setStatus("loading");
+                const period = getPeriod();
+                const params = new URLSearchParams({ period, interval });
+                const res = await fetch(
+                    `${API_BASE}/history/${encodeURIComponent(symbol)}?${params}`,
                 );
+                const data = await res.json();
+
+                if (data.error) {
+                    throw new Error(data.message || "Failed to fetch history");
+                }
+
+                if (!data.candles || data.candles.length === 0) {
+                    setStatus("ok");
+                    return;
+                }
+
+                const bars: Bar[] = data.candles.map((c: any) => ({
+                    time: c.time,
+                    open: c.open,
+                    high: c.high,
+                    low: c.low,
+                    close: c.close,
+                }));
+
                 if (!isCancelled) {
                     applyBars(bars, true);
-                    setStatus("ok");
+                    lastBarTimeRef.current = bars[bars.length - 1].time;
+                    setWarning("");
                 }
             } catch (err) {
                 if (!isCancelled) {
-                    setErrorMsg(
-                        err instanceof Error ? err.message : "Unknown error",
-                    );
+                    const msg =
+                        err instanceof Error ? err.message : "Unknown error";
+                    setErrorMsg(msg);
                     setStatus("error");
                 }
             }
         }
 
+        async function deltaPoll() {
+            if (!everLoaded.has(id) || !lastBarTimeRef.current) return;
+
+            // Save current chart state before polling
+            await saveChartState();
+
+            try {
+                const period = getPeriod();
+                const params = new URLSearchParams({
+                    period,
+                    interval,
+                    since: String(lastBarTimeRef.current),
+                });
+                const res = await fetch(
+                    `${API_BASE}/history/${encodeURIComponent(symbol)}?${params}`,
+                );
+                const data = await res.json();
+
+                if (data.error) {
+                    setWarning(`Update failed: ${data.message}`);
+                    return;
+                }
+
+                if (!data.candles || data.candles.length === 0) {
+                    return; // No new bars
+                }
+
+                const newBars: Bar[] = data.candles.map((c: any) => ({
+                    time: c.time,
+                    open: c.open,
+                    high: c.high,
+                    low: c.low,
+                    close: c.close,
+                }));
+
+                if (!isCancelled) {
+                    appendBars(newBars);
+                    lastBarTimeRef.current = newBars[newBars.length - 1].time;
+                    setWarning("");
+                }
+            } catch (err) {
+                const msg =
+                    err instanceof Error ? err.message : "Network error";
+                setWarning(msg);
+            }
+        }
+
         initialLoad();
 
-        // Poll every staleMs — queryOhlc will background-refresh when stale
-        const pollId = setInterval(() => {
-            queryOhlc(
-                symbol,
-                interval,
-                (fresh) => applyBars(fresh, false),
-                cancelled,
-            ).catch(() => {});
-        }, INTERVAL_CONFIG[interval].staleMs);
+        // Poll at interval for delta updates
+        const pollInterval = getPollInterval();
+        const pollId = setInterval(deltaPoll, pollInterval);
 
         return () => {
             isCancelled = true;
             clearInterval(pollId);
         };
-    }, [symbol, interval, stateReady]);
+    }, [symbol, interval, stateReady, id]);
 
     return (
         <div
@@ -303,6 +430,19 @@ export function StockChart({ id }: Props) {
                     }}
                 >
                     Error: {errorMsg}
+                </div>
+            )}
+
+            {warning && (
+                <div
+                    style={{
+                        padding: "8px 16px",
+                        backgroundColor: colors.bgSurface,
+                        color: colors.warning,
+                        fontSize: "12px",
+                    }}
+                >
+                    ⚠ {warning}
                 </div>
             )}
 
