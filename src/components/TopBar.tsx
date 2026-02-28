@@ -1,5 +1,19 @@
 import { useEffect, useState } from "preact/hooks";
 
+type ScreenOption = {
+    id: string;
+    name: string;
+};
+
+type Props = {
+    screens: ScreenOption[];
+    activeScreenId: string;
+    onScreenChange: (screenId: string) => void;
+    onCreateScreen: () => void;
+    onRenameScreen: (name: string) => void;
+    onAddWidget: () => void;
+};
+
 function toIstanbul(date: Date, opts: Intl.DateTimeFormatOptions): string {
     return new Intl.DateTimeFormat("tr-TR", {
         timeZone: "Europe/Istanbul",
@@ -32,11 +46,63 @@ function useClock() {
     return time;
 }
 
-export function TopBar() {
+export function TopBar({
+    screens,
+    activeScreenId,
+    onScreenChange,
+    onCreateScreen,
+    onRenameScreen,
+    onAddWidget,
+}: Props) {
     const clock = useClock();
+
+    const renameCurrent = () => {
+        const current = screens.find((screen) => screen.id === activeScreenId);
+        const nextName = window.prompt(
+            "Screen name",
+            current?.name ?? "New Screen",
+        );
+        if (!nextName) return;
+        onRenameScreen(nextName);
+    };
+
     return (
         <header class="topbar">
             <span class="topbar-brand">lima</span>
+            <div class="topbar-actions">
+                <button type="button" class="topbar-btn" onClick={onAddWidget}>
+                    + Widget
+                </button>
+                <select
+                    class="topbar-select"
+                    value={activeScreenId}
+                    onChange={(event) =>
+                        onScreenChange(
+                            (event.currentTarget as HTMLSelectElement).value,
+                        )
+                    }
+                >
+                    {screens.map((screen) => (
+                        <option value={screen.id} key={screen.id}>
+                            {screen.name}
+                        </option>
+                    ))}
+                </select>
+                <button
+                    type="button"
+                    class="topbar-btn"
+                    onClick={onCreateScreen}
+                >
+                    + Screen
+                </button>
+                <button
+                    type="button"
+                    class="topbar-btn"
+                    onClick={renameCurrent}
+                >
+                    Rename
+                </button>
+            </div>
             <span class="topbar-clock">{clock}</span>
         </header>
     );

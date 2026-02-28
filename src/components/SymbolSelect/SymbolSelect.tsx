@@ -2,7 +2,7 @@ import { Combobox, useListCollection } from "@ark-ui/react/combobox";
 import { useFilter } from "@ark-ui/react/locale";
 import { Portal } from "@ark-ui/react/portal";
 import { useEffect } from "preact/hooks";
-import "./SymbolSelect.css";
+import "./index.module.css";
 import type { SymbolItem } from "../../data/symbols";
 
 export type { SymbolItem };
