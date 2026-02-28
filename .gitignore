@@ -1,3 +1,6 @@
+# Custom
+backend/data/lima.db
+
 # Logs
 logs
 *.log
