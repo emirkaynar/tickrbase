@@ -85,8 +85,8 @@ class YahooFinanceProvider(DataProvider):
 
         candles: list[Candle] = []
         for ts, row in hist.iterrows():
-            dt = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts
-            time_sec = _to_unix_seconds(dt)
+            dt = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts # type: ignore
+            time_sec = _to_unix_seconds(dt) # type: ignore
             open_v = _coerce_float(row.get("Open"))
             high_v = _coerce_float(row.get("High"))
             low_v = _coerce_float(row.get("Low"))
