@@ -16,6 +16,7 @@ export function DashboardPage({ layout, onAddWidget }: Props) {
         layout: rglLayout,
         onLayoutChange,
         removeWidget,
+        activeScreenId,
     } = layout;
 
     if (!ready) {
@@ -24,7 +25,10 @@ export function DashboardPage({ layout, onAddWidget }: Props) {
 
     if (widgets.length === 0) {
         return (
-            <div class={styles.empty}>
+            <div
+                key={activeScreenId}
+                class={`${styles.empty} ${styles.screenFade}`}
+            >
                 <div class={styles.emptyCard}>
                     <p class={styles.emptyTitle}>No widgets yet</p>
                     <p class={styles.emptyHint}>Add a chart to get started.</p>
@@ -38,7 +42,7 @@ export function DashboardPage({ layout, onAddWidget }: Props) {
     }
 
     return (
-        <div class={styles.root}>
+        <div key={activeScreenId} class={`${styles.root} ${styles.screenFade}`}>
             <GridLayout
                 layout={rglLayout}
                 widgets={widgets}

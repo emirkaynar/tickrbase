@@ -16,7 +16,7 @@ export function createChartConfig(
     return {
         autoSize: false,
         layout: {
-            background: { color: c.bg },
+            background: { color: c.bgElevated },
             textColor: c.text,
         },
         grid: {

@@ -1,9 +1,8 @@
 import { useEffect, useRef, useCallback } from "preact/hooks";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { createChart } from "lightweight-charts";
-import { Combobox, Select } from "../../ui";
+import { Combobox, Select, Skeleton } from "../../ui";
 import type { SelectItem } from "../../ui";
-import { Skeleton } from "../../ui";
 import { useChartState } from "./useChartState";
 import { createChartConfig, getCandleColors } from "./chartConfig";
 import { registerWidget } from "../../widgets/registry";
@@ -130,20 +129,20 @@ function StockChart({ id }: Props) {
         <div class={styles.root}>
             {/* Drag handle + controls */}
             <div class={`${styles.handle} widget-handle`}>
+                {symbolsLoading ? (
+                    <Skeleton variant="rect" width={150} height={22} />
+                ) : (
+                    <div class={styles.symbolCombobox}>
+                        <Combobox
+                            items={symbolItems}
+                            value={symbol}
+                            placeholder="Symbol…"
+                            onChange={handleSymbolSelect}
+                        />
+                    </div>
+                )}
                 <div class={`${styles.dragGrip} sc-drag-grip`} />
                 <div class={styles.controls}>
-                    {symbolsLoading ? (
-                        <Skeleton variant="rect" width={150} height={22} />
-                    ) : (
-                        <div class={styles.symbolCombobox}>
-                            <Combobox
-                                items={symbolItems}
-                                value={symbol}
-                                placeholder="Symbol…"
-                                onChange={handleSymbolSelect}
-                            />
-                        </div>
-                    )}
                     <div class={styles.intervalSelect}>
                         <Select
                             items={INTERVAL_ITEMS}
@@ -157,12 +156,10 @@ function StockChart({ id }: Props) {
             {/* Chart canvas */}
             <div class={styles.chartContainer} ref={containerRef}>
                 {(!stateReady || status === "loading") && (
-                    <div class={styles.overlay}>
-                        <Skeleton variant="rect" width="100%" height="100%" />
-                    </div>
+                    <div class={styles.overlay} />
                 )}
                 {status === "error" && (
-                    <div class={styles.overlay}>
+                    <div class={styles.overlayError}>
                         <p class={styles.errorMsg}>{errorMsg}</p>
                     </div>
                 )}
@@ -178,7 +175,7 @@ registerWidget({
     type: "stock-chart",
     label: "Stock Chart",
     defaultSize: { w: 10, h: 12 },
-    minSize: { w: 6, h: 6 },
+    minSize: { w: 7, h: 8 },
     component: StockChart,
 });
 

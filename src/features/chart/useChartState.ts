@@ -147,7 +147,7 @@ export function useChartState(
 
         const initialLoad = async () => {
             try {
-                if (!everLoaded.has(id)) setStatus("loading");
+                setStatus("loading");
                 const data = await fetchHistory(
                     symbol,
                     interval,

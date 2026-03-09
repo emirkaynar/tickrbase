@@ -35,7 +35,7 @@ export function App() {
     );
 
     return (
-        <AppLayout topBar={topBar}>
+        <AppLayout topBar={topBar} contentKey={route}>
             {route === "dashboard" && (
                 <DashboardPage layout={layout} onAddWidget={handleAddWidget} />
             )}

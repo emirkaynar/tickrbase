@@ -68,29 +68,101 @@ a[href*="tradingview.com"] {
 }
 
 /* ── RGL resize handle cursors ───────────────────────────────────────────── */
+.react-resizable-handle {
+    opacity: 0 !important;
+    z-index: 100 !important;
+}
+
+.react-resizable-handle::after {
+    display: none !important;
+}
+
+/* ── RGL transition overrides ────────────────────────────────────────────── */
+.react-grid-layout {
+    transition: none !important;
+}
+
+.react-grid-item {
+    transition: none !important;
+}
+
+.react-grid-item.react-draggable-dragging {
+    transition: transform 10ms ease !important;
+}
+
+.react-grid-item.resizing {
+    transition:
+        width 20ms ease,
+        height 20ms ease !important;
+}
+
+.react-grid-item.react-grid-placeholder {
+    background: none !important;
+}
+
 .react-resizable-handle-n {
-    cursor: n-resize;
+    cursor: row-resize !important;
+    width: calc(100% - 24px) !important;
+    height: 4px !important;
+    rotate: 135deg !important;
+    top: -4px !important;
+    left: 0 !important;
+    margin-left: 12px !important;
 }
 .react-resizable-handle-s {
-    cursor: s-resize;
+    cursor: row-resize !important;
+    width: calc(100% - 24px) !important;
+    height: 4px !important;
+    rotate: 135deg !important;
+    bottom: -4px !important;
+    left: 0 !important;
+    margin-left: 12px !important;
 }
 .react-resizable-handle-e {
-    cursor: e-resize;
+    cursor: col-resize !important;
+    width: 4px !important;
+    height: calc(100% - 24px) !important;
+    rotate: 45deg !important;
+    right: -4px !important;
+    top: 0 !important;
+    margin-top: 12px !important;
 }
 .react-resizable-handle-w {
-    cursor: w-resize;
+    cursor: col-resize !important;
+    width: 4px !important;
+    height: calc(100% - 24px) !important;
+    rotate: 45deg !important;
+    left: -4px !important;
+    top: 0 !important;
+    margin-top: 12px !important;
 }
 .react-resizable-handle-ne {
     cursor: ne-resize;
+    width: 14px !important;
+    height: 14px !important;
+    top: -4px !important;
+    right: -4px !important;
 }
 .react-resizable-handle-nw {
     cursor: nw-resize;
+    width: 14px !important;
+    height: 14px !important;
+    top: -4px !important;
+    left: -4px !important;
 }
 .react-resizable-handle-se {
     cursor: se-resize;
+    width: 14px !important;
+    height: 14px !important;
+    bottom: -4px !important;
+    right: -4px !important;
 }
 .react-resizable-handle-sw {
     cursor: sw-resize;
+    width: 14px !important;
+    height: 14px !important;
+    bottom: -4px !important;
+    left: -4px !important;
 }
 
 /* ── Reduced motion ──────────────────────────────────────────────────────── */
