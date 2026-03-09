@@ -1,0 +1,161 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Lima Design Tokens
+   All component styles reference these variables. Never use hard-coded values.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Light theme (default) ───────────────────────────────────────────────── */
+:root,
+[data-theme="light"] {
+    color-scheme: light;
+
+    /* Backgrounds */
+    --color-bg: hsl(0, 0%, 97%);
+    --color-bg-muted: hsl(0, 0%, 94%);
+    --color-bg-elevated: hsl(0, 0%, 100%);
+    --color-bg-surface: hsl(0, 0%, 90%);
+
+    /* Borders */
+    --color-border: hsl(0, 0%, 82%);
+    --color-border-subtle: hsl(0, 0%, 90%);
+
+    /* Text */
+    --color-text: hsl(0, 0%, 10%);
+    --color-text-muted: hsl(0, 0%, 38%);
+    --color-text-subtle: hsl(0, 0%, 58%);
+    --color-text-inverse: hsl(0, 0%, 98%);
+
+    /* Primary (interactive accent) */
+    --color-primary: hsl(220, 88%, 54%);
+    --color-primary-foreground: hsl(0, 0%, 100%);
+    --color-primary-hover: hsl(220, 88%, 48%);
+
+    /* Semantic status */
+    --color-success: hsl(145, 54%, 36%);
+    --color-warning: hsl(40, 95%, 44%);
+    --color-danger: hsl(4, 80%, 52%);
+    --color-muted: hsl(0, 0%, 55%);
+    --color-accent: hsl(262, 72%, 58%);
+
+    /* Finance */
+    --color-bull: hsl(174, 60%, 36%);
+    --color-bear: hsl(4, 80%, 52%);
+
+    /* Focus ring */
+    --color-focus-ring: hsl(220, 88%, 54%);
+
+    /* Overlay backdrop */
+    --color-backdrop: hsla(0, 0%, 0%, 0.25);
+}
+
+/* ── Dark theme ──────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+    color-scheme: dark;
+
+    /* Backgrounds */
+    --color-bg: hsl(0, 0%, 4%);
+    --color-bg-muted: hsl(0, 0%, 7%);
+    --color-bg-elevated: hsl(0, 0%, 8%);
+    --color-bg-surface: hsl(0, 0%, 14%);
+
+    /* Borders */
+    --color-border: hsl(0, 0%, 16%);
+    --color-border-subtle: hsl(0, 0%, 12%);
+
+    /* Text */
+    --color-text: hsl(0, 0%, 82%);
+    --color-text-muted: hsl(0, 0%, 50%);
+    --color-text-subtle: hsl(0, 0%, 34%);
+    --color-text-inverse: hsl(0, 0%, 5%);
+
+    /* Primary */
+    --color-primary: hsl(220, 80%, 60%);
+    --color-primary-foreground: hsl(0, 0%, 100%);
+    --color-primary-hover: hsl(220, 80%, 66%);
+
+    /* Semantic status */
+    --color-success: hsl(145, 54%, 44%);
+    --color-warning: hsl(40, 95%, 58%);
+    --color-danger: hsl(4, 82%, 62%);
+    --color-muted: hsl(0, 0%, 40%);
+    --color-accent: hsl(262, 72%, 68%);
+
+    /* Finance */
+    --color-bull: hsl(174, 60%, 44%);
+    --color-bear: hsl(4, 82%, 62%);
+
+    /* Focus ring */
+    --color-focus-ring: hsl(220, 80%, 60%);
+
+    /* Overlay backdrop */
+    --color-backdrop: hsla(0, 0%, 0%, 0.55);
+}
+
+/* ── Spacing scale ───────────────────────────────────────────────────────── */
+:root {
+    --space-0-5: 2px;
+    --space-1: 4px;
+    --space-1-5: 6px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+
+    /* ── Border radius ─────────────────────────────────────────────────────── */
+    --radius-sm: 3px;
+    --radius-md: 5px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --radius-full: 9999px;
+
+    /* ── Shadows / Elevation ───────────────────────────────────────────────── */
+    --shadow-sm:
+        0 1px 3px hsla(0, 0%, 0%, 0.12), 0 1px 2px hsla(0, 0%, 0%, 0.08);
+    --shadow-md:
+        0 4px 12px hsla(0, 0%, 0%, 0.2), 0 2px 4px hsla(0, 0%, 0%, 0.12);
+    --shadow-lg:
+        0 8px 24px hsla(0, 0%, 0%, 0.28), 0 4px 8px hsla(0, 0%, 0%, 0.16);
+    --shadow-overlay: 0 16px 48px hsla(0, 0%, 0%, 0.4);
+
+    /* ── Z-index scale ─────────────────────────────────────────────────────── */
+    --z-base: 0;
+    --z-dropdown: 100;
+    --z-sticky: 200;
+    --z-overlay: 300;
+    --z-modal: 400;
+    --z-toast: 500;
+    --z-tooltip: 600;
+
+    /* ── Transitions ───────────────────────────────────────────────────────── */
+    --transition-fast: 80ms ease;
+    --transition-base: 150ms ease;
+    --transition-slow: 250ms ease;
+    --transition-theme: 200ms ease;
+
+    /* ── Typography ────────────────────────────────────────────────────────── */
+    --font-mono:
+        "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
+
+    --font-size-xs: 10px;
+    --font-size-sm: 11px;
+    --font-size-base: 12px;
+    --font-size-md: 13px;
+    --font-size-lg: 15px;
+    --font-size-xl: 18px;
+
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+
+    --line-height-tight: 1.2;
+    --line-height-base: 1.5;
+    --line-height-loose: 1.75;
+
+    /* ── Layout ────────────────────────────────────────────────────────────── */
+    --topbar-height: 36px;
+}

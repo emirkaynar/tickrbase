@@ -1,0 +1,106 @@
+@import "./variables.css";
+@import "./reset.css";
+
+/* ── Font ────────────────────────────────────────────────────────────────── */
+@font-face {
+    font-family: "JetBrains Mono";
+    src: url("/fonts/JetBrainsMono.ttf") format("truetype");
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+html {
+    /* smooth theme transitions — applied to html so all descendants inherit */
+    transition:
+        background-color var(--transition-theme),
+        color var(--transition-theme);
+}
+
+body {
+    font-family: var(--font-mono);
+    font-size: var(--font-size-base);
+    line-height: var(--line-height-base);
+    background: var(--color-bg);
+    color: var(--color-text);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ── Focus visible ───────────────────────────────────────────────────────── */
+:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+}
+
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+}
+
+*::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: var(--radius-full);
+}
+
+/* ── Hide lightweight-charts attribution ─────────────────────────────────── */
+a[href*="tradingview.com"] {
+    display: none !important;
+}
+
+/* ── RGL resize handle cursors ───────────────────────────────────────────── */
+.react-resizable-handle-n {
+    cursor: n-resize;
+}
+.react-resizable-handle-s {
+    cursor: s-resize;
+}
+.react-resizable-handle-e {
+    cursor: e-resize;
+}
+.react-resizable-handle-w {
+    cursor: w-resize;
+}
+.react-resizable-handle-ne {
+    cursor: ne-resize;
+}
+.react-resizable-handle-nw {
+    cursor: nw-resize;
+}
+.react-resizable-handle-se {
+    cursor: se-resize;
+}
+.react-resizable-handle-sw {
+    cursor: sw-resize;
+}
+
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}

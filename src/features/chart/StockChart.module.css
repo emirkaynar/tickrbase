@@ -1,0 +1,81 @@
+.root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--color-bg-elevated);
+    border-radius: var(--radius-md);
+}
+
+.handle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: 28px;
+    padding: 0 var(--space-1);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-elevated);
+    flex-shrink: 0;
+}
+
+.dragGrip {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    cursor: grab;
+    height: 100%;
+    min-width: 0;
+}
+
+.dragGrip:active {
+    cursor: grabbing;
+}
+
+.controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    flex-shrink: 0;
+}
+
+.symbolCombobox {
+    width: 150px;
+}
+
+.intervalSelect {
+    width: 72px;
+}
+
+.chartContainer {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg-elevated);
+    z-index: var(--z-base);
+}
+
+.errorMsg {
+    color: var(--color-danger);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    padding: var(--space-2);
+}
+
+.warning {
+    position: absolute;
+    bottom: var(--space-1);
+    right: var(--space-2);
+    color: var(--color-text-subtle);
+    font-size: var(--font-size-xs);
+    z-index: var(--z-base);
+    pointer-events: none;
+}

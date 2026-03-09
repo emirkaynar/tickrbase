@@ -1,0 +1,110 @@
+.root {
+    position: relative;
+}
+
+.trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: 22px;
+    padding: 0 var(--space-2);
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition:
+        border-color var(--transition-fast),
+        color var(--transition-fast),
+        background var(--transition-fast);
+
+    & svg {
+        width: 12px;
+        height: 12px;
+    }
+}
+
+.trigger:hover,
+.trigger[data-state="open"] {
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+    border-color: var(--color-border);
+}
+
+.indicator {
+    display: flex;
+    align-items: center;
+    color: var(--color-text-muted);
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-1);
+    min-width: 80px;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    outline: none;
+    z-index: var(--z-dropdown);
+    animation: scale-in var(--transition-fast) forwards;
+}
+
+.content[data-state="closed"] {
+    display: none;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+
+    & svg {
+        width: 12px;
+        height: 12px;
+    }
+}
+
+.item[data-highlighted] {
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+}
+
+.item[data-state="checked"] {
+    color: var(--color-bull);
+}
+
+.item[data-disabled] {
+    opacity: 0.4;
+}
+
+.itemIndicator {
+    display: flex;
+    align-items: center;
+    color: var(--color-bull);
+}
+
+@keyframes scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}

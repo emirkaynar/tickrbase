@@ -1,68 +1,46 @@
-import "./app.css";
-import { Fieldset } from "@ark-ui/react/fieldset";
-import { TopBar } from "./components/TopBar";
-import { GridLayout } from "./grid/GridLayout";
+// Feature imports must come before registry usages so widgets self-register
+import "./features/chart/StockChart";
+
+import { useRouter } from "./router";
 import { useLayout } from "./grid/useLayout";
+import { useTheme } from "./hooks/useTheme";
+import { AppLayout } from "./layout/AppLayout";
+import { TopBar } from "./layout/TopBar/TopBar";
+import { DashboardPage } from "./features/dashboard/DashboardPage";
+import { PortfolioPage } from "./features/portfolio/PortfolioPage";
+import { AlertsPage } from "./features/alerts/AlertsPage";
 
 export function App() {
-    const {
-        screens,
-        activeScreenId,
-        widgets,
-        layout,
-        onLayoutChange,
-        setActiveScreen,
-        createScreen,
-        renameActiveScreen,
-        addWidget,
-        removeWidget,
-        ready,
-    } = useLayout();
+    const { route, navigate } = useRouter();
+    const { theme, toggleTheme } = useTheme();
+    const layout = useLayout();
 
-    if (!ready) {
-        return <div class="grid-area" />;
+    function handleAddWidget() {
+        void layout.addWidget("stock-chart");
     }
 
-    const hasWidgets = widgets.length > 0;
+    const topBar = (
+        <TopBar
+            screens={layout.screens}
+            activeScreenId={layout.activeScreenId}
+            onScreenChange={(id) => void layout.setActiveScreen(id)}
+            onCreateScreen={() => void layout.createScreen()}
+            onRenameScreen={(name) => void layout.renameActiveScreen(name)}
+            onAddWidget={handleAddWidget}
+            route={route}
+            onNavigate={navigate}
+            theme={theme}
+            onToggleTheme={toggleTheme}
+        />
+    );
 
     return (
-        <>
-            <TopBar
-                screens={screens}
-                activeScreenId={activeScreenId}
-                onScreenChange={setActiveScreen}
-                onCreateScreen={createScreen}
-                onRenameScreen={renameActiveScreen}
-                onAddWidget={() => addWidget("stock-chart")}
-            />
-            <div class="grid-area" key={activeScreenId}>
-                {hasWidgets ? (
-                    <GridLayout
-                        layout={layout}
-                        widgets={widgets}
-                        onLayoutChange={onLayoutChange}
-                        onRemoveWidget={removeWidget}
-                    />
-                ) : (
-                    <div class="empty-state-wrap">
-                        <Fieldset.Root className="empty-state-card">
-                            <Fieldset.Legend className="empty-state-title">
-                                Start with your first widget
-                            </Fieldset.Legend>
-                            <Fieldset.HelperText className="empty-state-subtitle">
-                                Add a stock chart to begin building this screen.
-                            </Fieldset.HelperText>
-                            <button
-                                type="button"
-                                class="topbar-btn empty-state-cta"
-                                onClick={() => addWidget("stock-chart")}
-                            >
-                                + Add Widget
-                            </button>
-                        </Fieldset.Root>
-                    </div>
-                )}
-            </div>
-        </>
+        <AppLayout topBar={topBar}>
+            {route === "dashboard" && (
+                <DashboardPage layout={layout} onAddWidget={handleAddWidget} />
+            )}
+            {route === "portfolio" && <PortfolioPage />}
+            {route === "alerts" && <AlertsPage />}
+        </AppLayout>
     );
 }

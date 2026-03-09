@@ -1,0 +1,53 @@
+.root {
+    display: flex;
+    align-items: center;
+}
+
+.list {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    position: relative;
+}
+
+.trigger {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 var(--space-2);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    white-space: nowrap;
+    transition:
+        color var(--transition-fast),
+        background var(--transition-fast);
+    outline: none;
+}
+
+.trigger:hover {
+    color: var(--color-text);
+    background: var(--color-bg-surface);
+}
+
+.trigger[data-selected] {
+    color: var(--color-text);
+}
+
+.indicator {
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    height: 2px;
+    background: var(--color-primary);
+    border-radius: var(--radius-full);
+    transition:
+        left var(--transition-base),
+        width var(--transition-base);
+}
