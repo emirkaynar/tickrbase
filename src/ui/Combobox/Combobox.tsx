@@ -1,4 +1,4 @@
-import { useEffect } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
     Combobox as ArkCombobox,
     useListCollection,
@@ -38,19 +38,50 @@ export function Combobox({
         set(items);
     }, [items, set]);
 
+    const getLabel = (v: string) =>
+        items.find((i) => i.value === v)?.label ?? v;
+
+    // Fully controlled input text — Ark UI only syncs the input on user-driven
+    // selections, not on external `value` prop changes, so we own it ourselves.
+    const [inputValue, setInputValue] = useState(() => getLabel(value));
+
+    // Keep input in sync whenever the external value or items list changes
+    // (covers Dexie rehydration on refresh and backend fetch completing).
+    useEffect(() => {
+        setInputValue(getLabel(value));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [value, items]);
+
+    // Distinguish a real selection from a dismiss so onOpenChange doesn't
+    // overwrite the input with a stale label after the user picks an item.
+    const didSelectRef = useRef(false);
+
     return (
         <ArkCombobox.Root
             collection={collection}
             value={[value]}
+            inputValue={inputValue}
             onValueChange={(d) => {
-                if (d.value[0]) onChange(d.value[0]);
-                filter("");
+                if (d.value[0]) {
+                    onChange(d.value[0]);
+                    didSelectRef.current = true;
+                }
             }}
-            onInputValueChange={(d) => filter(d.inputValue)}
+            onInputValueChange={(d) => {
+                setInputValue(d.inputValue);
+                filter(d.inputValue);
+            }}
             onOpenChange={(d) => {
-                if (!d.open) filter("");
+                if (!d.open) {
+                    if (!didSelectRef.current) {
+                        // Dismissed without selecting — restore input to current label
+                        setInputValue(getLabel(value));
+                    }
+                    didSelectRef.current = false;
+                    filter("");
+                }
             }}
-            inputBehavior="autohighlight"
+            openOnChange={(d) => d.reason === "input-change"}
             positioning={{ placement: "bottom-start" }}
             loopFocus
             className={[styles.root, className].filter(Boolean).join(" ")}

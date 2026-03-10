@@ -186,7 +186,7 @@ export function useLayout() {
 
             // Register with watchlist — best effort
             void updateWatchlist([
-                { ticker: "ASELS.IS", interval: "1d" },
+                { ticker: "XU100.IS", interval: "1d" },
             ]).catch(() => {});
         },
         [activeScreenId],

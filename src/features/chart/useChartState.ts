@@ -62,7 +62,7 @@ export function useChartState(
     const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
     const [errorMsg, setErrorMsg] = useState("");
     const [warning, setWarning] = useState("");
-    const [symbol, setSymbol] = useState(_prev?.symbol ?? "ASELS.IS");
+    const [symbol, setSymbol] = useState(_prev?.symbol ?? "XU100.IS");
     const [interval, selectInterval] = useState<Interval>(
         _prev?.interval ?? "1d",
     );

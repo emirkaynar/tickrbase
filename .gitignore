@@ -1,5 +1,7 @@
 # Custom
 backend/data/lima.db
+__pycache__/
+*.pyc
 
 # Logs
 logs
