@@ -2,6 +2,8 @@ export { Badge } from "./Badge/Badge";
 export { Button } from "./Button/Button";
 export { Combobox } from "./Combobox/Combobox";
 export type { ComboboxItem } from "./Combobox/Combobox";
+export { CommandPalette } from "./CommandPalette/CommandPalette";
+export type { CommandPalettePage } from "./CommandPalette/model";
 export { Dialog } from "./Dialog/Dialog";
 export { Input } from "./Input/Input";
 export { Select } from "./Select/Select";

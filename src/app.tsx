@@ -1,3 +1,5 @@
+import { useEffect, useState } from "preact/hooks";
+
 // Feature imports must come before registry usages so widgets self-register
 import "./widgets/StockChart/StockChart";
 
@@ -9,14 +11,48 @@ import { TopBar } from "./layout/TopBar/TopBar";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { PortfolioPage } from "./features/portfolio/PortfolioPage";
 import { AlertsPage } from "./features/alerts/AlertsPage";
+import { CommandPalette } from "./ui";
+import type { CommandPalettePage } from "./ui";
 
 export function App() {
     const { route, navigate } = useRouter();
     const { theme, toggleTheme } = useTheme();
     const layout = useLayout();
 
+    const [paletteOpen, setPaletteOpen] = useState(false);
+    const [palettePage, setPalettePage] = useState<CommandPalettePage>("root");
+
+    function openPalette(page: CommandPalettePage) {
+        setPalettePage(page);
+        setPaletteOpen(true);
+    }
+
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            const target = e.target as HTMLElement | null;
+            const isEditable =
+                target?.tagName === "INPUT" ||
+                target?.tagName === "TEXTAREA" ||
+                target?.isContentEditable;
+
+            if (isEditable) return;
+
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+                e.preventDefault();
+                openPalette("root");
+            }
+        };
+
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    }, []);
+
     function handleAddWidget() {
-        void layout.addWidget("stock-chart");
+        openPalette("add-widget");
+    }
+
+    function handlePaletteAddWidget(type: "stock-chart") {
+        void layout.addWidget(type);
     }
 
     const topBar = (
@@ -35,12 +71,24 @@ export function App() {
     );
 
     return (
-        <AppLayout topBar={topBar} contentKey={route}>
-            {route === "dashboard" && (
-                <DashboardPage layout={layout} onAddWidget={handleAddWidget} />
-            )}
-            {route === "portfolio" && <PortfolioPage />}
-            {route === "alerts" && <AlertsPage />}
-        </AppLayout>
+        <>
+            <AppLayout topBar={topBar} contentKey={route}>
+                {route === "dashboard" && (
+                    <DashboardPage
+                        layout={layout}
+                        onAddWidget={handleAddWidget}
+                    />
+                )}
+                {route === "portfolio" && <PortfolioPage />}
+                {route === "alerts" && <AlertsPage />}
+            </AppLayout>
+
+            <CommandPalette
+                open={paletteOpen}
+                initialPage={palettePage}
+                onClose={() => setPaletteOpen(false)}
+                onAddWidget={handlePaletteAddWidget}
+            />
+        </>
     );
 }
