@@ -3,7 +3,7 @@
     inset: 0;
     z-index: var(--z-overlay);
     background: transparent;
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(var(--backdrop-dialog));
     animation: fade-in var(--transition-base);
 }
 
@@ -172,7 +172,7 @@
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-text-subtle);
-    padding: 0 var(--space-2);
+    padding: 0 var(--space-3);
     user-select: none;
 }
 
@@ -226,6 +226,147 @@
         width: 13px;
         height: 13px;
     }
+}
+
+.manageRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    border: 1px solid transparent;
+    border-radius: var(--radius-md);
+    padding: var(--space-1) var(--space-1);
+    transition:
+        border-color var(--transition-fast),
+        background var(--transition-fast);
+}
+
+.manageRow[data-active="true"] {
+    border-color: var(--color-border);
+    background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+}
+
+.dragHandle,
+.rowAction {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+
+    & svg {
+        width: 13px;
+        height: 13px;
+    }
+}
+
+.dragHandle {
+    opacity: 0;
+    cursor: grab;
+}
+
+.manageRow:hover .dragHandle,
+.manageRow[data-active="true"] .dragHandle {
+    opacity: 1;
+}
+
+.dragHandle:active {
+    cursor: grabbing;
+}
+
+.rowAction:hover,
+.dragHandle:hover {
+    border-color: var(--color-border);
+    color: var(--color-text);
+    background: color-mix(in oklab, var(--color-bg-surface) 64%, transparent);
+}
+
+.rowAction[data-lane-active="true"] {
+    border-radius: var(--radius-sm);
+    outline: 1px solid var(--color-accent);
+    outline-offset: 1px;
+}
+
+.manageName {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    cursor: pointer;
+}
+
+.manageActions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.activeChip {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    padding: 1px var(--space-1);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-subtle);
+}
+
+.deleteButton,
+.secondaryBtn,
+.dangerBtn {
+    height: 30px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    padding: 0 var(--space-3);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+}
+
+.deleteButton,
+.dangerBtn {
+    background: color-mix(in oklab, var(--color-danger) 18%, transparent);
+    color: var(--color-danger);
+    border-color: color-mix(
+        in oklab,
+        var(--color-danger) 36%,
+        var(--color-border)
+    );
+}
+
+.secondaryBtn {
+    background: transparent;
+    color: var(--color-text);
+}
+
+.confirmBody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.confirmText {
+    margin: 0;
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+}
+
+.confirmActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
 }
 
 .empty {

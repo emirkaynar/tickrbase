@@ -14,11 +14,20 @@ export const coreProvider: CommandProvider = {
             {
                 id: "root-add-widget",
                 label: "Add Widget",
-                hint: "Create and place a widget",
+                hint: "Add new widget to the screen",
                 keywords: ["add", "widget", "chart"],
                 enabled: true,
                 section: "Actions",
                 action: { kind: "go-add-widget" },
+            },
+            {
+                id: "root-manage-screens",
+                label: "Manage Screens",
+                hint: "Create, rename, reorder and delete screens",
+                keywords: ["manage", "screen", "rename", "delete", "order"],
+                enabled: true,
+                section: "Actions",
+                action: { kind: "go-manage-screens" },
             },
         ];
     },

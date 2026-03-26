@@ -1,9 +1,10 @@
 .backdrop {
     position: fixed;
     inset: 0;
-    background: var(--color-backdrop);
-    z-index: var(--z-overlay);
-    animation: fade-in var(--transition-base) ease;
+    background: transparent;
+    backdrop-filter: blur(var(--backdrop-dialog));
+    z-index: calc(var(--z-modal) + 1);
+    animation: fade-in var(--transition-base);
 }
 
 .backdrop[data-state="closed"] {
@@ -16,7 +17,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: var(--z-modal);
+    z-index: calc(var(--z-modal) + 2);
     padding: var(--space-4);
 }
 
@@ -25,7 +26,11 @@
 }
 
 .content {
-    background: var(--color-bg-elevated);
+    background: var(--color-mica-surface-base);
+    backdrop-filter: blur(var(--mica-backdrop-blur))
+        saturate(var(--mica-backdrop-saturate));
+    -webkit-backdrop-filter: blur(var(--mica-backdrop-blur))
+        saturate(var(--mica-backdrop-saturate));
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-overlay);
@@ -52,6 +57,13 @@
     color: var(--color-text);
 }
 
+.description {
+    margin: 0;
+    padding: var(--space-2) var(--space-4) 0;
+    font-size: var(--font-size-sm);
+    color: var(--color-text-subtle);
+}
+
 .closeBtn {
     display: flex;
     align-items: center;
@@ -74,7 +86,7 @@
     }
 }
 
-.closeBtn:hover {
+.closeBtn:hover, .closeBtn:focus {
     background: var(--color-bg-surface);
     border-color: var(--color-border);
     color: var(--color-text);

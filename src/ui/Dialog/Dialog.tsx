@@ -8,10 +8,19 @@ type Props = {
     open: boolean;
     onClose: () => void;
     title: string;
+    description?: string;
+    showCloseButton?: boolean;
     children: ComponentChildren;
 };
 
-export function Dialog({ open, onClose, title, children }: Props) {
+export function Dialog({
+    open,
+    onClose,
+    title,
+    description,
+    showCloseButton = true,
+    children,
+}: Props) {
     return (
         <ArkDialog.Root
             open={open}
@@ -27,16 +36,26 @@ export function Dialog({ open, onClose, title, children }: Props) {
                             <ArkDialog.Title className={styles.title}>
                                 {title}
                             </ArkDialog.Title>
-                            <ArkDialog.CloseTrigger asChild>
-                                <button
-                                    type="button"
-                                    class={styles.closeBtn}
-                                    onClick={onClose}
-                                >
-                                    <XIcon />
-                                </button>
-                            </ArkDialog.CloseTrigger>
+                            {showCloseButton && (
+                                <ArkDialog.CloseTrigger asChild>
+                                    <button
+                                        type="button"
+                                        class={styles.closeBtn}
+                                        aria-label="Close dialog"
+                                        onClick={onClose}
+                                    >
+                                        <XIcon />
+                                    </button>
+                                </ArkDialog.CloseTrigger>
+                            )}
                         </div>
+                        {description && (
+                            <ArkDialog.Description
+                                className={styles.description}
+                            >
+                                {description}
+                            </ArkDialog.Description>
+                        )}
                         <div className={styles.body}>{children}</div>
                     </ArkDialog.Content>
                 </ArkDialog.Positioner>

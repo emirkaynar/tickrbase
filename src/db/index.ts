@@ -20,6 +20,7 @@ export type ChartStateRecord = {
 export type ScreenRecord = {
     id: string;
     name: string;
+    order: number;
     createdAt: number;
 };
 
@@ -83,5 +84,27 @@ db.version(8).stores({
     widgets: "id, screenId, type, createdAt",
     uiState: "id",
 });
+
+// v9: add explicit screen ordering for palette-based reorder flows
+db.version(9)
+    .stores({
+        layout: null,
+        widgetState: "id",
+        chartState: "widget_id",
+        screens: "id, order, createdAt",
+        widgets: "id, screenId, type, createdAt",
+        uiState: "id",
+    })
+    .upgrade(async (tx) => {
+        const screens = await tx
+            .table("screens")
+            .toCollection()
+            .sortBy("createdAt");
+        await Promise.all(
+            screens.map((screen, index) =>
+                tx.table("screens").update(screen.id, { order: index }),
+            ),
+        );
+    });
 
 export { db };

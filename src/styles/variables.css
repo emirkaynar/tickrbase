@@ -88,7 +88,7 @@
     --color-focus-ring: hsl(220, 80%, 60%);
 
     /* Mica material */
-    --color-mica-surface-base: hsla(0, 0%, 5%, 0.4);
+    --color-mica-surface-base: hsla(0, 0%, 5%, 0.6);
     --color-mica-border: hsla(0, 0%, 35%, 0.22);
 }
 
@@ -124,6 +124,7 @@
     --shadow-overlay: 0 16px 48px hsla(0, 0%, 0%, 0.4);
     --mica-backdrop-blur: 20px;
     --mica-backdrop-saturate: 160%;
+    --backdrop-dialog: 2px;
 
     /* ── Z-index scale ─────────────────────────────────────────────────────── */
     --z-base: 0;

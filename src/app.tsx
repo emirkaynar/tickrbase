@@ -55,6 +55,26 @@ export function App() {
         void layout.addWidget(type);
     }
 
+    function handlePaletteCreateScreen(name?: string) {
+        void layout.createScreen(name);
+    }
+
+    function handlePaletteRenameScreen(screenId: string, name: string) {
+        void layout.renameScreen(screenId, name);
+    }
+
+    async function handlePaletteDeleteScreen(screenId: string) {
+        return layout.deleteScreen(screenId);
+    }
+
+    function handlePaletteReorderScreens(nextIds: string[]) {
+        void layout.reorderScreens(nextIds);
+    }
+
+    function handlePaletteMoveScreen(screenId: string, direction: -1 | 1) {
+        void layout.moveScreen(screenId, direction);
+    }
+
     const topBar = (
         <TopBar
             screens={layout.screens}
@@ -88,6 +108,14 @@ export function App() {
                 initialPage={palettePage}
                 onClose={() => setPaletteOpen(false)}
                 onAddWidget={handlePaletteAddWidget}
+                screens={layout.screens}
+                activeScreenId={layout.activeScreenId}
+                onSetActiveScreen={(id) => void layout.setActiveScreen(id)}
+                onCreateScreen={handlePaletteCreateScreen}
+                onRenameScreen={handlePaletteRenameScreen}
+                onDeleteScreen={handlePaletteDeleteScreen}
+                onReorderScreens={handlePaletteReorderScreens}
+                onMoveScreen={handlePaletteMoveScreen}
             />
         </>
     );
