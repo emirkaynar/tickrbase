@@ -5,7 +5,7 @@ import { Combobox, Select, Skeleton } from "../../ui";
 import type { SelectItem } from "../../ui";
 import { useChartState } from "./useChartState";
 import { createChartConfig, getCandleColors } from "./chartConfig";
-import { registerWidget } from "../../widgets/registry";
+import { registerWidget } from "../registry";
 import { useSymbols } from "../../hooks/useSymbols";
 import { INTERVALS, INTERVAL_CONFIG } from "../../services/types";
 import type { Interval } from "../../services/types";

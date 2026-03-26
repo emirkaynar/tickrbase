@@ -1,5 +1,5 @@
 // Feature imports must come before registry usages so widgets self-register
-import "./features/chart/StockChart";
+import "./widgets/StockChart/StockChart";
 
 import { useRouter } from "./router";
 import { useLayout } from "./grid/useLayout";

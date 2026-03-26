@@ -39,10 +39,8 @@ type UseChartStateReturn = {
     ) => { bars: Bar[]; interval: Interval; symbol: string } | undefined;
 };
 
-function getPeriod(interval: Interval): string {
-    if (interval === "1d") return "1y";
-    if (interval === "1wk") return "5y";
-    return "5d";
+function getPeriod(_interval: Interval): string {
+    return "max";
 }
 
 function getPollMs(interval: Interval): number {
