@@ -81,6 +81,20 @@ class SymbolsResponse(BaseModel):
     last_updated: str
 
 
+class LookupItem(BaseModel):
+    symbol: str
+    company_name: str
+    exchange: str
+    instrument_type: str
+
+
+class LookupResponse(BaseModel):
+    query: str
+    items: list[LookupItem]
+    stale: bool = False
+    last_updated: str
+
+
 class ErrorResponse(BaseModel):
     error: bool = True
     message: str

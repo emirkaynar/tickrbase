@@ -10,8 +10,6 @@ from .provider import DataProvider
 
 def normalize_ticker(ticker: str) -> str:
     cleaned = ticker.strip().upper()
-    if not cleaned.endswith(BIST_SUFFIX):
-        cleaned = f"{cleaned}{BIST_SUFFIX}"
     return cleaned
 
 
@@ -117,3 +115,51 @@ class YahooFinanceProvider(DataProvider):
             return yf_ticker.get_info() or {}
         except Exception:
             return {}
+
+    def lookup(self, query: str, count: int) -> list[dict]:
+        import yfinance as yf
+
+        lookup_cls = getattr(yf, "Lookup", None)
+        if lookup_cls is None:
+            raise RuntimeError("Installed yfinance version does not expose Lookup API")
+
+        lookup = lookup_cls(query=query, timeout=30, raise_errors=True)
+        frame = lookup.get_all(count=count)
+        if frame is None or frame.empty:
+            return []
+
+        # Reset index to make symbol a column
+        frame = frame.reset_index()
+        rows: list[dict] = []
+        records = frame.to_dict(orient="records") if hasattr(frame, "to_dict") else []
+        for row in records:
+            symbol = str(row.get("symbol") or "").strip().upper()
+            if not symbol:
+                continue
+
+            company_name = str(
+                row.get("longName")
+                or row.get("shortName")
+                or row.get("name")
+                or symbol
+            ).strip()
+            exchange = str(
+                row.get("exchange")
+                or row.get("exchDisp")
+                or row.get("fullExchangeName")
+                or ""
+            ).strip()
+            instrument_type = str(
+                row.get("quoteType") or row.get("type") or "unknown"
+            ).strip().lower()
+
+            rows.append(
+                {
+                    "symbol": symbol,
+                    "company_name": company_name,
+                    "exchange": exchange,
+                    "instrument_type": instrument_type,
+                }
+            )
+
+        return rows

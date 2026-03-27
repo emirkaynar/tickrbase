@@ -24,3 +24,7 @@ class DataProvider(ABC):
     @abstractmethod
     def get_company_info(self, ticker: str) -> dict:
         raise NotImplementedError
+
+    @abstractmethod
+    def lookup(self, query: str, count: int) -> list[dict]:
+        raise NotImplementedError

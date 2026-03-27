@@ -68,6 +68,20 @@ export type SymbolsResponse = {
     last_updated: string;
 };
 
+export type LookupItem = {
+    symbol: string;
+    company_name: string;
+    exchange: string;
+    instrument_type: string;
+};
+
+export type LookupResponse = {
+    query: string;
+    items: LookupItem[];
+    stale: boolean;
+    last_updated: string;
+};
+
 export type WatchlistItem = { ticker: string; interval: string };
 
 export type WatchlistResponse = WatchlistItem[];

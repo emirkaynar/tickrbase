@@ -14,6 +14,7 @@ from ..core.models import (
     PortfolioCreate,
     PortfolioPosition,
     PriceResponse,
+    LookupResponse,
     SymbolsResponse,
     WatchlistUpdate,
 )
@@ -21,6 +22,7 @@ from ..core.provider import DataProvider
 from ..services import alerts as alerts_service
 from ..services import portfolio as portfolio_service
 from ..services import prices as prices_service
+from ..services import lookup as lookup_service
 from ..services import symbols as symbols_service
 from ..services import watchlist as watchlist_service
 
@@ -101,6 +103,24 @@ def build_router(provider: DataProvider, price_cache: TTLCache[float]) -> APIRou
             "stale": stale,
             "last_updated": prices_service.iso_timestamp(fetched_at),
         }
+
+    @router.get("/lookup", response_model=LookupResponse)
+    def get_lookup(q: str):
+        try:
+            query, items, stale, fetched_at = lookup_service.search_lookup(
+                provider,
+                q,
+            )
+            return {
+                "query": query,
+                "items": items,
+                "stale": stale,
+                "last_updated": prices_service.iso_timestamp(fetched_at),
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=str(exc))
 
     @router.get("/watchlist")
     def list_watchlist():

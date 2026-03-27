@@ -11,4 +11,5 @@ export type { SelectItem } from "./Select/Select";
 export { Skeleton } from "./Skeleton/Skeleton";
 export { Tabs } from "./Tabs/Tabs";
 export type { TabItem } from "./Tabs/Tabs";
+export { TickerSelector } from "./TickerSelector/TickerSelector";
 export { Tooltip } from "./Tooltip/Tooltip";

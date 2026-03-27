@@ -1,0 +1,194 @@
+.root {
+    position: relative;
+}
+
+.control {
+    position: relative;
+}
+
+.input {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 90px;
+    height: 22px;
+    padding: 0 2rem 0 var(--space-2);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    outline: none;
+    transition:
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
+}
+
+.input::placeholder {
+    color: var(--color-text-subtle);
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.input:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px
+        color-mix(in oklab, var(--color-primary) 25%, transparent);
+}
+
+.indicators {
+    position: absolute;
+    top: 50%;
+    right: var(--space-1);
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+}
+
+.trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 0;
+    pointer-events: auto;
+    transition: color var(--transition-fast);
+
+    & svg {
+        width: 12px;
+        height: 12px;
+    }
+}
+
+.trigger:hover {
+    color: var(--color-text);
+}
+
+.content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-1);
+    min-width: max(var(--reference-width, 160px), 260px);
+    max-height: min(var(--available-height, 300px), 300px);
+    overflow-y: auto;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+    outline: none;
+    z-index: var(--z-dropdown);
+    overscroll-behavior: contain;
+    animation: scale-in var(--transition-fast) forwards;
+}
+
+.content[data-state="closed"] {
+    display: none;
+}
+
+.status,
+.empty {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1-5) var(--space-2);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-subtle);
+    user-select: none;
+}
+
+.spinner {
+    width: 12px;
+    height: 12px;
+    animation: spin 1s linear infinite;
+}
+
+.item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-1-5);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+
+    & svg {
+        width: 12px;
+        height: 12px;
+    }
+}
+
+.item[data-highlighted] {
+    background: var(--color-bg-surface);
+}
+
+.item[data-disabled] {
+    opacity: 0.4;
+}
+
+.item[data-state="checked"] .itemTitle {
+    color: var(--color-bull);
+}
+
+.itemText {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.itemTitle {
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-text);
+}
+
+.itemSubtitle {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-subtle);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.itemIndicator {
+    display: flex;
+    align-items: center;
+    color: var(--color-bull);
+}
+
+.itemIndicator[data-state="unchecked"] {
+    display: none;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}

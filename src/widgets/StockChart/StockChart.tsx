@@ -1,12 +1,11 @@
 import { useEffect, useRef, useCallback } from "preact/hooks";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { createChart } from "lightweight-charts";
-import { Combobox, Select, Skeleton } from "../../ui";
+import { Select, TickerSelector } from "../../ui";
 import type { SelectItem } from "../../ui";
 import { useChartState } from "./useChartState";
 import { createChartConfig, getCandleColors } from "./chartConfig";
 import { registerWidget } from "../registry";
-import { useSymbols } from "../../hooks/useSymbols";
 import { INTERVALS, INTERVAL_CONFIG } from "../../services/types";
 import type { Interval } from "../../services/types";
 import styles from "./StockChart.module.css";
@@ -23,9 +22,6 @@ function StockChart({ id }: Props) {
     const chartRef = useRef<IChartApi | null>(null);
     const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
     const intervalRef = useRef<Interval>("1d");
-
-    const { items: symbolItems } = useSymbols();
-    const symbolsLoading = symbolItems.length === 0;
 
     const {
         symbol,
@@ -129,18 +125,13 @@ function StockChart({ id }: Props) {
         <div class={styles.root}>
             {/* Drag handle + controls */}
             <div class={`${styles.handle} widget-handle`}>
-                {symbolsLoading ? (
-                    <Skeleton variant="rect" width={150} height={22} />
-                ) : (
-                    <div class={styles.symbolCombobox}>
-                        <Combobox
-                            items={symbolItems}
-                            value={symbol}
-                            placeholder="Symbol…"
-                            onChange={handleSymbolSelect}
-                        />
-                    </div>
-                )}
+                <div class={styles.symbolCombobox}>
+                    <TickerSelector
+                        value={symbol}
+                        placeholder="Ticker..."
+                        onChange={handleSymbolSelect}
+                    />
+                </div>
                 <div class={`${styles.dragGrip} sc-drag-grip`} />
                 <div class={styles.controls}>
                     <div class={styles.intervalSelect}>
