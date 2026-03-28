@@ -2,11 +2,14 @@ import type { ComponentChildren } from "preact";
 import styles from "./Badge.module.css";
 
 type BadgeVariant =
+    | "accent"
     | "bull"
     | "bear"
     | "success"
     | "warning"
     | "danger"
+    | "amber-subtle"
+    | "blue-subtle"
     | "muted";
 
 type Props = {

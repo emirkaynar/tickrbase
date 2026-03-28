@@ -7,6 +7,7 @@ import {
 } from "preact/hooks";
 import { Dialog as ArkDialog } from "@ark-ui/react/dialog";
 import { Portal } from "@ark-ui/react/portal";
+import { Badge } from "../Badge/Badge";
 import {
     ArrowLeftIcon,
     GripVerticalIcon,
@@ -721,20 +722,28 @@ export function CommandPalette({
                                                                     styles.itemMain
                                                                 }
                                                             >
-                                                                {cmd.label}
+                                                                <span
+                                                                    className={
+                                                                        styles.itemTitle
+                                                                    }
+                                                                >
+                                                                    {cmd.label}
+                                                                </span>
+                                                                {cmd.badge && (
+                                                                    <Badge
+                                                                        variant={cmd.badge === "LIMA Bridge" ? "accent" : cmd.badge === "TradingView" ? "blue-subtle" : "muted"}
+                                                                        children={
+                                                                            cmd.badge
+                                                                        }
+                                                                    ></Badge>
+                                                                )}
                                                             </span>
                                                             <span
                                                                 className={
                                                                     styles.itemMeta
                                                                 }
                                                             >
-                                                                {cmd.action
-                                                                    .kind ===
-                                                                "go-add-widget" ? (
-                                                                    <PlusIcon />
-                                                                ) : (
-                                                                    cmd.hint
-                                                                )}
+                                                                {cmd.hint}
                                                             </span>
                                                         </button>
                                                     );

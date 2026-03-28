@@ -14,6 +14,7 @@ export type CommandAction =
 export type CommandItem = {
     id: string;
     label: string;
+    badge?: string;
     hint?: string;
     keywords: string[];
     enabled: boolean;

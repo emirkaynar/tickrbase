@@ -40,13 +40,44 @@ export const widgetProvider: CommandProvider = {
         return [
             {
                 id: "widget-stock-chart",
-                label: "Stock Chart",
-                hint: "Add market chart widget",
+                label: "Basic Chart",
+                badge: "LIMA Bridge",
+                hint: "Basic stock chart powered by Yahoo Finance",
                 keywords: ["stock", "chart", "widget", "candlestick"],
                 enabled: true,
-                section: "Widgets",
+                section: "Charts",
                 action: { kind: "add-widget", widget: "stock-chart" },
             },
+            {
+                id: "widget-advanced-chart",
+                label: "Advanced Chart",
+                badge: "TradingView",
+                hint: "Advanced chart widget with more features",
+                keywords: ["advanced", "chart", "widget", "tradingview"],
+                enabled: false,
+                section: "Charts",
+                action: { kind: "placeholder" },
+            },
+            {
+                id: "widget-technical-analysis",
+                label: "Technical Analysis",
+                badge: "TradingView",
+                hint: "Technical analysis tools and indicators",
+                keywords: ["technical", "analysis", "widget", "tradingview"],
+                enabled: false,
+                section: "Technical",
+                action: { kind: "placeholder" },
+            },
+            {
+                id: "widget-economic-calendar",
+                label: "Economic Calendar",
+                badge: "TradingView",
+                hint: "Economic calendar with upcoming events and news",
+                keywords: ["economic", "calendar", "widget", "tradingview"],
+                enabled: false,
+                section: "Economic",
+                action: { kind: "placeholder" },
+            }
         ];
     },
 };

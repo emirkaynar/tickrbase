@@ -45,7 +45,14 @@
 
     /* Mica material */
     --color-mica-surface-base: hsla(0, 0%, 100%, 0.52);
-    --color-mica-border: hsla(0, 0%, 100%, 0.5);
+    --color-mica-border: hsla(0, 0%, 64%, 0.5);
+
+    /* Other Colors */
+    --color-amber: hsl(30, 100%, 32%);
+    --color-blue: hsl(211, 100%, 42%);
+
+    /* Badges */
+    --color-badge-mix: rgba(255, 255, 255, 0.55);
 }
 
 /* ── Dark theme ──────────────────────────────────────────────────────────── */
@@ -90,6 +97,13 @@
     /* Mica material */
     --color-mica-surface-base: hsla(0, 0%, 5%, 0.6);
     --color-mica-border: hsla(0, 0%, 35%, 0.22);
+
+    /* Other Colors */
+    --color-amber: hsl(39, 90%, 50%);
+    --color-blue: hsl(210, 100%, 66%);
+
+    /* Badges */
+    --color-badge-mix: rgba(0, 0, 0, 0.55);
 }
 
 /* ── Spacing scale ───────────────────────────────────────────────────────── */

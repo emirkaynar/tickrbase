@@ -4,8 +4,8 @@
     gap: var(--space-0-5);
     padding: 1px var(--space-1-5);
     border-radius: var(--radius-full);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     font-family: var(--font-mono);
     letter-spacing: 0.03em;
     white-space: nowrap;
@@ -30,6 +30,18 @@
 .danger {
     background: color-mix(in oklab, var(--color-danger) 18%, transparent);
     color: var(--color-danger);
+}
+.accent {
+    background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+    color: var(--color-accent);
+}
+.amber-subtle {
+    background: color-mix(in oklab, var(--color-amber) 18%, var(--color-badge-mix));
+    color: var(--color-amber);
+}
+.blue-subtle {
+    background: color-mix(in oklab, var(--color-blue) 18%, var(--color-badge-mix));
+    color: var(--color-blue);
 }
 .muted {
     background: var(--color-bg-surface);
