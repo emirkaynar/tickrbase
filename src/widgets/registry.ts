@@ -1,15 +1,20 @@
 import type { ComponentType } from "preact";
 
-export type WidgetType = "stock-chart";
+export type WidgetType = "stock-chart" | "advanced-chart";
 
 export type WidgetSize = { w: number; h: number };
+
+export type WidgetComponentProps = {
+    id: string;
+    onRemove: () => void;
+};
 
 export type WidgetDefinition = {
     type: WidgetType;
     label: string;
     defaultSize: WidgetSize;
     minSize: WidgetSize;
-    component: ComponentType<{ id: string }>;
+    component: ComponentType<WidgetComponentProps>;
 };
 
 export type WidgetInstance = {

@@ -25,7 +25,7 @@ type Props = {
     open: boolean;
     initialPage: CommandPalettePage;
     onClose: () => void;
-    onAddWidget: (type: "stock-chart") => void;
+    onAddWidget: (type: "stock-chart" | "advanced-chart") => void;
     screens: Array<{ id: string; name: string }>;
     activeScreenId: string;
     onSetActiveScreen: (screenId: string) => void;
@@ -112,7 +112,7 @@ export function CommandPalette({
 
     const commandContext = useMemo(
         () => ({
-            availableWidgets: ["stock-chart"] as const,
+            availableWidgets: ["stock-chart", "advanced-chart"] as const,
             screens,
             activeScreenId,
         }),
@@ -731,7 +731,15 @@ export function CommandPalette({
                                                                 </span>
                                                                 {cmd.badge && (
                                                                     <Badge
-                                                                        variant={cmd.badge === "LIMA Bridge" ? "accent" : cmd.badge === "TradingView" ? "blue-subtle" : "muted"}
+                                                                        variant={
+                                                                            cmd.badge ===
+                                                                            "LIMA Bridge"
+                                                                                ? "accent"
+                                                                                : cmd.badge ===
+                                                                                    "TradingView"
+                                                                                  ? "blue-subtle"
+                                                                                  : "muted"
+                                                                        }
                                                                         children={
                                                                             cmd.badge
                                                                         }

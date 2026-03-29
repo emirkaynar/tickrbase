@@ -41,36 +41,6 @@
     box-shadow: 0 0 0 1px var(--color-primary);
 }
 
-.removeBtn {
-    position: absolute;
-    top: var(--space-1);
-    right: var(--space-1);
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-elevated);
-    color: var(--color-text-muted);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    z-index: 3;
-    transition:
-        border-color var(--transition-fast),
-        color var(--transition-fast);
-
-    & svg {
-        width: 11px;
-        height: 11px;
-    }
-}
-
-.removeBtn:hover {
-    border-color: var(--color-danger);
-    color: var(--color-danger);
-}
-
 @keyframes fade-in {
     from {
         opacity: 0;

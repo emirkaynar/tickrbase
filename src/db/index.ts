@@ -9,7 +9,7 @@ export type LayoutRecord = {
 export type WidgetStateRecord = {
     id: string;
     symbol: string;
-    interval: string;
+    interval?: string;
 };
 
 export type ChartStateRecord = {

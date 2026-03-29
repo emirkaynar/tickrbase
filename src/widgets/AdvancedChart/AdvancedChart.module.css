@@ -1,0 +1,142 @@
+.root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    background: var(--color-bg-elevated);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    transition: border-color var(--transition-fast);
+}
+
+:global(.react-draggable-dragging) .root {
+    border-color: var(--color-primary) !important;
+}
+
+:global(.react-resizable.resizing) .root {
+    border-color: var(--color-primary) !important;
+}
+
+.chartArea {
+    position: relative;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--color-bg-elevated);
+}
+
+.widgetHost {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    width: 100%;
+    z-index: 1;
+    overflow: hidden;
+}
+
+.widgetHost iframe {
+    display: block;
+    width: calc(100% + 4px) !important;
+    height: calc(100% + 4px) !important;
+    margin: -2px;
+    border: none;
+}
+
+.dragOverlay {
+    position: absolute;
+    top: 0;
+    left: 55%;
+    right: 0;
+    height: 32px;
+    z-index: 11;
+    display: flex;
+    pointer-events: none;
+}
+
+.passThroughLane {
+    flex: 1 1 auto;
+    pointer-events: none;
+}
+
+.actions {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: flex-end;
+    padding-right: 8px;
+    pointer-events: auto;
+}
+
+.dragBtn {
+    opacity: 0.3;
+}
+
+.chartArea:hover .dragBtn {
+    opacity: 0.8;
+}
+
+.dragBtn:active {
+    opacity: 1;
+}
+
+.removeBtn {
+    opacity: 1;
+}
+
+.skeletonOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: var(--color-bg-elevated);
+    background-image: linear-gradient(
+        90deg,
+        transparent 0%,
+        var(--color-bg-surface) 50%,
+        transparent 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.6s ease infinite;
+}
+
+.errorOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: color-mix(in srgb, var(--color-bg) 85%, transparent);
+    padding: 16px;
+}
+
+.errorText {
+    color: var(--color-danger);
+    text-align: center;
+    font-size: var(--font-size-md);
+}
+
+.retryBtn {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
+.retryBtn:hover {
+    border-color: var(--color-primary);
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+    100% {
+        background-position: -200% 0;
+    }
+}

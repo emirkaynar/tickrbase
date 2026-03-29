@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "preact/hooks";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { createChart } from "lightweight-charts";
-import { Select, TickerSelector } from "../../ui";
+import { Select, TickerSelector, WidgetRemoveButton } from "../../ui";
 import type { SelectItem } from "../../ui";
 import { useChartState } from "./useChartState";
 import { createChartConfig, getCandleColors } from "./chartConfig";
@@ -10,14 +10,14 @@ import { INTERVALS, INTERVAL_CONFIG } from "../../services/types";
 import type { Interval } from "../../services/types";
 import styles from "./StockChart.module.css";
 
-type Props = { id: string };
+type Props = { id: string; onRemove: () => void };
 
 const INTERVAL_ITEMS: SelectItem[] = INTERVALS.map((i) => ({
     label: INTERVAL_CONFIG[i].label,
     value: i,
 }));
 
-function StockChart({ id }: Props) {
+function StockChart({ id, onRemove }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -141,6 +141,7 @@ function StockChart({ id }: Props) {
                             onChange={handleIntervalSelect}
                         />
                     </div>
+                    <WidgetRemoveButton onClick={onRemove} />
                 </div>
             </div>
 

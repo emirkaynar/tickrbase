@@ -7,7 +7,6 @@ import {
 import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
-import { XIcon } from "lucide-react";
 import { getWidgetDefinition, type WidgetInstance } from "../widgets/registry";
 import styles from "./GridLayout.module.css";
 
@@ -76,16 +75,11 @@ export function GridLayout({
                     const WidgetComponent = def.component;
                     return (
                         <div key={widget.id} class={styles.slot}>
-                            <button
-                                type="button"
-                                class={styles.removeBtn}
-                                onClick={() => onRemoveWidget(widget.id)}
-                                title="Remove widget"
-                            >
-                                <XIcon />
-                            </button>
                             <div style={{ height: "100%" }}>
-                                <WidgetComponent id={widget.id} />
+                                <WidgetComponent
+                                    id={widget.id}
+                                    onRemove={() => onRemoveWidget(widget.id)}
+                                />
                             </div>
                         </div>
                     );

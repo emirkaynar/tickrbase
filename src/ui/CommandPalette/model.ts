@@ -8,7 +8,7 @@ export type CommandPalettePage =
 export type CommandAction =
     | { kind: "go-add-widget" }
     | { kind: "go-manage-screens" }
-    | { kind: "add-widget"; widget: "stock-chart" }
+    | { kind: "add-widget"; widget: "stock-chart" | "advanced-chart" }
     | { kind: "placeholder" };
 
 export type CommandItem = {
@@ -23,7 +23,7 @@ export type CommandItem = {
 };
 
 export type CommandContext = {
-    availableWidgets: ReadonlyArray<"stock-chart">;
+    availableWidgets: ReadonlyArray<"stock-chart" | "advanced-chart">;
     screens: ReadonlyArray<{ id: string; name: string }>;
     activeScreenId: string;
 };

@@ -54,9 +54,9 @@ export const widgetProvider: CommandProvider = {
                 badge: "TradingView",
                 hint: "Advanced chart widget with more features",
                 keywords: ["advanced", "chart", "widget", "tradingview"],
-                enabled: false,
+                enabled: true,
                 section: "Charts",
-                action: { kind: "placeholder" },
+                action: { kind: "add-widget", widget: "advanced-chart" },
             },
             {
                 id: "widget-technical-analysis",
@@ -77,7 +77,7 @@ export const widgetProvider: CommandProvider = {
                 enabled: false,
                 section: "Economic",
                 action: { kind: "placeholder" },
-            }
+            },
         ];
     },
 };

@@ -2,6 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 
 // Feature imports must come before registry usages so widgets self-register
 import "./widgets/StockChart/StockChart";
+import "./widgets/AdvancedChart/AdvancedChart";
 
 import { useRouter } from "./router";
 import { useLayout } from "./grid/useLayout";
@@ -51,7 +52,7 @@ export function App() {
         openPalette("add-widget");
     }
 
-    function handlePaletteAddWidget(type: "stock-chart") {
+    function handlePaletteAddWidget(type: "stock-chart" | "advanced-chart") {
         void layout.addWidget(type);
     }
 

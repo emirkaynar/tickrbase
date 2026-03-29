@@ -13,3 +13,7 @@ export { Tabs } from "./Tabs/Tabs";
 export type { TabItem } from "./Tabs/Tabs";
 export { TickerSelector } from "./TickerSelector/TickerSelector";
 export { Tooltip } from "./Tooltip/Tooltip";
+export {
+    WidgetDragButton,
+    WidgetRemoveButton,
+} from "./WidgetActions/WidgetActions";

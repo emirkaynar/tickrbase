@@ -1,0 +1,45 @@
+.button {
+    width: 22px;
+    height: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-elevated);
+    color: var(--color-text-muted);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition:
+        border-color var(--transition-fast),
+        color var(--transition-fast),
+        opacity var(--transition-fast),
+        background-color var(--transition-fast);
+}
+
+.button svg {
+    width: 13px;
+    height: 13px;
+}
+
+.drag svg {
+    width: 11px;
+    height: 11px;
+}
+
+.remove:hover {
+    border-color: var(--color-danger);
+    color: var(--color-danger);
+}
+
+.drag {
+    cursor: grab;
+}
+
+.drag:active {
+    cursor: grabbing;
+}
+
+.drag:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}

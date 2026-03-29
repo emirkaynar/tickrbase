@@ -79,6 +79,7 @@ a[href*="tradingview.com"] {
 
 /* ── RGL transition overrides ────────────────────────────────────────────── */
 .react-grid-layout {
+    max-height: calc(100vh - var(--topbar-height)) !important;
     transition: none !important;
 }
 
