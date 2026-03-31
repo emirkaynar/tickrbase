@@ -7,6 +7,7 @@ import type {
 } from "lightweight-charts";
 import { db } from "../../db";
 import { fetchHistory } from "../../services/history";
+import { livePricesClient } from "../../services/livePrices";
 import { updateWatchlist } from "../../services/watchlist";
 import type { Bar, Interval } from "../../services/types";
 import { INTERVALS } from "../../services/types";
@@ -47,6 +48,37 @@ function getPollMs(interval: Interval): number {
     return ["1m", "5m", "15m"].includes(interval) ? 60_000 : 300_000;
 }
 
+function bucketStart(timeSec: number, interval: Interval): number {
+    if (interval === "1m") return Math.floor(timeSec / 60) * 60;
+    if (interval === "5m") return Math.floor(timeSec / 300) * 300;
+    if (interval === "15m") return Math.floor(timeSec / 900) * 900;
+    if (interval === "30m") return Math.floor(timeSec / 1800) * 1800;
+    if (interval === "1h") return Math.floor(timeSec / 3600) * 3600;
+
+    const dt = new Date(timeSec * 1000);
+    if (interval === "1d") {
+        return Math.floor(
+            Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()) /
+                1000,
+        );
+    }
+    if (interval === "1wk") {
+        const day = dt.getUTCDay();
+        const offsetToMonday = (day + 6) % 7;
+        const monday = new Date(
+            Date.UTC(
+                dt.getUTCFullYear(),
+                dt.getUTCMonth(),
+                dt.getUTCDate() - offsetToMonday,
+            ),
+        );
+        return Math.floor(monday.getTime() / 1000);
+    }
+    return Math.floor(
+        Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1) / 1000,
+    );
+}
+
 export function useChartState(
     id: string,
     refs: ChartRefs,
@@ -55,6 +87,10 @@ export function useChartState(
 
     const _prev = lastState.get(id);
     const lastBarTimeRef = useRef<number | null>(null);
+    const lastLiveTickMsRef = useRef<number>(Date.now());
+    const latestBarRef = useRef<Bar | null>(
+        _prev?.bars?.length ? _prev.bars[_prev.bars.length - 1] : null,
+    );
     const chartStateRef = useRef<{ from: number; to: number } | null>(null);
 
     const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
@@ -113,6 +149,7 @@ export function useChartState(
                     .setVisibleRange(chartStateRef.current as never);
             }
             lastState.set(id, { bars, interval, symbol });
+            latestBarRef.current = bars.length ? bars[bars.length - 1] : null;
             everLoaded.add(id);
             setStatus("ok");
         },
@@ -183,9 +220,12 @@ export function useChartState(
                     ctrl.signal,
                 );
                 if (cancelled || !data.candles.length) return;
+                for (const candle of data.candles) {
+                    series.update(candle as CandlestickData<UTCTimestamp>);
+                }
                 const last = data.candles[data.candles.length - 1];
-                series.update(last as CandlestickData<UTCTimestamp>);
                 lastBarTimeRef.current = last.time;
+                latestBarRef.current = last;
                 setWarning("");
             } catch (err) {
                 if (cancelled) return;
@@ -212,6 +252,107 @@ export function useChartState(
         applyBars,
         saveChartState,
     ]);
+
+    // Live websocket ticks - update current candle or append next bucket.
+    useEffect(() => {
+        if (!stateReady) return;
+
+        const unsubscribe = livePricesClient.onTick((tick) => {
+            if (tick.symbol !== symbol) return;
+            const series = seriesRef.current;
+            if (!series) return;
+
+            lastLiveTickMsRef.current = Date.now();
+            const intervalNow = intervalRef.current;
+            const bucket = bucketStart(Math.floor(tick.ts / 1000), intervalNow);
+
+            const prev = latestBarRef.current;
+            const nextBar: Bar =
+                prev && bucket === prev.time
+                    ? {
+                          ...prev,
+                          high: Math.max(prev.high, tick.price),
+                          low: Math.min(prev.low, tick.price),
+                          close: tick.price,
+                      }
+                    : prev && bucket > prev.time
+                      ? {
+                            time: bucket,
+                            open: prev.close,
+                            high: tick.price,
+                            low: tick.price,
+                            close: tick.price,
+                        }
+                      : {
+                            time: bucket,
+                            open: tick.price,
+                            high: tick.price,
+                            low: tick.price,
+                            close: tick.price,
+                        };
+
+            series.update(nextBar as CandlestickData<UTCTimestamp>);
+            latestBarRef.current = nextBar;
+            lastBarTimeRef.current = nextBar.time;
+            setWarning("");
+        });
+
+        return unsubscribe;
+    }, [stateReady, symbol, seriesRef, intervalRef]);
+
+    // If no live tick arrives for 60s, force a since-backfill pull as recovery.
+    useEffect(() => {
+        if (!stateReady) return;
+
+        let cancelled = false;
+        const ctrl = new AbortController();
+
+        const timer = setInterval(() => {
+            if (cancelled) return;
+            if (!everLoaded.has(id) || lastBarTimeRef.current === null) return;
+
+            const silenceMs = Date.now() - lastLiveTickMsRef.current;
+            if (silenceMs < 60_000) return;
+
+            void fetchHistory(
+                symbol,
+                intervalRef.current,
+                getPeriod(intervalRef.current),
+                lastBarTimeRef.current,
+                ctrl.signal,
+            )
+                .then((data) => {
+                    if (cancelled || !data.candles.length) return;
+                    const series = seriesRef.current;
+                    if (!series) return;
+                    for (const candle of data.candles) {
+                        series.update(candle as CandlestickData<UTCTimestamp>);
+                    }
+                    const last = data.candles[data.candles.length - 1];
+                    latestBarRef.current = last;
+                    lastBarTimeRef.current = last.time;
+                    setWarning("");
+                    lastLiveTickMsRef.current = Date.now();
+                })
+                .catch((err) => {
+                    if (cancelled) return;
+                    if (
+                        err instanceof DOMException &&
+                        err.name === "AbortError"
+                    )
+                        return;
+                    setWarning(
+                        err instanceof Error ? err.message : "Network error",
+                    );
+                });
+        }, 10_000);
+
+        return () => {
+            cancelled = true;
+            ctrl.abort();
+            clearInterval(timer);
+        };
+    }, [id, symbol, stateReady, seriesRef, intervalRef]);
 
     return {
         status,

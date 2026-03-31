@@ -8,7 +8,8 @@ import { createChartConfig, getCandleColors } from "./chartConfig";
 import { registerWidget } from "../registry";
 import { INTERVALS, INTERVAL_CONFIG } from "../../services/types";
 import type { Interval } from "../../services/types";
-import styles from "./StockChart.module.css";
+import { livePricesClient } from "../../services/livePrices";
+import styles from "./BasicChart.module.css";
 
 type Props = { id: string; onRemove: () => void };
 
@@ -36,6 +37,12 @@ function StockChart({ id, onRemove }: Props) {
 
     const isIntraday = !["1d", "1wk", "1mo"].includes(interval);
 
+    // Keep websocket subscription map in sync with current widget symbol.
+    useEffect(() => {
+        if (!stateReady) return;
+        livePricesClient.updateSymbol(id, symbol);
+    }, [id, symbol, stateReady]);
+
     // Create chart once container is ready
     useEffect(() => {
         const container = containerRef.current;
@@ -55,9 +62,10 @@ function StockChart({ id, onRemove }: Props) {
             chartRef.current = null;
             seriesRef.current = null;
             chart.remove();
+            livePricesClient.removeWidget(id);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [id]);
 
     // Update chart config when intraday flag changes (interval switch)
     useEffect(() => {
@@ -108,9 +116,12 @@ function StockChart({ id, onRemove }: Props) {
 
     const handleSymbolSelect = useCallback(
         (value: string) => {
-            if (value) setSymbol(value);
+            if (value) {
+                setSymbol(value);
+                livePricesClient.updateSymbol(id, value);
+            }
         },
-        [setSymbol],
+        [setSymbol, id],
     );
 
     const handleIntervalSelect = useCallback(
@@ -125,15 +136,12 @@ function StockChart({ id, onRemove }: Props) {
         <div class={styles.root}>
             {/* Drag handle + controls */}
             <div class={`${styles.handle} widget-handle`}>
-                <div class={styles.symbolCombobox}>
+                <div class={styles.widgetInputs}>
                     <TickerSelector
                         value={symbol}
                         placeholder="Ticker..."
                         onChange={handleSymbolSelect}
                     />
-                </div>
-                <div class={`${styles.dragGrip} sc-drag-grip`} />
-                <div class={styles.controls}>
                     <div class={styles.intervalSelect}>
                         <Select
                             items={INTERVAL_ITEMS}
@@ -141,6 +149,9 @@ function StockChart({ id, onRemove }: Props) {
                             onChange={handleIntervalSelect}
                         />
                     </div>
+                </div>
+                <div class={`${styles.dragGrip} sc-drag-grip`} />
+                <div class={styles.controls}>
                     <WidgetRemoveButton onClick={onRemove} />
                 </div>
             </div>

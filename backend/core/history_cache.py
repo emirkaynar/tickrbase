@@ -177,6 +177,10 @@ def get_history(
             if latest_time is not None:
                 pad = INTERVAL_SECONDS.get(interval, 60) * 2
                 start = max(latest_time - pad, 0)
+                max_range_period = YAHOO_MAX_RANGE.get(interval)
+                if max_range_period and max_range_period != "max":
+                    # Keep start within provider-supported lookback for this interval.
+                    start = max(start, _period_start(max_range_period, now_ts))
             try:
                 delta = provider.get_history(
                     normalized,

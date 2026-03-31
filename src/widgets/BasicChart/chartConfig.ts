@@ -1,5 +1,5 @@
-import type { DeepPartial, ChartOptions, Time } from "lightweight-charts";
-import { getChartColors } from "../../styles/tokens";
+import { type DeepPartial, type ChartOptions, type Time, CrosshairMode } from "lightweight-charts";
+import { getChartColors, getFonts } from "../../styles/tokens";
 
 function istFmt(unixSec: number, opts: Intl.DateTimeFormatOptions): string {
     return new Intl.DateTimeFormat("en-GB", {
@@ -12,16 +12,27 @@ export function createChartConfig(
     isIntraday: boolean,
 ): DeepPartial<ChartOptions> {
     const c = getChartColors();
+    const f = getFonts();
 
     return {
         autoSize: false,
         layout: {
             background: { color: c.bgElevated },
             textColor: c.text,
+            fontFamily: f.mono,
         },
         grid: {
             vertLines: { color: c.bgSurface },
             horzLines: { color: c.bgSurface },
+        },
+        crosshair: {
+            mode: CrosshairMode.Magnet, // only show vert line
+            vertLine: {
+                labelBackgroundColor: c.bgSurface,
+            },
+            horzLine: {
+                labelBackgroundColor: c.bgSurface,
+            },
         },
         rightPriceScale: { borderColor: c.border },
         leftPriceScale: { borderColor: c.border },

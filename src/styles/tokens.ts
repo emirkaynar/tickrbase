@@ -84,3 +84,11 @@ export function getChartColors() {
         warning: colorToken("--color-warning"),
     };
 }
+
+export function getFonts() {
+    return {
+        base: token("--font-base"),
+        mono: token("--font-mono"),
+    };
+}
+

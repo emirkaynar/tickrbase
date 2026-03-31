@@ -12,18 +12,23 @@ from .core.config import CORS_ORIGINS, PRICE_TTL_SECONDS
 from .core.db import init_db
 from .core.yahoo import YahooFinanceProvider
 from .scheduler import create_scheduler
+from .services.streaming import LivePriceStreamHub
 
 
 provider = YahooFinanceProvider()
 price_cache = TTLCache[float](PRICE_TTL_SECONDS)
+stream_hub = LivePriceStreamHub()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
+    await stream_hub.start()
     scheduler = create_scheduler(provider, price_cache)
     scheduler.start()
     yield
+    await stream_hub.broadcast_shutdown("Server is shutting down")
+    await stream_hub.stop()
     scheduler.shutdown(wait=False)
 
 
@@ -56,4 +61,4 @@ async def unhandled_exception_handler(_request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"error": True, "message": str(exc)})
 
 
-app.include_router(build_router(provider, price_cache))
+app.include_router(build_router(provider, price_cache, stream_hub))

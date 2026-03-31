@@ -1,7 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 
 // Feature imports must come before registry usages so widgets self-register
-import "./widgets/StockChart/StockChart";
+import "./widgets/BasicChart/BasicChart";
 import "./widgets/AdvancedChart/AdvancedChart";
 
 import { useRouter } from "./router";
@@ -14,6 +14,7 @@ import { PortfolioPage } from "./features/portfolio/PortfolioPage";
 import { AlertsPage } from "./features/alerts/AlertsPage";
 import { CommandPalette } from "./ui";
 import type { CommandPalettePage } from "./ui";
+import { livePricesClient, type LiveStatus } from "./services/livePrices";
 
 export function App() {
     const { route, navigate } = useRouter();
@@ -22,11 +23,23 @@ export function App() {
 
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [palettePage, setPalettePage] = useState<CommandPalettePage>("root");
+    const [liveStatus, setLiveStatus] = useState<LiveStatus>(
+        livePricesClient.getStatus(),
+    );
 
     function openPalette(page: CommandPalettePage) {
         setPalettePage(page);
         setPaletteOpen(true);
     }
+
+    useEffect(() => {
+        livePricesClient.connect();
+        const unsubscribe = livePricesClient.onStatus(setLiveStatus);
+        return () => {
+            unsubscribe();
+            livePricesClient.disconnect();
+        };
+    }, []);
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -103,6 +116,26 @@ export function App() {
                 {route === "portfolio" && <PortfolioPage />}
                 {route === "alerts" && <AlertsPage />}
             </AppLayout>
+
+            {import.meta.env.DEV && (
+                <div
+                    style={{
+                        position: "fixed",
+                        right: "12px",
+                        bottom: "12px",
+                        zIndex: 1000,
+                        border: "1px solid var(--color-border)",
+                        background: "var(--color-bg-elevated)",
+                        color: "var(--color-text-muted)",
+                        borderRadius: "var(--radius-sm)",
+                        fontSize: "11px",
+                        padding: "4px 8px",
+                        pointerEvents: "none",
+                    }}
+                >
+                    WS: {liveStatus}
+                </div>
+            )}
 
             <CommandPalette
                 open={paletteOpen}
