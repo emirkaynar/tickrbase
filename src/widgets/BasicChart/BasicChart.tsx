@@ -152,7 +152,7 @@ function StockChart({ id, onRemove }: Props) {
                 </div>
                 <div class={`${styles.dragGrip} sc-drag-grip`} />
                 <div class={styles.controls}>
-                    <WidgetRemoveButton onClick={onRemove} />
+                    <WidgetRemoveButton class={styles.removeBtn} onClick={onRemove} />
                 </div>
             </div>
 

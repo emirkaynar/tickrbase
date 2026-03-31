@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { MoonIcon, PlusIcon, SunIcon, PencilIcon } from "lucide-react";
-import { Button, Dialog, Input, Tabs } from "../../ui";
+import { Button, Tabs, Tooltip } from "../../ui";
 import type { TabItem } from "../../ui";
 import type { Theme } from "../../hooks/useTheme";
 import type { Route } from "../../router";
@@ -12,8 +12,7 @@ type Props = {
     screens: Screen[];
     activeScreenId: string;
     onScreenChange: (id: string) => void;
-    onCreateScreen: () => void;
-    onRenameScreen: (name: string) => void;
+    onManageScreens: () => void;
     onAddWidget: () => void;
     route: Route;
     onNavigate: (r: Route) => void;
@@ -57,8 +56,7 @@ export function TopBar({
     screens,
     activeScreenId,
     onScreenChange,
-    onCreateScreen,
-    onRenameScreen,
+    onManageScreens,
     onAddWidget,
     route,
     onNavigate,
@@ -66,20 +64,6 @@ export function TopBar({
     onToggleTheme,
 }: Props) {
     const clock = useClock();
-    const [renameOpen, setRenameOpen] = useState(false);
-    const [renameValue, setRenameValue] = useState("");
-
-    const openRename = () => {
-        const current = screens.find((s) => s.id === activeScreenId);
-        setRenameValue(current?.name ?? "");
-        setRenameOpen(true);
-    };
-
-    const submitRename = () => {
-        const trimmed = renameValue.trim();
-        if (trimmed) onRenameScreen(trimmed);
-        setRenameOpen(false);
-    };
 
     const tabItems: TabItem[] = screens.map((s) => ({
         value: s.id,
@@ -106,30 +90,26 @@ export function TopBar({
                             value={activeScreenId}
                             onChange={onScreenChange}
                         />
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={onCreateScreen}
-                            title="New screen"
-                        >
-                            <PlusIcon />
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={openRename}
-                            title="Rename screen"
-                        >
-                            <PencilIcon />
-                        </Button>
+                        <Tooltip content="Manage screens">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onManageScreens}
+                                title="Manage screens"
+                            >
+                                <PencilIcon />
+                            </Button>
+                        </Tooltip>
                     </div>
                 )}
 
                 {/* Add widget — only on dashboard */}
                 {route === "dashboard" && (
+                    <Tooltip content="Add widget">
                     <Button variant="outline" size="sm" onClick={onAddWidget}>
                         <PlusIcon /> Widget
                     </Button>
+                    </Tooltip>
                 )}
 
                 <div class={styles.spacer} />
@@ -155,51 +135,19 @@ export function TopBar({
                 </nav>
 
                 {/* Theme toggle */}
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={onToggleTheme}
-                    title="Toggle theme"
-                >
-                    {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-                </Button>
-
+                <Tooltip content="Toggle theme">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={onToggleTheme}
+                        title="Toggle theme"
+                    >
+                        {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+                    </Button>
+                </Tooltip>
                 {/* Clock */}
                 <span class={styles.clock}>{clock}</span>
             </header>
-
-            {/* Rename dialog */}
-            <Dialog
-                open={renameOpen}
-                onClose={() => setRenameOpen(false)}
-                title="Rename screen"
-            >
-                <div class={styles.renameForm}>
-                    <Input
-                        value={renameValue}
-                        onChange={setRenameValue}
-                        placeholder="Screen name"
-                        size="md"
-                        autoFocus
-                    />
-                    <div class={styles.renameActions}>
-                        <Button
-                            variant="ghost"
-                            size="md"
-                            onClick={() => setRenameOpen(false)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            variant="solid"
-                            size="md"
-                            onClick={submitRename}
-                        >
-                            Rename
-                        </Button>
-                    </div>
-                </div>
-            </Dialog>
         </>
     );
 }

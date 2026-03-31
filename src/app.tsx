@@ -65,6 +65,10 @@ export function App() {
         openPalette("add-widget");
     }
 
+    function manageScreens() {
+        openPalette("manage-screens");
+    }
+
     function handlePaletteAddWidget(type: "stock-chart" | "advanced-chart") {
         void layout.addWidget(type);
     }
@@ -94,8 +98,7 @@ export function App() {
             screens={layout.screens}
             activeScreenId={layout.activeScreenId}
             onScreenChange={(id) => void layout.setActiveScreen(id)}
-            onCreateScreen={() => void layout.createScreen()}
-            onRenameScreen={(name) => void layout.renameActiveScreen(name)}
+            onManageScreens={manageScreens}
             onAddWidget={handleAddWidget}
             route={route}
             onNavigate={navigate}
