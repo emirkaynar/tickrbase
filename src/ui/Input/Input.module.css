@@ -1,6 +1,6 @@
 .input {
     width: 100%;
-    border: 1px solid var(--color-border);
+    border: none;
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--color-text);
@@ -15,10 +15,8 @@
     color: var(--color-text-subtle);
 }
 
-.input:focus {
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 2px
-        color-mix(in oklab, var(--color-primary) 25%, transparent);
+.input:hover, .input:focus {
+    background: var(--color-bg-surface);
 }
 
 .input:disabled {

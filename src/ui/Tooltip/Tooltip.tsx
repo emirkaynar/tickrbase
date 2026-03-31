@@ -10,7 +10,7 @@ type Props = {
 
 export function Tooltip({ content, children }: Props) {
     return (
-        <ArkTooltip.Root openDelay={400} closeDelay={0}>
+        <ArkTooltip.Root openDelay={400} closeDelay={0} positioning={{placement: 'top'}}>
             <ArkTooltip.Trigger asChild>
                 <span>{children}</span>
             </ArkTooltip.Trigger>

@@ -1,28 +1,43 @@
 .content {
-    padding: var(--space-1) var(--space-2);
-    background: var(--color-bg-surface);
-    border: 1px solid var(--color-border);
+    padding: var(--space-1-5) var(--space-3);
+    background: var(--color-mica-surface-light);
+    backdrop-filter: blur(var(--mica-backdrop-blur)) saturate(var(--mica-backdrop-saturate));
+    border: none;
     border-radius: var(--radius-sm);
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     font-family: var(--font-mono);
     color: var(--color-text);
     box-shadow: var(--shadow-sm);
     z-index: var(--z-tooltip);
     white-space: nowrap;
-    animation: fade-in var(--transition-fast) ease;
+
+    &[data-state="open"] {
+        animation: scale-fade-in 0.15s ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: scale-fade-out 0.1s ease-in;
+    }
 }
 
-.content[data-state="closed"] {
-    display: none;
-}
-
-@keyframes fade-in {
+@keyframes scale-fade-in {
     from {
         opacity: 0;
-        transform: translateY(2px);
+        transform: scale(0.96);
     }
     to {
         opacity: 1;
-        transform: translateY(0);
+        transform: scale(1);
+    }
+}
+
+@keyframes scale-fade-out {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.96);
     }
 }

@@ -48,6 +48,15 @@ function getPollMs(interval: Interval): number {
     return ["1m", "5m", "15m"].includes(interval) ? 60_000 : 300_000;
 }
 
+function intervalSeconds(interval: Interval): number | null {
+    if (interval === "1m") return 60;
+    if (interval === "5m") return 300;
+    if (interval === "15m") return 900;
+    if (interval === "30m") return 1800;
+    if (interval === "1h") return 3600;
+    return null;
+}
+
 function bucketStart(timeSec: number, interval: Interval): number {
     if (interval === "1m") return Math.floor(timeSec / 60) * 60;
     if (interval === "5m") return Math.floor(timeSec / 300) * 300;
@@ -77,6 +86,19 @@ function bucketStart(timeSec: number, interval: Interval): number {
     return Math.floor(
         Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1) / 1000,
     );
+}
+
+function alignedBucketStart(
+    timeSec: number,
+    interval: Interval,
+    anchorTime: number | null,
+): number {
+    const step = intervalSeconds(interval);
+    if (step === null || anchorTime === null) {
+        return bucketStart(timeSec, interval);
+    }
+    const offset = ((anchorTime % step) + step) % step;
+    return Math.floor((timeSec - offset) / step) * step + offset;
 }
 
 export function useChartState(
@@ -150,6 +172,7 @@ export function useChartState(
             }
             lastState.set(id, { bars, interval, symbol });
             latestBarRef.current = bars.length ? bars[bars.length - 1] : null;
+            lastBarTimeRef.current = latestBarRef.current?.time ?? null;
             everLoaded.add(id);
             setStatus("ok");
         },
@@ -197,7 +220,6 @@ export function useChartState(
                 }
                 const bars: Bar[] = data.candles;
                 applyBars(bars, true);
-                lastBarTimeRef.current = bars[bars.length - 1].time;
                 setWarning("");
             } catch (err) {
                 if (cancelled) return;
@@ -220,12 +242,19 @@ export function useChartState(
                     ctrl.signal,
                 );
                 if (cancelled || !data.candles.length) return;
+                let latestTime = latestBarRef.current?.time ?? null;
+                let lastApplied: Bar | null = null;
                 for (const candle of data.candles) {
+                    if (latestTime !== null && candle.time < latestTime) {
+                        continue;
+                    }
                     series.update(candle as CandlestickData<UTCTimestamp>);
+                    latestTime = candle.time;
+                    lastApplied = candle;
                 }
-                const last = data.candles[data.candles.length - 1];
-                lastBarTimeRef.current = last.time;
-                latestBarRef.current = last;
+                if (!lastApplied) return;
+                lastBarTimeRef.current = lastApplied.time;
+                latestBarRef.current = lastApplied;
                 setWarning("");
             } catch (err) {
                 if (cancelled) return;
@@ -264,11 +293,17 @@ export function useChartState(
 
             lastLiveTickMsRef.current = Date.now();
             const intervalNow = intervalRef.current;
-            const bucket = bucketStart(Math.floor(tick.ts / 1000), intervalNow);
-
             const prev = latestBarRef.current;
+            const tickTimeSec = Math.floor(tick.ts / 1000);
+            const bucket = alignedBucketStart(
+                tickTimeSec,
+                intervalNow,
+                prev?.time ?? null,
+            );
+            const step = intervalSeconds(intervalNow);
+
             const nextBar: Bar =
-                prev && bucket === prev.time
+                prev && (step === null || bucket <= prev.time)
                     ? {
                           ...prev,
                           high: Math.max(prev.high, tick.price),
@@ -290,6 +325,10 @@ export function useChartState(
                             low: tick.price,
                             close: tick.price,
                         };
+
+            if (prev && nextBar.time < prev.time) {
+                return;
+            }
 
             series.update(nextBar as CandlestickData<UTCTimestamp>);
             latestBarRef.current = nextBar;
@@ -325,12 +364,19 @@ export function useChartState(
                     if (cancelled || !data.candles.length) return;
                     const series = seriesRef.current;
                     if (!series) return;
+                    let latestTime = latestBarRef.current?.time ?? null;
+                    let lastApplied: Bar | null = null;
                     for (const candle of data.candles) {
+                        if (latestTime !== null && candle.time < latestTime) {
+                            continue;
+                        }
                         series.update(candle as CandlestickData<UTCTimestamp>);
+                        latestTime = candle.time;
+                        lastApplied = candle;
                     }
-                    const last = data.candles[data.candles.length - 1];
-                    latestBarRef.current = last;
-                    lastBarTimeRef.current = last.time;
+                    if (!lastApplied) return;
+                    latestBarRef.current = lastApplied;
+                    lastBarTimeRef.current = lastApplied.time;
                     setWarning("");
                     lastLiveTickMsRef.current = Date.now();
                 })
