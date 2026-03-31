@@ -99,7 +99,12 @@ function AdvancedChart({ id, onRemove }: Props) {
     const [hydrated, setHydrated] = useState(false);
     const hostRef = useRef<HTMLDivElement>(null);
     const iframeWindowRef = useRef<Window | null>(null);
+    const symbolRef = useRef(symbol);
     const persistedSymbolRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        symbolRef.current = symbol;
+    }, [symbol]);
 
     useEffect(() => {
         let cancelled = false;
@@ -135,6 +140,15 @@ function AdvancedChart({ id, onRemove }: Props) {
 
     useEffect(() => {
         const onMessage = (event: MessageEvent) => {
+            if (!iframeWindowRef.current) {
+                const host = hostRef.current;
+                const iframe = host?.querySelector(
+                    "iframe",
+                ) as HTMLIFrameElement | null;
+                if (iframe?.contentWindow) {
+                    iframeWindowRef.current = iframe.contentWindow;
+                }
+            }
             if (!iframeWindowRef.current) return;
             if (event.source !== iframeWindowRef.current) return;
 
@@ -157,6 +171,7 @@ function AdvancedChart({ id, onRemove }: Props) {
             if (shortName === persistedSymbolRef.current) return;
 
             persistedSymbolRef.current = shortName;
+            setSymbol(shortName);
             void db.widgetState.put({ id, symbol: shortName });
         };
 
@@ -198,7 +213,7 @@ function AdvancedChart({ id, onRemove }: Props) {
         script.type = "text/javascript";
         script.async = true;
         script.innerHTML = JSON.stringify(
-            createWidgetConfig(symbol, interval, themeMode),
+            createWidgetConfig(symbolRef.current, interval, themeMode),
         );
         script.onerror = () => {
             setError(
@@ -208,34 +223,43 @@ function AdvancedChart({ id, onRemove }: Props) {
 
         host.appendChild(script);
 
-        // Capture the iframe's contentWindow once it is created, so we can map
-        // postMessage events to this widget instance during dev diagnostics.
-        const probeInterval = window.setInterval(() => {
+        const bindIframeWindow = () => {
             const iframe = host.querySelector(
                 "iframe",
             ) as HTMLIFrameElement | null;
-            if (!iframe?.contentWindow) return;
+            if (!iframe?.contentWindow) return false;
             iframeWindowRef.current = iframe.contentWindow;
-            window.clearInterval(probeInterval);
-        }, 100);
+            return true;
+        };
+
+        // Bind iframe window reliably across slow loads/re-inits.
+        bindIframeWindow();
+
+        const iframeObserver = new MutationObserver(() => {
+            void bindIframeWindow();
+        });
+        iframeObserver.observe(host, { childList: true, subtree: true });
+
+        let rafId = 0;
+        const watchUntilBound = () => {
+            if (bindIframeWindow()) return;
+            rafId = window.requestAnimationFrame(watchUntilBound);
+        };
+        watchUntilBound();
 
         // Hide skeleton after a delay to allow TradingView to render
         const loadingTimeout = setTimeout(() => {
             setLoading(false);
         }, 2000);
 
-        const probeTimeout = window.setTimeout(() => {
-            window.clearInterval(probeInterval);
-        }, 3000);
-
         return () => {
             iframeWindowRef.current = null;
             host.innerHTML = "";
             clearTimeout(loadingTimeout);
-            window.clearInterval(probeInterval);
-            window.clearTimeout(probeTimeout);
+            iframeObserver.disconnect();
+            if (rafId) window.cancelAnimationFrame(rafId);
         };
-    }, [symbol, interval, themeMode, retrySeed, hydrated]);
+    }, [interval, themeMode, retrySeed, hydrated]);
 
     return (
         <div class={styles.root}>
