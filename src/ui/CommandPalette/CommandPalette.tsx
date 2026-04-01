@@ -25,7 +25,9 @@ type Props = {
     open: boolean;
     initialPage: CommandPalettePage;
     onClose: () => void;
-    onAddWidget: (type: "stock-chart" | "advanced-chart") => void;
+    onAddWidget: (
+        type: "stock-chart" | "advanced-chart" | "economic-calendar",
+    ) => void;
     screens: Array<{ id: string; name: string }>;
     activeScreenId: string;
     onSetActiveScreen: (screenId: string) => void;
@@ -112,7 +114,11 @@ export function CommandPalette({
 
     const commandContext = useMemo(
         () => ({
-            availableWidgets: ["stock-chart", "advanced-chart"] as const,
+            availableWidgets: [
+                "stock-chart",
+                "advanced-chart",
+                "economic-calendar",
+            ] as const,
             screens,
             activeScreenId,
         }),

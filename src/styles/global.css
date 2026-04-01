@@ -88,7 +88,7 @@ a[href*="tradingview.com"] {
 }
 
 .react-grid-item.react-draggable-dragging {
-    transition: transform 10ms ease !important;
+    transition: transform 10ms ease, width 100ms ease, height 100ms ease !important;
 }
 
 .react-grid-item.resizing {

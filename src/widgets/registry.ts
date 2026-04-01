@@ -1,6 +1,6 @@
 import type { ComponentType } from "preact";
 
-export type WidgetType = "stock-chart" | "advanced-chart";
+export type WidgetType = "stock-chart" | "advanced-chart" | "economic-calendar";
 
 export type WidgetSize = { w: number; h: number };
 

@@ -59,6 +59,16 @@ export const widgetProvider: CommandProvider = {
                 action: { kind: "add-widget", widget: "advanced-chart" },
             },
             {
+                id: "widget-economic-calendar",
+                label: "Economic Calendar",
+                badge: "TradingView",
+                hint: "Economic calendar with upcoming events and news",
+                keywords: ["economic", "calendar", "widget", "tradingview"],
+                enabled: true,
+                section: "Economic",
+                action: { kind: "add-widget", widget: "economic-calendar" },
+            },
+            {
                 id: "widget-technical-analysis",
                 label: "Technical Analysis",
                 badge: "TradingView",
@@ -66,16 +76,6 @@ export const widgetProvider: CommandProvider = {
                 keywords: ["technical", "analysis", "widget", "tradingview"],
                 enabled: false,
                 section: "Technical",
-                action: { kind: "placeholder" },
-            },
-            {
-                id: "widget-economic-calendar",
-                label: "Economic Calendar",
-                badge: "TradingView",
-                hint: "Economic calendar with upcoming events and news",
-                keywords: ["economic", "calendar", "widget", "tradingview"],
-                enabled: false,
-                section: "Economic",
                 action: { kind: "placeholder" },
             },
         ];

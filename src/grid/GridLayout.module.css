@@ -36,11 +36,6 @@
     transition: none;
 }
 
-.resizing .react-grid-item.react-grid-item-resizing .slot > * {
-    border-color: var(--color-primary) !important;
-    box-shadow: 0 0 0 1px var(--color-primary);
-}
-
 @keyframes fade-in {
     from {
         opacity: 0;
