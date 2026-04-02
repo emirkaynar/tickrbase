@@ -13,7 +13,7 @@ import { TopBar } from "./layout/TopBar/TopBar";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { PortfolioPage } from "./features/portfolio/PortfolioPage";
 import { AlertsPage } from "./features/alerts/AlertsPage";
-import { CommandPalette } from "./ui";
+import { CommandPalette, toast, ToastViewport } from "./ui";
 import type { CommandPalettePage } from "./ui";
 import { livePricesClient, type LiveStatus } from "./services/livePrices";
 
@@ -70,14 +70,23 @@ export function App() {
         openPalette("manage-screens");
     }
 
-    function handlePaletteAddWidget(
+    async function handlePaletteAddWidget(
         type: "stock-chart" | "advanced-chart" | "economic-calendar",
     ) {
-        void layout.addWidget(type);
+        const result = await layout.addWidget(type);
+        if (!result.success && result.noSpace) {
+            setPaletteOpen(false);
+            toast.warning({
+                title: "No space available",
+                description:
+                    "This screen is full. Remove or resize a widget, then try again.",
+            });
+        }
     }
 
     function handlePaletteCreateScreen(name?: string) {
         void layout.createScreen(name);
+        
     }
 
     function handlePaletteRenameScreen(screenId: string, name: string) {
@@ -123,7 +132,7 @@ export function App() {
                 {route === "alerts" && <AlertsPage />}
             </AppLayout>
 
-            {import.meta.env.DEV && (
+            {import.meta.env.MODE === "debug" && (
                 <div
                     style={{
                         position: "fixed",
@@ -157,6 +166,8 @@ export function App() {
                 onReorderScreens={handlePaletteReorderScreens}
                 onMoveScreen={handlePaletteMoveScreen}
             />
+
+            <ToastViewport />
         </>
     );
 }

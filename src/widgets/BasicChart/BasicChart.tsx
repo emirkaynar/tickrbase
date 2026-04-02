@@ -177,7 +177,7 @@ function StockChart({ id, onRemove }: Props) {
 registerWidget({
     type: "stock-chart",
     label: "Stock Chart",
-    defaultSize: { w: 10, h: 12 },
+    defaultSize: { w: 11, h: 12 },
     minSize: { w: 7, h: 8 },
     component: StockChart,
 });

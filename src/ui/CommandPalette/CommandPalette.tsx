@@ -223,6 +223,7 @@ export function CommandPalette({
         setQuery(nextDefaultScreenName(screens));
         setActiveIndex(0);
         setManageLane("row");
+        
     };
 
     const beginRenameScreen = (screenId?: string) => {

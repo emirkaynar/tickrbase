@@ -5,9 +5,11 @@ import { updateWatchlist } from "../services/watchlist";
 import { useDebounce } from "../hooks/useDebounce";
 import {
     createWidgetInstance,
+    getWidgetDefinition,
     type WidgetInstance,
     type WidgetType,
 } from "../widgets/registry";
+import { calculateGridConstraints, findFittingSize } from "./constraints";
 
 const ACTIVE_SCREEN_KEY = "active-screen" as const;
 
@@ -279,9 +281,35 @@ export function useLayout() {
     );
 
     const addWidget = useCallback(
-        async (type: WidgetType) => {
-            if (!activeScreenId) return;
-            const record = createWidgetInstance(activeScreenId, type);
+        async (
+            type: WidgetType,
+        ): Promise<{ success: boolean; noSpace?: boolean }> => {
+            if (!activeScreenId) return { success: false };
+
+            const def = getWidgetDefinition(type);
+            const constraints = calculateGridConstraints(window.innerHeight);
+
+            // Free-placement add: default first, then width/height fallback.
+            const fitting = findFittingSize(
+                widgets,
+                def.defaultSize,
+                def.minSize,
+                constraints,
+            );
+
+            // No space available
+            if (!fitting) {
+                return { success: false, noSpace: true };
+            }
+
+            // Create widget with calculated position and size
+            const record = createWidgetInstance(activeScreenId, type, {
+                x: fitting.position.x,
+                y: fitting.position.y,
+                w: fitting.size.w,
+                h: fitting.size.h,
+            });
+
             await db.widgets.add(record);
             setWidgets((prev) => [...prev, record]);
 
@@ -289,8 +317,10 @@ export function useLayout() {
             void updateWatchlist([
                 { ticker: "XU100.IS", interval: "1d" },
             ]).catch(() => {});
+
+            return { success: true };
         },
-        [activeScreenId],
+        [activeScreenId, widgets],
     );
 
     const removeWidget = useCallback(async (id: string) => {

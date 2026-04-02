@@ -57,8 +57,8 @@ export function GridLayout({
                     rowHeight: 24,
                     margin: [6, 6] as [number, number],
                 }}
-                dragConfig={{ handle: ".sc-drag-grip" }}
-                compactor={getCompactor("wrap", false, true)}
+                dragConfig={{ handle: ".sc-drag-grip", bounded: true }}
+                compactor={getCompactor(null, false, true)}
                 onDragStart={() => setShowGuide(true)}
                 onDragStop={() => setShowGuide(false)}
                 onResizeStart={() => {

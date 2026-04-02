@@ -91,7 +91,9 @@
 }
 
 .chartArea:hover .dragBtn,
-.chartArea:hover .removeBtn {
+.chartArea:hover .removeBtn,
+.removeBtn:focus,
+.dragBtn:focus {
     opacity: 1;
 }
 

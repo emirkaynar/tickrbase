@@ -306,8 +306,8 @@ function AdvancedChart({ id, onRemove }: Props) {
 registerWidget({
     type: "advanced-chart",
     label: "Advanced Chart",
-    defaultSize: { w: 11, h: 13 },
-    minSize: { w: 10, h: 8 },
+    defaultSize: { w: 12, h: 12 },
+    minSize: { w: 7, h: 8 },
     component: AdvancedChart,
 });
 

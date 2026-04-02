@@ -46,6 +46,7 @@ export function getWidgetDefinition(type: WidgetType): WidgetDefinition {
 export function createWidgetInstance(
     screenId: string,
     type: WidgetType,
+    position?: { x: number; y: number; w: number; h: number },
 ): WidgetInstance {
     const def = getWidgetDefinition(type);
     const stamp = Date.now();
@@ -53,10 +54,10 @@ export function createWidgetInstance(
         id: `${type}-${stamp}`,
         screenId,
         type,
-        x: 0,
-        y: 0,
-        w: def.defaultSize.w,
-        h: def.defaultSize.h,
+        x: position?.x ?? 0,
+        y: position?.y ?? 0,
+        w: position?.w ?? def.defaultSize.w,
+        h: position?.h ?? def.defaultSize.h,
         minW: def.minSize.w,
         minH: def.minSize.h,
         createdAt: stamp,
