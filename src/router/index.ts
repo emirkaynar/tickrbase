@@ -1,8 +1,8 @@
 import { useState, useEffect } from "preact/hooks";
 
-export type Route = "dashboard" | "portfolio" | "alerts";
+export type Route = "dashboard" | "portfolio" | "settings";
 
-const ROUTES: Route[] = ["dashboard", "portfolio", "alerts"];
+const ROUTES: Route[] = ["dashboard", "portfolio", "settings"];
 
 function readHash(): Route {
     const hash = window.location.hash.replace("#", "") as Route;

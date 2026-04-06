@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import { MoonIcon, PlusIcon, SunIcon, PencilIcon } from "lucide-react";
+import { MoonIcon, PlusIcon, SunIcon, PencilIcon, Settings } from "lucide-react";
 import { Button, Tabs, Tooltip } from "../../ui";
 import type { TabItem } from "../../ui";
 import type { Theme } from "../../hooks/useTheme";
@@ -73,7 +73,7 @@ export function TopBar({
     const navLinks: { label: string; route: Route }[] = [
         { label: "Dashboard", route: "dashboard" },
         { label: "Portfolio", route: "portfolio" },
-        { label: "Alerts", route: "alerts" },
+        { label: "Settings", route: "settings" },
     ];
 
     return (
@@ -129,7 +129,15 @@ export function TopBar({
                                 onNavigate(link.route);
                             }}
                         >
-                            {link.label}
+                            {link.label === "Settings" ? (
+                                <>
+                                    <span class={styles.navIcon}>
+                                        <Settings size={14} />
+                                    </span>
+                                </>
+                            ) : (
+                                link.label
+                            )}
                         </a>
                     ))}
                 </nav>

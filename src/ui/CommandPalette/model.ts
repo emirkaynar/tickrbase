@@ -10,7 +10,7 @@ export type CommandAction =
     | { kind: "go-manage-screens" }
     | {
           kind: "add-widget";
-          widget: "stock-chart" | "advanced-chart" | "economic-calendar";
+          widget: "basic-chart" | "advanced-chart" | "economic-calendar";
       }
     | { kind: "placeholder" };
 
@@ -27,7 +27,7 @@ export type CommandItem = {
 
 export type CommandContext = {
     availableWidgets: ReadonlyArray<
-        "stock-chart" | "advanced-chart" | "economic-calendar"
+        "basic-chart" | "advanced-chart" | "economic-calendar"
     >;
     screens: ReadonlyArray<{ id: string; name: string }>;
     activeScreenId: string;

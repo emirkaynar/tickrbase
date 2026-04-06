@@ -18,7 +18,7 @@ const INTERVAL_ITEMS: SelectItem[] = INTERVALS.map((i) => ({
     value: i,
 }));
 
-function StockChart({ id, onRemove }: Props) {
+function BasicChart({ id, onRemove }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
     const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
@@ -175,11 +175,11 @@ function StockChart({ id, onRemove }: Props) {
 
 // Self-register on import
 registerWidget({
-    type: "stock-chart",
-    label: "Stock Chart",
+    type: "basic-chart",
+    label: "Basic Chart",
     defaultSize: { w: 11, h: 12 },
     minSize: { w: 7, h: 8 },
-    component: StockChart,
+    component: BasicChart,
 });
 
-export { StockChart };
+export { BasicChart };

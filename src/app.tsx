@@ -12,7 +12,7 @@ import { AppLayout } from "./layout/AppLayout";
 import { TopBar } from "./layout/TopBar/TopBar";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { PortfolioPage } from "./features/portfolio/PortfolioPage";
-import { AlertsPage } from "./features/alerts/AlertsPage";
+import { SettingsPage } from "./features/settings/SettingsPage";
 import { CommandPalette, toast, ToastViewport } from "./ui";
 import type { CommandPalettePage } from "./ui";
 import { livePricesClient, type LiveStatus } from "./services/livePrices";
@@ -71,7 +71,7 @@ export function App() {
     }
 
     async function handlePaletteAddWidget(
-        type: "stock-chart" | "advanced-chart" | "economic-calendar",
+        type: "basic-chart" | "advanced-chart" | "economic-calendar",
     ) {
         const result = await layout.addWidget(type);
         if (!result.success && result.noSpace) {
@@ -129,7 +129,7 @@ export function App() {
                     />
                 )}
                 {route === "portfolio" && <PortfolioPage />}
-                {route === "alerts" && <AlertsPage />}
+                {route === "settings" && <SettingsPage />}
             </AppLayout>
 
             {import.meta.env.MODE === "debug" && (

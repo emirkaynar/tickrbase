@@ -39,14 +39,24 @@ export const widgetProvider: CommandProvider = {
         if (page !== "add-widget") return [];
         return [
             {
-                id: "widget-stock-chart",
+                id: "widget-symbol-overview",
+                label: "Symbol Overview",
+                badge: "LIMA Bridge",
+                hint: "Overview of a specific stock symbol",
+                keywords: ["symbol", "overview", "stock"],
+                enabled: false,
+                section: "Overview",
+                action: { kind: "placeholder" },
+            },
+            {
+                id: "widget-basic-chart",
                 label: "Basic Chart",
                 badge: "LIMA Bridge",
                 hint: "Basic stock chart powered by Yahoo Finance",
                 keywords: ["stock", "chart", "widget", "candlestick"],
                 enabled: true,
                 section: "Charts",
-                action: { kind: "add-widget", widget: "stock-chart" },
+                action: { kind: "add-widget", widget: "basic-chart" },
             },
             {
                 id: "widget-advanced-chart",

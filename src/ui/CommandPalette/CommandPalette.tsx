@@ -26,7 +26,7 @@ type Props = {
     initialPage: CommandPalettePage;
     onClose: () => void;
     onAddWidget: (
-        type: "stock-chart" | "advanced-chart" | "economic-calendar",
+        type: "basic-chart" | "advanced-chart" | "economic-calendar",
     ) => void;
     screens: Array<{ id: string; name: string }>;
     activeScreenId: string;
@@ -115,7 +115,7 @@ export function CommandPalette({
     const commandContext = useMemo(
         () => ({
             availableWidgets: [
-                "stock-chart",
+                "basic-chart",
                 "advanced-chart",
                 "economic-calendar",
             ] as const,

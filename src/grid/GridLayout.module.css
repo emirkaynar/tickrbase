@@ -34,6 +34,7 @@
 .shell .react-grid-layout {
     position: relative;
     z-index: 0;
+    min-height: calc(100vh - var(--topbar-height));
 }
 
 .slot {

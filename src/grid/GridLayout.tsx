@@ -52,6 +52,7 @@ export function GridLayout({
                 layout={layout}
                 onLayoutChange={(l) => onLayoutChange([...l])}
                 width={width}
+                style={{ minHeight: `calc(100vh - var(--topbar-height))` }}
                 gridConfig={{
                     cols: 30,
                     rowHeight: 24,
