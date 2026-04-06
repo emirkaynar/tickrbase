@@ -1,0 +1,311 @@
+.root {
+    width: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-elevated);
+    overflow: hidden;
+}
+
+.widget {
+    height: 100%;
+}
+
+.full {
+    min-height: 360px;
+}
+
+.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 180px;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+}
+
+.scrollArea {
+    width: 100%;
+    height: 100%;
+}
+
+.viewport {
+    width: 100%;
+    height: 100%;
+}
+
+.table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    table-layout: fixed;
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    font-family: var(--font-mono);
+}
+
+.head {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+
+.headerRow {
+    background: var(--color-bg-surface);
+}
+
+.headerCell {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    min-width: 96px;
+    border-bottom: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border-subtle);
+    background: var(--color-bg-surface);
+    color: var(--color-text-muted);
+    padding: 0;
+    text-align: left;
+    vertical-align: middle;
+}
+
+.headerInner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 34px;
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+}
+
+.headerContent {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sortButton {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-width: 0;
+    cursor: pointer;
+    padding: 0;
+}
+
+.sortButton:hover {
+    color: var(--color-text);
+}
+
+.headerCell[data-draggable="true"] .headerInner,
+.headerCell[data-draggable="true"] .sortButton {
+    cursor: pointer;
+}
+
+.headerCell[data-draggable="true"]:active .headerInner,
+.headerCell[data-draggable="true"]:active .sortButton {
+    cursor: grabbing;
+}
+
+.sortIndicator {
+    color: var(--color-text-subtle);
+    font-size: var(--font-size-xs);
+    line-height: 1;
+}
+
+.columnResizer {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    width: 8px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 8;
+}
+
+.columnResizer::after {
+    content: "";
+    position: absolute;
+    top: var(--space-1);
+    bottom: var(--space-1);
+    left: 3px;
+    width: 2px;
+    background: transparent;
+    border-radius: var(--radius-full);
+    transition: background var(--transition-fast);
+}
+
+.headerCell:hover .columnResizer::after,
+.resizing::after {
+    background: var(--color-primary);
+}
+
+.body {
+    background: var(--color-bg-elevated);
+}
+
+.bodyRow {
+    transition:
+        background var(--transition-fast),
+        transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow var(--transition-fast);
+}
+
+.bodyRow[data-draggable="true"] {
+    cursor: grab;
+}
+
+.bodyRow[data-draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.cell {
+    border-bottom: 1px solid var(--color-border-subtle);
+    border-right: 1px solid var(--color-border-subtle);
+    padding: 0;
+    vertical-align: middle;
+    background: var(--color-bg-elevated);
+}
+
+.bodyRow:hover .cell {
+    background: var(--color-bg-surface);
+}
+
+.cellContent {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-height: 34px;
+    padding: var(--space-2) var(--space-3);
+}
+
+.cellValue {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stickyCell {
+    position: sticky;
+    left: 0;
+    z-index: 4;
+    background: var(--color-bg-elevated);
+    box-shadow: 1px 0 0 var(--color-border-subtle);
+}
+
+.headerCell.stickyCell {
+    z-index: 7;
+    background: var(--color-bg-surface);
+}
+
+.bodyRow:hover .stickyCell {
+    background: var(--color-bg-surface);
+}
+
+.dragSource {
+    box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.dropTarget {
+    box-shadow:
+        inset 0 0 0 1px var(--color-primary),
+        0 0 0 2px color-mix(in hsl, var(--color-primary), transparent 75%);
+}
+
+.spacerRow {
+    background: var(--color-bg);
+}
+
+.spacerCell {
+    padding: 0;
+    border-bottom: 1px dashed var(--color-border-subtle);
+    background: var(--color-bg-elevated);
+}
+
+.spacer {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: 0 var(--space-3);
+}
+
+.spacerRow[data-draggable="true"] .spacer {
+    cursor: grab;
+}
+
+.spacerRow[data-draggable="true"]:active .spacer {
+    cursor: grabbing;
+}
+
+.spacerLine {
+    display: block;
+    width: 100%;
+    height: 1px;
+    background: color-mix(in hsl, var(--color-border), transparent 30%);
+}
+
+.spacerLabel {
+    font-size: var(--font-size-xs);
+    color: var(--color-text-subtle);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.emptyCell {
+    padding: var(--space-8) var(--space-4);
+    text-align: center;
+    color: var(--color-text-muted);
+    background: var(--color-bg-elevated);
+    border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.scrollbar {
+    display: flex;
+    background: var(--color-bg-muted);
+    user-select: none;
+    touch-action: none;
+    padding: var(--space-0-5);
+}
+
+.scrollbar[data-state="hidden"] {
+    display: none;
+}
+
+.scrollbar[data-orientation="horizontal"] {
+    flex-direction: column;
+    height: 12px;
+    border-top: 1px solid var(--color-border-subtle);
+}
+
+.scrollbar[data-orientation="vertical"] {
+    width: 12px;
+    border-left: 1px solid var(--color-border-subtle);
+}
+
+.thumb {
+    flex: 1;
+    background: color-mix(in hsl, var(--color-text-subtle), transparent 25%);
+    border-radius: var(--radius-full);
+}
+
+.thumb:hover {
+    background: color-mix(in hsl, var(--color-text-muted), transparent 15%);
+}
+
+.corner {
+    background: var(--color-bg-muted);
+}

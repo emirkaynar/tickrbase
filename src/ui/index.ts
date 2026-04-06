@@ -9,6 +9,17 @@ export { Input } from "./Input/Input";
 export { Select } from "./Select/Select";
 export type { SelectItem } from "./Select/Select";
 export { Skeleton } from "./Skeleton/Skeleton";
+export { Table } from "./Table/Table";
+export type {
+    TableColumnDef,
+    TableColumnOption,
+    TableController,
+    TableProps,
+    TableScope,
+    TableScopeType,
+    TableSpacerRow,
+    TableVariant,
+} from "./Table/types";
 export { Tabs } from "./Tabs/Tabs";
 export type { TabItem } from "./Tabs/Tabs";
 export { TickerSelector } from "./TickerSelector/TickerSelector";

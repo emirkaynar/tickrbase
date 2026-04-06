@@ -79,6 +79,16 @@ export const widgetProvider: CommandProvider = {
                 action: { kind: "add-widget", widget: "economic-calendar" },
             },
             {
+                id: "widget-watchlist",
+                label: "Watchlist",
+                badge: "LIMA Bridge",
+                hint: "Track symbols and intervals in a reorderable table",
+                keywords: ["watchlist", "symbols", "table", "portfolio"],
+                enabled: true,
+                section: "Watch",
+                action: { kind: "add-widget", widget: "watchlist" },
+            },
+            {
                 id: "widget-technical-analysis",
                 label: "Technical Analysis",
                 badge: "TradingView",

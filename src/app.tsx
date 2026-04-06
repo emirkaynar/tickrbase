@@ -4,6 +4,7 @@ import { useEffect, useState } from "preact/hooks";
 import "./widgets/BasicChart/BasicChart";
 import "./widgets/AdvancedChart/AdvancedChart";
 import "./widgets/EconomicCalendar/EconomicCalendar";
+import "./widgets/Watchlist/Watchlist";
 
 import { useRouter } from "./router";
 import { useLayout } from "./grid/useLayout";
@@ -71,7 +72,11 @@ export function App() {
     }
 
     async function handlePaletteAddWidget(
-        type: "basic-chart" | "advanced-chart" | "economic-calendar",
+        type:
+            | "basic-chart"
+            | "advanced-chart"
+            | "economic-calendar"
+            | "watchlist",
     ) {
         const result = await layout.addWidget(type);
         if (!result.success && result.noSpace) {
@@ -86,7 +91,6 @@ export function App() {
 
     function handlePaletteCreateScreen(name?: string) {
         void layout.createScreen(name);
-        
     }
 
     function handlePaletteRenameScreen(screenId: string, name: string) {

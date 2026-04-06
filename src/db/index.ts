@@ -42,12 +42,41 @@ export type UiStateRecord = {
     activeScreenId: string;
 };
 
+export type TableScopeType = "widget" | "page";
+
+export type TableSortRecord = {
+    id: string;
+    desc: boolean;
+};
+
+export type TableSpacerRecord = {
+    id: string;
+    label?: string;
+    height?: number;
+};
+
+export type TablePreferencesRecord = {
+    id: string;
+    scopeType: TableScopeType;
+    scopeId: string;
+    tableId: string;
+    visibleColumnIds: string[];
+    columnOrder: string[];
+    columnWidths: Record<string, number>;
+    rowOrder: string[];
+    spacers: TableSpacerRecord[];
+    sorting: TableSortRecord[];
+    updatedAt: number;
+    createdAt: number;
+};
+
 const db = new Dexie("lima") as Dexie & {
     widgetState: EntityTable<WidgetStateRecord, "id">;
     chartState: EntityTable<ChartStateRecord, "widget_id">;
     screens: EntityTable<ScreenRecord, "id">;
     widgets: EntityTable<WidgetRecord, "id">;
     uiState: EntityTable<UiStateRecord, "id">;
+    tablePreferences: EntityTable<TablePreferencesRecord, "id">;
 };
 
 // v1-v7: legacy migrations retained so existing users keep their data
@@ -106,5 +135,16 @@ db.version(9)
             ),
         );
     });
+
+// v10: reusable table preferences scoped by widget/page instance
+db.version(10).stores({
+    layout: null,
+    widgetState: "id",
+    chartState: "widget_id",
+    screens: "id, order, createdAt",
+    widgets: "id, screenId, type, createdAt",
+    uiState: "id",
+    tablePreferences: "id, scopeType, scopeId, tableId, updatedAt",
+});
 
 export { db };

@@ -26,7 +26,11 @@ type Props = {
     initialPage: CommandPalettePage;
     onClose: () => void;
     onAddWidget: (
-        type: "basic-chart" | "advanced-chart" | "economic-calendar",
+        type:
+            | "basic-chart"
+            | "advanced-chart"
+            | "economic-calendar"
+            | "watchlist",
     ) => void;
     screens: Array<{ id: string; name: string }>;
     activeScreenId: string;
@@ -118,6 +122,7 @@ export function CommandPalette({
                 "basic-chart",
                 "advanced-chart",
                 "economic-calendar",
+                "watchlist",
             ] as const,
             screens,
             activeScreenId,
@@ -223,7 +228,6 @@ export function CommandPalette({
         setQuery(nextDefaultScreenName(screens));
         setActiveIndex(0);
         setManageLane("row");
-        
     };
 
     const beginRenameScreen = (screenId?: string) => {
