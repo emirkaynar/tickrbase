@@ -7,7 +7,11 @@ export type { CommandPalettePage } from "./CommandPalette/model";
 export { Dialog } from "./Dialog/Dialog";
 export { Input } from "./Input/Input";
 export { Select } from "./Select/Select";
-export type { SelectItem } from "./Select/Select";
+export type {
+    SelectItem,
+    SelectTriggerVariant,
+    SelectVariant,
+} from "./Select/Select";
 export { Skeleton } from "./Skeleton/Skeleton";
 export { Table } from "./Table/Table";
 export type {

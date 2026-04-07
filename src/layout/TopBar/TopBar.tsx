@@ -131,9 +131,11 @@ export function TopBar({
                         >
                             {link.label === "Settings" ? (
                                 <>
+                                <Tooltip content="Settings">
                                     <span class={styles.navIcon}>
                                         <Settings size={14} />
                                     </span>
+                                </Tooltip>
                                 </>
                             ) : (
                                 link.label

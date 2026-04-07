@@ -1,5 +1,21 @@
-import { useEffect, useMemo, useState } from "preact/hooks";
-import { Table, type TableColumnDef, WidgetRemoveButton } from "../../ui";
+import { RotateCcw, Columns3 } from "lucide-react";
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "preact/hooks";
+import {
+    Select,
+    Table,
+    type SelectItem,
+    type TableColumnDef,
+    type TableColumnOption,
+    type TableController,
+    WidgetRemoveButton,
+    Tooltip,
+} from "../../ui";
 import { fetchWatchlist } from "../../services/watchlist";
 import { INTERVAL_CONFIG, type WatchlistItem } from "../../services/types";
 import { ScrollArea as ArcScrollArea } from "@ark-ui/react/scroll-area";
@@ -11,6 +27,33 @@ type Props = { id: string; onRemove: () => void };
 type WatchlistRow = WatchlistItem & {
     last_seen?: number;
 };
+
+const WATCHLIST_LOCKED_COLUMN_IDS = ["symbol"];
+
+function areColumnOptionsEqual(
+    left: TableColumnOption[],
+    right: TableColumnOption[],
+): boolean {
+    if (left === right) return true;
+    if (left.length !== right.length) return false;
+
+    for (let i = 0; i < left.length; i += 1) {
+        const a = left[i];
+        const b = right[i];
+        if (!b) return false;
+        if (
+            a.id !== b.id ||
+            a.label !== b.label ||
+            a.visible !== b.visible ||
+            a.locked !== b.locked ||
+            a.removable !== b.removable
+        ) {
+            return false;
+        }
+    }
+
+    return true;
+}
 
 function intervalOrder(interval: string): number {
     const order = ["1m", "5m", "15m", "30m", "1h", "1d", "1wk", "1mo"];
@@ -39,6 +82,9 @@ function Watchlist({ id, onRemove }: Props) {
     const [rows, setRows] = useState<WatchlistRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
+    const tableControllerRef = useRef<TableController | null>(null);
+    const [hasController, setHasController] = useState(false);
+    const [columnOptions, setColumnOptions] = useState<TableColumnOption[]>([]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -127,6 +173,84 @@ function Watchlist({ id, onRemove }: Props) {
         [],
     );
 
+    const setColumnOptionsIfChanged = useCallback(
+        (next: TableColumnOption[]) => {
+            setColumnOptions((prev) =>
+                areColumnOptionsEqual(prev, next) ? prev : next,
+            );
+        },
+        [],
+    );
+
+    const refreshColumnOptions = useCallback(() => {
+        const controller = tableControllerRef.current;
+        if (!controller) return;
+        setColumnOptionsIfChanged(controller.getColumnOptions());
+    }, [setColumnOptionsIfChanged]);
+
+    const handleControllerReady = useCallback(
+        (controller: TableController) => {
+            tableControllerRef.current = controller;
+            setHasController(true);
+            setColumnOptionsIfChanged(controller.getColumnOptions());
+        },
+        [setColumnOptionsIfChanged],
+    );
+
+    const columnItems = useMemo<SelectItem[]>(
+        () =>
+            columnOptions.map((option) => ({
+                label: option.label,
+                value: option.id,
+                disabled: option.locked,
+                locked: option.locked,
+            })),
+        [columnOptions],
+    );
+
+    const visibleColumnIds = useMemo(
+        () =>
+            columnOptions
+                .filter((option) => option.visible)
+                .map((option) => option.id),
+        [columnOptions],
+    );
+
+    const handleVisibleColumnsChange = useCallback(
+        (nextVisibleIds: string[]) => {
+            const tableController = tableControllerRef.current;
+            if (!tableController) return;
+
+            const nextVisibleSet = new Set(nextVisibleIds);
+            let didChange = false;
+
+            for (const option of columnOptions) {
+                if (option.locked) continue;
+
+                const shouldBeVisible = nextVisibleSet.has(option.id);
+                if (shouldBeVisible === option.visible) continue;
+                didChange = true;
+
+                if (shouldBeVisible) {
+                    tableController.showColumn(option.id);
+                } else {
+                    tableController.hideColumn(option.id);
+                }
+            }
+
+            if (!didChange) return;
+            setColumnOptionsIfChanged(tableController.getColumnOptions());
+        },
+        [columnOptions, setColumnOptionsIfChanged],
+    );
+
+    const handleResetColumns = useCallback(() => {
+        const tableController = tableControllerRef.current;
+        if (!tableController) return;
+        tableController.resetLayout();
+        setColumnOptionsIfChanged(tableController.getColumnOptions());
+    }, [setColumnOptionsIfChanged]);
+
     return (
         <div className={styles.root}>
             <div className={`${styles.handle} widget-handle`}>
@@ -140,6 +264,36 @@ function Watchlist({ id, onRemove }: Props) {
                 </div>
                 <div className={`${styles.dragGrip} sc-drag-grip`} />
                 <div className={styles.controls}>
+                    <Tooltip content="Columns">
+                    <Select
+                        className={styles.columnSelect}
+                        items={columnItems}
+                        multiple
+                        values={visibleColumnIds}
+                        onValuesChange={handleVisibleColumnsChange}
+                        onOpenChange={(open) => {
+                            if (open) refreshColumnOptions();
+                        }}
+                        placement="bottom-end"
+                        variant="widget"
+                        triggerVariant="icon"
+                        triggerIcon={<Columns3 />}
+                        triggerLabel="Columns"
+                        disabled={!hasController}
+                    />
+                    </Tooltip>
+
+                    <button
+                        type="button"
+                        className={styles.controlButton}
+                        onClick={handleResetColumns}
+                        aria-label="Reset table layout"
+                        title="Reset table layout"
+                        disabled={!hasController}
+                    >
+                        <RotateCcw />
+                    </button>
+
                     <WidgetRemoveButton
                         class={styles.removeBtn}
                         onClick={onRemove}
@@ -166,9 +320,14 @@ function Watchlist({ id, onRemove }: Props) {
                                         tableId="watchlist"
                                         variant="widget"
                                         stickyColumnId="symbol"
-                                        lockedColumnIds={["symbol"]}
+                                        lockedColumnIds={
+                                            WATCHLIST_LOCKED_COLUMN_IDS
+                                        }
                                         height="100%"
                                         emptyMessage="No watchlist symbols yet."
+                                        onControllerReady={
+                                            handleControllerReady
+                                        }
                                     ></Table>
                                 </>
                             )}

@@ -7,7 +7,6 @@ import {
 } from "preact/hooks";
 import type { ColumnSizingState, SortingState } from "@tanstack/react-table";
 import { db, type TablePreferencesRecord } from "../../db";
-import { useDebounce } from "../../hooks/useDebounce";
 import type { TableScopeType, TableSpacerRow } from "./types";
 
 const SPACER_PREFIX = "spacer:";
@@ -105,6 +104,26 @@ export function normalizeColumnWidths(
     return next;
 }
 
+function mergeDefaultColumnWidths(
+    columnWidths: ColumnSizingState,
+    defaultColumnWidths: ColumnSizingState,
+): ColumnSizingState {
+    let next = columnWidths;
+
+    for (const [id, size] of Object.entries(defaultColumnWidths)) {
+        if (!Number.isFinite(size) || size <= 0) continue;
+        if (next[id] !== undefined) continue;
+
+        if (next === columnWidths) {
+            next = { ...columnWidths };
+        }
+
+        next[id] = size;
+    }
+
+    return next;
+}
+
 export function normalizeRowOrder(
     rowOrder: string[],
     rowIds: string[],
@@ -138,6 +157,7 @@ type UseTablePersistenceInput = {
     tableId: string;
     allColumnIds: string[];
     lockedColumnIds: string[];
+    defaultColumnWidths: ColumnSizingState;
     rowIds: string[];
     initialSpacerRows: TableSpacerRow[];
 };
@@ -178,6 +198,7 @@ export function useTablePersistence({
     tableId,
     allColumnIds,
     lockedColumnIds,
+    defaultColumnWidths,
     rowIds,
     initialSpacerRows,
 }: UseTablePersistenceInput): UseTablePersistenceResult {
@@ -206,6 +227,11 @@ export function useTablePersistence({
         [allColumnIds],
     );
 
+    const defaultNormalizedColumnWidths = useMemo(
+        () => normalizeColumnWidths(defaultColumnWidths, allColumnIds),
+        [defaultColumnWidths, allColumnIds],
+    );
+
     const defaultRowOrder = useMemo(
         () =>
             normalizeRowOrder(
@@ -222,7 +248,9 @@ export function useTablePersistence({
     );
     const [columnOrder, setColumnOrder] =
         useState<string[]>(defaultColumnOrder);
-    const [columnWidths, setColumnWidths] = useState<ColumnSizingState>({});
+    const [columnWidths, setColumnWidths] = useState<ColumnSizingState>(
+        defaultNormalizedColumnWidths,
+    );
     const [rowOrder, setRowOrder] = useState<string[]>(defaultRowOrder);
     const [spacers, setSpacers] = useState<TableSpacerRow[]>(
         normalizedInitialSpacers,
@@ -234,13 +262,14 @@ export function useTablePersistence({
     const resetToDefaults = useCallback(() => {
         setVisibleColumnIds(defaultVisibleColumnIds);
         setColumnOrder(defaultColumnOrder);
-        setColumnWidths({});
+        setColumnWidths(defaultNormalizedColumnWidths);
         setSpacers(normalizedInitialSpacers);
         setRowOrder(defaultRowOrder);
         setSorting([]);
     }, [
         defaultVisibleColumnIds,
         defaultColumnOrder,
+        defaultNormalizedColumnWidths,
         normalizedInitialSpacers,
         defaultRowOrder,
     ]);
@@ -258,7 +287,7 @@ export function useTablePersistence({
                 createdAtRef.current = Date.now();
                 setVisibleColumnIds(defaultVisibleColumnIds);
                 setColumnOrder(defaultColumnOrder);
-                setColumnWidths({});
+                setColumnWidths(defaultNormalizedColumnWidths);
                 setSpacers(normalizedInitialSpacers);
                 setRowOrder(defaultRowOrder);
                 setSorting([]);
@@ -279,7 +308,13 @@ export function useTablePersistence({
                 normalizeColumnOrder(saved.columnOrder ?? [], allColumnIds),
             );
             setColumnWidths(
-                normalizeColumnWidths(saved.columnWidths ?? {}, allColumnIds),
+                mergeDefaultColumnWidths(
+                    normalizeColumnWidths(
+                        saved.columnWidths ?? {},
+                        allColumnIds,
+                    ),
+                    defaultNormalizedColumnWidths,
+                ),
             );
             setSpacers(nextSpacers);
             setRowOrder(
@@ -307,8 +342,18 @@ export function useTablePersistence({
             normalizeVisibleColumnIds(prev, allColumnIds, lockedColumnIds),
         );
         setColumnOrder((prev) => normalizeColumnOrder(prev, allColumnIds));
-        setColumnWidths((prev) => normalizeColumnWidths(prev, allColumnIds));
-    }, [hydrated, allColumnIds, lockedColumnIds]);
+        setColumnWidths((prev) =>
+            mergeDefaultColumnWidths(
+                normalizeColumnWidths(prev, allColumnIds),
+                defaultNormalizedColumnWidths,
+            ),
+        );
+    }, [
+        hydrated,
+        allColumnIds,
+        lockedColumnIds,
+        defaultNormalizedColumnWidths,
+    ]);
 
     useEffect(() => {
         if (!hydrated) return;
@@ -328,13 +373,6 @@ export function useTablePersistence({
         );
     }, [hydrated, rowIds, spacers]);
 
-    const persist = useDebounce(
-        useCallback((record: TablePreferencesRecord) => {
-            void db.tablePreferences.put(record);
-        }, []),
-        250,
-    );
-
     useEffect(() => {
         if (!hydrated) return;
 
@@ -348,6 +386,10 @@ export function useTablePersistence({
             columnWidths,
             allColumnIds,
         );
+        const persistedWidths = mergeDefaultColumnWidths(
+            normalizedWidths,
+            defaultNormalizedColumnWidths,
+        );
         const normalizedSpacers = normalizeSpacers(spacers);
         const normalizedRows = normalizeRowOrder(
             rowOrder,
@@ -355,20 +397,20 @@ export function useTablePersistence({
             normalizedSpacers.map((spacer) => spacer.id),
         );
 
-        persist({
+        void db.tablePreferences.put({
             id: instanceId,
             scopeType,
             scopeId,
             tableId,
             visibleColumnIds: normalizedVisible,
             columnOrder: normalizedOrder,
-            columnWidths: normalizedWidths,
+            columnWidths: persistedWidths,
             rowOrder: normalizedRows,
             spacers: normalizedSpacers,
             sorting,
             createdAt: createdAtRef.current,
             updatedAt: Date.now(),
-        });
+        } satisfies TablePreferencesRecord);
     }, [
         hydrated,
         visibleColumnIds,
@@ -379,12 +421,12 @@ export function useTablePersistence({
         sorting,
         allColumnIds,
         lockedColumnIds,
+        defaultNormalizedColumnWidths,
         rowIds,
         instanceId,
         scopeType,
         scopeId,
         tableId,
-        persist,
     ]);
 
     return {

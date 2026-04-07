@@ -6,7 +6,6 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-1);
-    height: 22px;
     padding: 0 var(--space-1-5);
     background: transparent;
     border: none;
@@ -25,6 +24,56 @@
         width: 12px;
         height: 12px;
     }
+}
+
+.widget {
+    height: 22px;
+}
+
+.full {
+    height: 24px;
+}
+
+.defaultTrigger {
+    min-width: 80px;
+}
+
+.iconTrigger {
+    width: 22px;
+    min-width: 22px;
+    padding: 0;
+    justify-content: center;
+    background: var(--color-bg-elevated);
+}
+
+.iconTrigger:hover,
+.iconTrigger[data-state="open"] {
+    background: var(--color-bg-surface);
+    color: var(--color-primary);
+}
+
+.iconSlot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    & svg {
+        width: 13px;
+        height: 13px;
+    }
+}
+
+.trigger:disabled,
+.trigger[data-disabled] {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.iconTrigger:disabled:hover,
+.iconTrigger[data-disabled]:hover,
+.iconTrigger[data-disabled][data-state="open"] {
+    background: var(--color-bg-elevated);
+    color: var(--color-text-muted);
 }
 
 .trigger:hover,
@@ -54,6 +103,10 @@
     animation: scale-in var(--transition-fast) forwards;
 }
 
+.iconContent {
+    min-width: 220px;
+}
+
 .content[data-state="closed"] {
     display: none;
 }
@@ -76,6 +129,21 @@
         width: 12px;
         height: 12px;
     }
+}
+
+.itemText {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.itemMeta {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.lockIcon {
+    color: var(--color-text-subtle);
 }
 
 .item[data-highlighted] {
