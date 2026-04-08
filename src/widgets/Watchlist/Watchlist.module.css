@@ -149,6 +149,18 @@
     color: var(--color-text-muted);
 }
 
+.priceCell {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.25rem;
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+}
+
+.priceSkeleton {
+    display: inline-block;
+}
+
 .errorState {
     display: grid;
     place-items: center;

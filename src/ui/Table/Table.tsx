@@ -10,7 +10,6 @@ import { isSortableOperation, useSortable } from "@dnd-kit/react/sortable";
 import {
     flexRender,
     getCoreRowModel,
-    getSortedRowModel,
     useReactTable,
     type ColumnSizingState,
     type Row,
@@ -18,23 +17,28 @@ import {
     type VisibilityState,
 } from "@tanstack/react-table";
 import { Modifier } from "@dnd-kit/abstract";
-import type { TableController, TableProps, TableSpacerRow } from "./types";
-import {
-    createSpacerId,
-    isSpacerId,
-    normalizeColumnOrder,
-    normalizeRowOrder,
-    normalizeSpacerId,
-    normalizeVisibleColumnIds,
-    useTablePersistence,
-} from "./useTablePersistence";
+import type {
+    TableColumnMeta,
+    TableController,
+    TableProps,
+    TableSpacerRow,
+} from "./types";
 import styles from "./Table.module.css";
 
 const ROW_DND_PREFIX = "row:";
+const SPACER_PREFIX = "spacer:";
 const COLUMN_DRAG_HOLD_DELAY_MS = 100;
 const COLUMN_DRAG_HOLD_TOLERANCE_PX = 6;
 const DEFAULT_LOCKED_COLUMN_IDS: string[] = [];
 const DEFAULT_INITIAL_SPACERS: TableSpacerRow[] = [];
+
+function normalizeSpacerId(id: string): string {
+    return id.startsWith(SPACER_PREFIX) ? id : `${SPACER_PREFIX}${id}`;
+}
+
+function createSpacerId(): string {
+    return `${SPACER_PREFIX}${Date.now()}-${Math.floor(Math.random() * 100_000)}`;
+}
 
 class RestrictVerticalAxisModifier extends Modifier {
     apply(operation: any) {
@@ -49,10 +53,6 @@ type DragEndPayload = Parameters<
     NonNullable<DragDropEventHandlers["onDragEnd"]>
 >[0];
 
-type DragOverPayload = Parameters<
-    NonNullable<DragDropEventHandlers["onDragOver"]>
->[0];
-
 function cx(...parts: Array<string | false | null | undefined>): string {
     return parts.filter(Boolean).join(" ");
 }
@@ -65,6 +65,87 @@ function uniqueOrdered(values: string[]): string[] {
         if (!value || seen.has(value)) continue;
         seen.add(value);
         next.push(value);
+    }
+
+    return next;
+}
+
+function normalizeColumnOrder(
+    columnOrder: string[],
+    allColumnIds: string[],
+): string[] {
+    const available = new Set(allColumnIds);
+    const ordered = uniqueOrdered(columnOrder).filter((id) =>
+        available.has(id),
+    );
+
+    for (const id of allColumnIds) {
+        if (!ordered.includes(id)) ordered.push(id);
+    }
+
+    return ordered;
+}
+
+function normalizeVisibleColumnIds(
+    visibleColumnIds: string[],
+    allColumnIds: string[],
+    lockedColumnIds: string[],
+): string[] {
+    const available = new Set(allColumnIds);
+    const locked = new Set(lockedColumnIds.filter((id) => available.has(id)));
+    const visible = uniqueOrdered(visibleColumnIds).filter((id) =>
+        available.has(id),
+    );
+
+    for (const id of locked) {
+        if (!visible.includes(id)) visible.push(id);
+    }
+
+    return visible;
+}
+
+function normalizeRowOrder(rowOrder: string[], rowIds: string[]): string[] {
+    const available = new Set(rowIds);
+    const next = uniqueOrdered(rowOrder).filter((id) => available.has(id));
+
+    for (const id of rowIds) {
+        if (!next.includes(id)) next.push(id);
+    }
+
+    return next;
+}
+
+function normalizeColumnWidths(
+    columnWidths: ColumnSizingState,
+    allColumnIds: string[],
+): ColumnSizingState {
+    const available = new Set(allColumnIds);
+    const next: ColumnSizingState = {};
+
+    for (const [id, size] of Object.entries(columnWidths)) {
+        if (!available.has(id)) continue;
+        if (!Number.isFinite(size) || size <= 0) continue;
+        next[id] = size;
+    }
+
+    return next;
+}
+
+function mergeDefaultColumnWidths(
+    columnWidths: ColumnSizingState,
+    defaultColumnWidths: ColumnSizingState,
+): ColumnSizingState {
+    let next = columnWidths;
+
+    for (const [id, size] of Object.entries(defaultColumnWidths)) {
+        if (!Number.isFinite(size) || size <= 0) continue;
+        if (next[id] !== undefined) continue;
+
+        if (next === columnWidths) {
+            next = { ...columnWidths };
+        }
+
+        next[id] = size;
     }
 
     return next;
@@ -134,12 +215,6 @@ function getDefaultColumnWidth(
     return undefined;
 }
 
-function getSortIndicator(direction: false | "asc" | "desc"): string {
-    if (direction === "asc") return "↑";
-    if (direction === "desc") return "↓";
-    return "";
-}
-
 type SortableHeaderProps = {
     dragEnabled: boolean;
     draggable: boolean;
@@ -147,10 +222,7 @@ type SortableHeaderProps = {
     size: number;
     isDragSource: boolean;
     isDropTarget: boolean;
-    sorted: false | "asc" | "desc";
-    canSort: boolean;
     isResizing: boolean;
-    onToggleSort: () => void;
     onResizeStart: (event: MouseEvent | TouchEvent) => void;
     onDragStart: (event: DragEvent) => void;
     onDragOver: (event: DragEvent) => void;
@@ -161,6 +233,7 @@ type SortableHeaderProps = {
     onPointerUp: () => void;
     onPointerLeave: () => void;
     onPointerCancel: () => void;
+    alignmentClassName?: string;
     children: ComponentChildren;
 };
 
@@ -171,10 +244,7 @@ function SortableHeader({
     size,
     isDragSource,
     isDropTarget,
-    sorted,
-    canSort,
     isResizing,
-    onToggleSort,
     onResizeStart,
     onDragStart,
     onDragOver,
@@ -185,6 +255,7 @@ function SortableHeader({
     onPointerUp,
     onPointerLeave,
     onPointerCancel,
+    alignmentClassName,
     children,
 }: SortableHeaderProps) {
     return (
@@ -203,7 +274,7 @@ function SortableHeader({
             )}
         >
             <div
-                className={styles.headerInner}
+                className={cx(styles.headerInner, alignmentClassName)}
                 draggable={draggable}
                 onDragStart={draggable ? (onDragStart as never) : undefined}
                 onDragOver={draggable ? (onDragOver as never) : undefined}
@@ -223,20 +294,7 @@ function SortableHeader({
                     dragEnabled ? (onPointerCancel as never) : undefined
                 }
             >
-                {canSort ? (
-                    <button
-                        type="button"
-                        className={styles.sortButton}
-                        onClick={onToggleSort}
-                    >
-                        <span className={styles.headerContent}>{children}</span>
-                        <span className={styles.sortIndicator}>
-                            {getSortIndicator(sorted)}
-                        </span>
-                    </button>
-                ) : (
-                    <span className={styles.headerContent}>{children}</span>
-                )}
+                <span className={styles.headerContent}>{children}</span>
             </div>
 
             <div
@@ -262,6 +320,14 @@ type SortableDataRowProps<TData extends object> = {
     stickyColumnId: string;
     draggable: boolean;
 };
+
+function getAlignmentClassName(
+    align: "left" | "center" | "right" | undefined,
+): string {
+    if (align === "right") return styles.alignRight;
+    if (align === "center") return styles.alignCenter;
+    return styles.alignLeft;
+}
 
 function SortableDataRow<TData extends object>({
     id,
@@ -297,6 +363,10 @@ function SortableDataRow<TData extends object>({
         >
             {row.getVisibleCells().map((cell) => {
                 const sticky = cell.column.id === stickyColumnId;
+                const meta = cell.column.columnDef.meta as
+                    | TableColumnMeta
+                    | undefined;
+                const alignClassName = getAlignmentClassName(meta?.align);
 
                 return (
                     <td
@@ -308,8 +378,10 @@ function SortableDataRow<TData extends object>({
                         }}
                         className={cx(styles.cell, sticky && styles.stickyCell)}
                     >
-                        <div className={styles.cellContent}>
-                            <span className={styles.cellValue}>
+                        <div className={cx(styles.cellContent, alignClassName)}>
+                            <span
+                                className={cx(styles.cellValue, alignClassName)}
+                            >
                                 {flexRender(
                                     cell.column.columnDef.cell,
                                     cell.getContext(),
@@ -325,90 +397,30 @@ function SortableDataRow<TData extends object>({
     );
 }
 
-type SortableSpacerRowProps = {
-    spacer: TableSpacerRow;
-    index: number;
-    colSpan: number;
-    groupId: string;
-    draggable: boolean;
-};
-
-function SortableSpacerRow({
-    spacer,
-    index,
-    colSpan,
-    groupId,
-    draggable,
-}: SortableSpacerRowProps) {
-    const { ref, isDragSource, isDropTarget } = useSortable({
-        id: toRowDragId(spacer.id),
-        index,
-        group: groupId,
-        disabled: !draggable,
-        modifiers: draggable ? [RestrictVerticalAxisModifier] : undefined,
-        feedback: draggable ? "clone" : "default",
-        transition: {
-            duration: 180,
-            easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-            idle: true,
-        },
-    });
-
-    return (
-        <tr
-            ref={ref as never}
-            data-draggable={draggable ? "true" : undefined}
-            className={cx(
-                styles.spacerRow,
-                isDragSource && styles.dragSource,
-                isDropTarget && styles.dropTarget,
-            )}
-        >
-            <td colSpan={Math.max(colSpan, 1)} className={styles.spacerCell}>
-                <div
-                    className={styles.spacer}
-                    style={{
-                        height: toCssSize(spacer.height ?? 18),
-                    }}
-                >
-                    {spacer.label ? (
-                        <span className={styles.spacerLabel}>
-                            {spacer.label}
-                        </span>
-                    ) : (
-                        <span className={styles.spacerLine} />
-                    )}
-                </div>
-            </td>
-        </tr>
-    );
-}
-
 export function Table<TData extends object>({
     rows,
     columns,
     getRowId,
-    scopeType,
-    scopeId,
-    tableId,
+    scopeType: _scopeType,
+    scopeId: _scopeId,
+    tableId: _tableId,
     variant = "widget",
     className,
     stickyColumnId = "symbol",
     lockedColumnIds = DEFAULT_LOCKED_COLUMN_IDS,
-    initialSpacerRows = DEFAULT_INITIAL_SPACERS,
+    initialSpacerRows: _initialSpacerRows = DEFAULT_INITIAL_SPACERS,
     emptyMessage = "No rows to display.",
     height,
     maxHeight,
     enableColumnReorder = true,
     enableRowReorder = true,
-    disableRowReorderWhenSorted = true,
+    disableRowReorderWhenSorted: _disableRowReorderWhenSorted = true,
     onControllerReady,
 }: TableProps<TData>) {
     const [draggingColumnId, setDraggingColumnId] = useState("");
     const [dragOverColumnId, setDragOverColumnId] = useState("");
     const draggingColumnIdRef = useRef("");
     const dragOverColumnIdRef = useRef("");
-    const lastRowDragTargetIdRef = useRef("");
     const armedColumnDragIdRef = useRef("");
     const pendingColumnDragIdRef = useRef("");
     const columnDragHoldTimerRef = useRef<number | null>(null);
@@ -449,6 +461,14 @@ export function Table<TData extends object>({
         [rows, getRowId],
     );
 
+    const dataById = useMemo(() => {
+        const map = new Map<string, TData>();
+        rows.forEach((row, index) => {
+            map.set(getRowId(row, index), row);
+        });
+        return map;
+    }, [rows, getRowId]);
+
     const defaultColumnWidths = useMemo<ColumnSizingState>(() => {
         const next: ColumnSizingState = {};
 
@@ -461,32 +481,79 @@ export function Table<TData extends object>({
         return next;
     }, [columns]);
 
-    const {
-        instanceId,
-        hydrated,
-        visibleColumnIds,
-        setVisibleColumnIds,
-        columnOrder,
-        setColumnOrder,
-        columnWidths,
-        setColumnWidths,
-        rowOrder,
-        setRowOrder,
-        spacers,
-        setSpacers,
-        sorting,
-        setSorting,
-        resetToDefaults,
-    } = useTablePersistence({
-        scopeType,
-        scopeId,
-        tableId,
+    const defaultVisibleColumnIds = useMemo(
+        () =>
+            normalizeVisibleColumnIds(
+                allColumnIds,
+                allColumnIds,
+                normalizedLockedColumnIds,
+            ),
+        [allColumnIds, normalizedLockedColumnIds],
+    );
+
+    const defaultColumnOrder = useMemo(
+        () => normalizeColumnOrder(allColumnIds, allColumnIds),
+        [allColumnIds],
+    );
+
+    const defaultNormalizedColumnWidths = useMemo(
+        () =>
+            normalizeColumnWidths(
+                mergeDefaultColumnWidths(
+                    defaultColumnWidths,
+                    defaultColumnWidths,
+                ),
+                allColumnIds,
+            ),
+        [defaultColumnWidths, allColumnIds],
+    );
+
+    const defaultRowOrder = useMemo(
+        () => normalizeRowOrder([], dataRowIds),
+        [dataRowIds],
+    );
+
+    const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(
+        defaultVisibleColumnIds,
+    );
+    const [columnOrder, setColumnOrder] =
+        useState<string[]>(defaultColumnOrder);
+    const [columnWidths, setColumnWidths] = useState<ColumnSizingState>(
+        defaultNormalizedColumnWidths,
+    );
+    const [rowOrder, setRowOrder] = useState<string[]>(defaultRowOrder);
+
+    useEffect(() => {
+        setVisibleColumnIds((prev) =>
+            normalizeVisibleColumnIds(
+                prev,
+                allColumnIds,
+                normalizedLockedColumnIds,
+            ),
+        );
+        setColumnOrder((prev) => normalizeColumnOrder(prev, allColumnIds));
+        setColumnWidths((prev) =>
+            mergeDefaultColumnWidths(
+                normalizeColumnWidths(prev, allColumnIds),
+                defaultNormalizedColumnWidths,
+            ),
+        );
+    }, [
         allColumnIds,
-        lockedColumnIds: normalizedLockedColumnIds,
-        defaultColumnWidths,
-        rowIds: dataRowIds,
-        initialSpacerRows,
-    });
+        normalizedLockedColumnIds,
+        defaultNormalizedColumnWidths,
+    ]);
+
+    useEffect(() => {
+        setRowOrder((prev) => normalizeRowOrder(prev, dataRowIds));
+    }, [dataRowIds]);
+
+    const resetToDefaults = () => {
+        setVisibleColumnIds(defaultVisibleColumnIds);
+        setColumnOrder(defaultColumnOrder);
+        setColumnWidths(defaultNormalizedColumnWidths);
+        setRowOrder(defaultRowOrder);
+    };
 
     const columnVisibility = useMemo<VisibilityState>(() => {
         const visibleSet = new Set(visibleColumnIds);
@@ -499,17 +566,31 @@ export function Table<TData extends object>({
         return visibility;
     }, [visibleColumnIds, allColumnIds, lockedSet]);
 
+    const orderedRowIds = useMemo(
+        () => normalizeRowOrder(rowOrder, dataRowIds),
+        [rowOrder, dataRowIds],
+    );
+
+    const orderedRows = useMemo(() => {
+        const next: TData[] = [];
+
+        for (const id of orderedRowIds) {
+            const row = dataById.get(id);
+            if (row !== undefined) next.push(row);
+        }
+
+        return next;
+    }, [orderedRowIds, dataById]);
+
     const table = useReactTable({
-        data: rows,
+        data: orderedRows,
         columns,
         getRowId: (row, index) => getRowId(row, index),
         state: {
-            sorting,
             columnOrder,
             columnSizing: columnWidths,
             columnVisibility,
         },
-        onSortingChange: setSorting,
         onColumnOrderChange: (updater) => {
             setColumnOrder((prev) =>
                 normalizeColumnOrder(
@@ -543,69 +624,17 @@ export function Table<TData extends object>({
             });
         },
         getCoreRowModel: getCoreRowModel(),
-        getSortedRowModel: getSortedRowModel(),
         columnResizeMode: "onChange",
         enableColumnResizing: true,
     });
 
     const visibleLeafColumns = table.getVisibleLeafColumns();
     const renderedColumnCount = Math.max(visibleLeafColumns.length + 1, 1);
+    const tableRows = table.getRowModel().rows;
 
-    const rowGroupId = `${instanceId}:rows`;
+    const rowGroupId = "table:rows";
 
-    const rowMap = useMemo(() => {
-        const map = new Map<string, Row<TData>>();
-        for (const row of table.getRowModel().rows) {
-            map.set(row.id, row);
-        }
-        return map;
-    }, [table, rows, sorting, columnVisibility]);
-
-    const spacerMap = useMemo(() => {
-        return new Map(spacers.map((spacer) => [spacer.id, spacer]));
-    }, [spacers]);
-
-    const normalizedBaseRowOrder = useMemo(
-        () =>
-            normalizeRowOrder(
-                rowOrder,
-                dataRowIds,
-                spacers.map((spacer) => spacer.id),
-            ),
-        [rowOrder, dataRowIds, spacers],
-    );
-
-    const sortedDataIds = useMemo(
-        () => table.getRowModel().rows.map((row) => row.id),
-        [table, rows, sorting, columnVisibility],
-    );
-
-    const hasActiveSorting = sorting.length > 0;
-
-    const displayRowIds = useMemo(() => {
-        if (!hasActiveSorting) {
-            return normalizedBaseRowOrder;
-        }
-
-        const queue = [...sortedDataIds];
-        const next: string[] = [];
-
-        for (const token of normalizedBaseRowOrder) {
-            if (isSpacerId(token)) {
-                if (spacerMap.has(token)) next.push(token);
-                continue;
-            }
-
-            const id = queue.shift();
-            if (id) next.push(id);
-        }
-
-        next.push(...queue);
-        return next;
-    }, [hasActiveSorting, sortedDataIds, normalizedBaseRowOrder, spacerMap]);
-
-    const canReorderRows =
-        enableRowReorder && (!disableRowReorderWhenSorted || !hasActiveSorting);
+    const canReorderRows = enableRowReorder;
 
     const clearColumnDragHoldTimer = () => {
         if (columnDragHoldTimerRef.current == null) return;
@@ -624,7 +653,7 @@ export function Table<TData extends object>({
     };
 
     const handleColumnPointerDown = (columnId: string, event: PointerEvent) => {
-        if (!enableColumnReorder) return;
+        if (!enableColumnReorder || lockedSet.has(columnId)) return;
         if (event.pointerType === "mouse" && event.button !== 0) return;
 
         clearColumnDragArmedState();
@@ -685,7 +714,8 @@ export function Table<TData extends object>({
     };
 
     const handleColumnDragStart = (columnId: string, event: DragEvent) => {
-        if (!enableColumnReorder) return;
+        if (!enableColumnReorder || lockedSet.has(columnId)) return;
+
         if (armedColumnDragIdRef.current !== columnId) {
             event.preventDefault();
             return;
@@ -705,7 +735,7 @@ export function Table<TData extends object>({
     };
 
     const handleColumnDragOver = (targetColumnId: string, event: DragEvent) => {
-        if (!enableColumnReorder) return;
+        if (!enableColumnReorder || lockedSet.has(targetColumnId)) return;
 
         event.preventDefault();
 
@@ -715,6 +745,7 @@ export function Table<TData extends object>({
             "";
 
         if (!sourceColumnId || sourceColumnId === targetColumnId) return;
+        if (lockedSet.has(sourceColumnId)) return;
         if (dragOverColumnIdRef.current === targetColumnId) return;
 
         dragOverColumnIdRef.current = targetColumnId;
@@ -731,68 +762,28 @@ export function Table<TData extends object>({
         resetColumnDragState();
     };
 
-    const handleDragOver = (event: DragOverPayload) => {
+    const handleDragEnd = (event: DragEndPayload) => {
         const operation = event.operation;
-        if (!isSortableOperation(operation)) return;
+        if (event.canceled || !isSortableOperation(operation)) return;
 
         const { source, target } = operation;
         if (!source || !target) return;
 
         const sourceId = fromRowDragId(String(source.id));
         const targetId = fromRowDragId(String(target.id));
-        if (!sourceId || !targetId) return;
-        if (sourceId === targetId) return;
 
-        lastRowDragTargetIdRef.current = targetId;
-    };
-
-    const handleDragEnd = (event: DragEndPayload) => {
-        const operation = event.operation;
-        if (event.canceled || !isSortableOperation(operation)) return;
-
-        const { source, target } = operation;
-        if (!target) return;
-        if (!source) return;
-
-        const sourceId = fromRowDragId(String(source.id));
-        const targetId = fromRowDragId(String(target.id));
-        const sourceIndex = Number(source.index);
-        const targetIndex = Number(target.index);
-
-        const trackedTargetId = lastRowDragTargetIdRef.current;
-        const resolvedTargetId =
-            sourceId && targetId && targetId !== sourceId
-                ? targetId
-                : sourceId && trackedTargetId && trackedTargetId !== sourceId
-                  ? trackedTargetId
-                  : "";
-
-        lastRowDragTargetIdRef.current = "";
-
-        const hasValidIndexes =
-            Number.isInteger(sourceIndex) && Number.isInteger(targetIndex);
-        const hasDistinctIndexes =
-            hasValidIndexes && sourceIndex !== targetIndex;
-
-        if (!sourceId && !hasDistinctIndexes) return;
-        if (!targetId && !hasDistinctIndexes) return;
+        if (!sourceId || !targetId || sourceId === targetId) return;
 
         setRowOrder((prev) => {
-            const normalized = normalizeRowOrder(
-                prev,
-                dataRowIds,
-                spacers.map((spacer) => spacer.id),
-            );
+            const normalized = normalizeRowOrder(prev, dataRowIds);
+            const from = normalized.indexOf(sourceId);
+            const to = normalized.indexOf(targetId);
 
-            if (sourceId && resolvedTargetId) {
-                return moveById(normalized, sourceId, resolvedTargetId);
+            if (from < 0 || to < 0 || from === to) {
+                return normalized;
             }
 
-            if (hasDistinctIndexes) {
-                return moveByIndex(normalized, sourceIndex, targetIndex);
-            }
-
-            return normalized;
+            return moveByIndex(normalized, from, to);
         });
     };
 
@@ -885,36 +876,12 @@ export function Table<TData extends object>({
                 });
             },
             addSpacer: (spacer) => {
-                const id = spacer?.id
+                return spacer?.id
                     ? normalizeSpacerId(spacer.id)
                     : createSpacerId();
-
-                setSpacers((prev) => {
-                    if (prev.some((item) => item.id === id)) return prev;
-                    return [
-                        ...prev,
-                        {
-                            id,
-                            label: spacer?.label,
-                            height: spacer?.height,
-                        },
-                    ];
-                });
-
-                setRowOrder((prev) =>
-                    prev.includes(id) ? prev : [...prev, id],
-                );
-
-                return id;
             },
-            removeSpacer: (id: string) => {
-                const normalizedId = normalizeSpacerId(id);
-                setSpacers((prev) =>
-                    prev.filter((spacer) => spacer.id !== normalizedId),
-                );
-                setRowOrder((prev) =>
-                    prev.filter((rowId) => rowId !== normalizedId),
-                );
+            removeSpacer: () => {
+                // Spacers are temporarily disabled in this minimal stability pass.
             },
             resetLayout: () => {
                 resetToDefaults();
@@ -927,8 +894,6 @@ export function Table<TData extends object>({
             lockedSet,
             normalizedLockedColumnIds,
             resetToDefaults,
-            setRowOrder,
-            setSpacers,
             setVisibleColumnIds,
             visibleColumnIds,
         ],
@@ -956,21 +921,6 @@ export function Table<TData extends object>({
 
     const sensors = useMemo(() => [PointerSensor, KeyboardSensor], []);
 
-    if (!hydrated) {
-        return (
-            <div
-                className={cx(
-                    styles.root,
-                    variant === "widget" ? styles.widget : styles.full,
-                    className,
-                )}
-                style={rootStyle}
-            >
-                <div className={styles.loading}>Loading table...</div>
-            </div>
-        );
-    }
-
     return (
         <>
             <div
@@ -981,11 +931,7 @@ export function Table<TData extends object>({
                 )}
                 style={rootStyle}
             >
-                <DragDropProvider
-                    sensors={sensors}
-                    onDragOver={handleDragOver}
-                    onDragEnd={handleDragEnd}
-                >
+                <DragDropProvider sensors={sensors} onDragEnd={handleDragEnd}>
                     <table
                         className={styles.table}
                         style={{
@@ -1029,13 +975,21 @@ export function Table<TData extends object>({
                                             );
                                         }
 
+                                        const canDragColumn =
+                                            enableColumnReorder &&
+                                            !lockedSet.has(header.column.id);
+                                        const meta = header.column.columnDef
+                                            .meta as
+                                            | TableColumnMeta
+                                            | undefined;
+                                        const alignClassName =
+                                            getAlignmentClassName(meta?.align);
+
                                         return (
                                             <SortableHeader
                                                 key={header.id}
-                                                dragEnabled={
-                                                    enableColumnReorder
-                                                }
-                                                draggable={enableColumnReorder}
+                                                dragEnabled={canDragColumn}
+                                                draggable={canDragColumn}
                                                 sticky={
                                                     header.column.id ===
                                                     stickyColumnId
@@ -1052,27 +1006,7 @@ export function Table<TData extends object>({
                                                     draggingColumnId !==
                                                         header.column.id
                                                 }
-                                                sorted={
-                                                    header.column.getIsSorted() as
-                                                        | false
-                                                        | "asc"
-                                                        | "desc"
-                                                }
-                                                canSort={
-                                                    header.column.getCanSort() &&
-                                                    (
-                                                        header.column.columnDef
-                                                            .meta as
-                                                            | {
-                                                                  sortable?: boolean;
-                                                              }
-                                                            | undefined
-                                                    )?.sortable !== false
-                                                }
                                                 isResizing={header.column.getIsResizing()}
-                                                onToggleSort={() =>
-                                                    header.column.toggleSorting()
-                                                }
                                                 onResizeStart={header.getResizeHandler()}
                                                 onDragStart={(event) =>
                                                     handleColumnDragStart(
@@ -1106,6 +1040,9 @@ export function Table<TData extends object>({
                                                 onPointerCancel={
                                                     handleColumnPointerCancel
                                                 }
+                                                alignmentClassName={
+                                                    alignClassName
+                                                }
                                             >
                                                 {flexRender(
                                                     header.column.columnDef
@@ -1125,7 +1062,7 @@ export function Table<TData extends object>({
                         </thead>
 
                         <tbody className={styles.body}>
-                            {displayRowIds.length === 0 ? (
+                            {tableRows.length === 0 ? (
                                 <tr>
                                     <td
                                         colSpan={renderedColumnCount}
@@ -1135,38 +1072,17 @@ export function Table<TData extends object>({
                                     </td>
                                 </tr>
                             ) : (
-                                displayRowIds.map((id, index) => {
-                                    if (isSpacerId(id)) {
-                                        const spacer = spacerMap.get(id);
-                                        if (!spacer) return null;
-
-                                        return (
-                                            <SortableSpacerRow
-                                                key={id}
-                                                spacer={spacer}
-                                                index={index}
-                                                colSpan={renderedColumnCount}
-                                                groupId={rowGroupId}
-                                                draggable={canReorderRows}
-                                            />
-                                        );
-                                    }
-
-                                    const row = rowMap.get(id);
-                                    if (!row) return null;
-
-                                    return (
-                                        <SortableDataRow
-                                            key={id}
-                                            id={id}
-                                            index={index}
-                                            row={row}
-                                            groupId={rowGroupId}
-                                            stickyColumnId={stickyColumnId}
-                                            draggable={canReorderRows}
-                                        />
-                                    );
-                                })
+                                tableRows.map((row, index) => (
+                                    <SortableDataRow
+                                        key={row.id}
+                                        id={row.id}
+                                        index={index}
+                                        row={row}
+                                        groupId={rowGroupId}
+                                        stickyColumnId={stickyColumnId}
+                                        draggable={canReorderRows}
+                                    />
+                                ))
                             )}
                         </tbody>
                     </table>

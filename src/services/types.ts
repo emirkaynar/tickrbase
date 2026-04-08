@@ -82,7 +82,7 @@ export type LookupResponse = {
     last_updated: string;
 };
 
-export type WatchlistItem = { ticker: string; interval: string };
+export type WatchlistItem = { ticker: string };
 
 export type WatchlistResponse = WatchlistItem[];
 

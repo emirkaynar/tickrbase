@@ -15,6 +15,7 @@ export type TableColumnMeta = {
     locked?: boolean;
     removable?: boolean;
     sortable?: boolean;
+    align?: "left" | "center" | "right";
 };
 
 export type TableColumnDef<TData extends object> = ColumnDef<TData, unknown> & {

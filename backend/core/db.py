@@ -63,13 +63,6 @@ def init_db() -> None:
                 PRIMARY KEY (ticker, interval)
             );
 
-            CREATE TABLE IF NOT EXISTS watchlist (
-                ticker TEXT NOT NULL,
-                interval TEXT NOT NULL,
-                last_seen INTEGER NOT NULL,
-                PRIMARY KEY (ticker, interval)
-            );
-
             CREATE TABLE IF NOT EXISTS symbols (
                 id TEXT PRIMARY KEY,
                 payload TEXT NOT NULL,

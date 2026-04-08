@@ -314,9 +314,7 @@ export function useLayout() {
             setWidgets((prev) => [...prev, record]);
 
             // Register with watchlist — best effort
-            void updateWatchlist([
-                { ticker: "XU100.IS", interval: "1d" },
-            ]).catch(() => {});
+            void updateWatchlist([{ ticker: "XU100.IS" }]).catch(() => {});
 
             return { success: true };
         },

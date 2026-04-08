@@ -1,4 +1,4 @@
-import { RotateCcw, Columns3 } from "lucide-react";
+import { Columns3 } from "lucide-react";
 import {
     useCallback,
     useEffect,
@@ -7,6 +7,7 @@ import {
     useState,
 } from "preact/hooks";
 import {
+    Skeleton,
     Select,
     Table,
     type SelectItem,
@@ -17,7 +18,8 @@ import {
     Tooltip,
 } from "../../ui";
 import { fetchWatchlist } from "../../services/watchlist";
-import { INTERVAL_CONFIG, type WatchlistItem } from "../../services/types";
+import { livePricesClient } from "../../services/livePrices";
+import type { WatchlistItem } from "../../services/types";
 import { ScrollArea as ArcScrollArea } from "@ark-ui/react/scroll-area";
 import { registerWidget } from "../registry";
 import styles from "./Watchlist.module.css";
@@ -25,10 +27,20 @@ import styles from "./Watchlist.module.css";
 type Props = { id: string; onRemove: () => void };
 
 type WatchlistRow = WatchlistItem & {
-    last_seen?: number;
+    price: number | null;
+    isPriceLoading: boolean;
+    isPricePulsing: boolean;
 };
 
 const WATCHLIST_LOCKED_COLUMN_IDS = ["symbol"];
+const PRICE_PULSE_MS = 260;
+
+function formatPrice(value: number): string {
+    return value.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+}
 
 function areColumnOptionsEqual(
     left: TableColumnOption[],
@@ -55,36 +67,20 @@ function areColumnOptionsEqual(
     return true;
 }
 
-function intervalOrder(interval: string): number {
-    const order = ["1m", "5m", "15m", "30m", "1h", "1d", "1wk", "1mo"];
-    const index = order.indexOf(interval);
-    return index < 0 ? Number.MAX_SAFE_INTEGER : index;
-}
-
-function formatRelativeTime(unixSeconds?: number): string {
-    if (!unixSeconds) return "-";
-
-    const nowSec = Math.floor(Date.now() / 1000);
-    const delta = Math.max(0, nowSec - unixSeconds);
-
-    if (delta < 60) return `${delta}s ago`;
-    if (delta < 3600) return `${Math.floor(delta / 60)}m ago`;
-    if (delta < 86_400) return `${Math.floor(delta / 3600)}h ago`;
-    return `${Math.floor(delta / 86_400)}d ago`;
-}
-
-function getIntervalLabel(interval: string): string {
-    const entry = INTERVAL_CONFIG[interval as keyof typeof INTERVAL_CONFIG];
-    return entry?.label ?? interval;
-}
-
 function Watchlist({ id, onRemove }: Props) {
-    const [rows, setRows] = useState<WatchlistRow[]>([]);
+    const [items, setItems] = useState<WatchlistItem[]>([]);
+    const [priceByTicker, setPriceByTicker] = useState<Record<string, number>>(
+        {},
+    );
+    const [pulsingByTicker, setPulsingByTicker] = useState<
+        Record<string, boolean>
+    >({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const tableControllerRef = useRef<TableController | null>(null);
     const [hasController, setHasController] = useState(false);
     const [columnOptions, setColumnOptions] = useState<TableColumnOption[]>([]);
+    const pulseTimersRef = useRef<Record<string, number>>({});
 
     useEffect(() => {
         const controller = new AbortController();
@@ -93,7 +89,7 @@ function Watchlist({ id, onRemove }: Props) {
             try {
                 setError("");
                 const data = await fetchWatchlist(controller.signal);
-                setRows(data as WatchlistRow[]);
+                setItems(data);
             } catch {
                 if (!controller.signal.aborted) {
                     setError("Could not load watchlist.");
@@ -112,13 +108,94 @@ function Watchlist({ id, onRemove }: Props) {
             if (!controller.signal.aborted) {
                 void load();
             }
-        }, 30_000);
+        }, 5_000);
 
         return () => {
             controller.abort();
             window.clearInterval(timer);
         };
     }, []);
+
+    useEffect(() => {
+        const subscriptionId = `watchlist:${id}`;
+        const symbols = items.map((item) => item.ticker);
+
+        if (!symbols.length) {
+            livePricesClient.removeWidget(subscriptionId);
+            return;
+        }
+
+        livePricesClient.updateSymbols(subscriptionId, symbols);
+
+        return () => {
+            livePricesClient.removeWidget(subscriptionId);
+        };
+    }, [id, items]);
+
+    useEffect(() => {
+        const unsubscribe = livePricesClient.onTick((tick) => {
+            let didPriceChange = false;
+
+            setPriceByTicker((prev) => {
+                if (!Number.isFinite(tick.price)) return prev;
+                const nextPrice = tick.price;
+                if (prev[tick.symbol] === nextPrice) return prev;
+                didPriceChange = true;
+                return {
+                    ...prev,
+                    [tick.symbol]: nextPrice,
+                };
+            });
+
+            if (!didPriceChange) {
+                return;
+            }
+
+            setPulsingByTicker((prev) => ({
+                ...prev,
+                [tick.symbol]: true,
+            }));
+
+            const existingTimer = pulseTimersRef.current[tick.symbol];
+            if (existingTimer != null) {
+                window.clearTimeout(existingTimer);
+            }
+
+            pulseTimersRef.current[tick.symbol] = window.setTimeout(() => {
+                setPulsingByTicker((prev) => {
+                    if (!prev[tick.symbol]) return prev;
+                    const next = { ...prev };
+                    delete next[tick.symbol];
+                    return next;
+                });
+                delete pulseTimersRef.current[tick.symbol];
+            }, PRICE_PULSE_MS);
+        });
+
+        return () => {
+            unsubscribe();
+            for (const timer of Object.values(pulseTimersRef.current)) {
+                window.clearTimeout(timer);
+            }
+            pulseTimersRef.current = {};
+        };
+    }, []);
+
+    const rows = useMemo<WatchlistRow[]>(
+        () =>
+            items.map((item) => {
+                const ticker = item.ticker;
+                const price = priceByTicker[ticker];
+
+                return {
+                    ...item,
+                    price: Number.isFinite(price) ? price : null,
+                    isPriceLoading: !Number.isFinite(price),
+                    isPricePulsing: Boolean(pulsingByTicker[ticker]),
+                };
+            }),
+        [items, priceByTicker, pulsingByTicker],
+    );
 
     const columns = useMemo<TableColumnDef<WatchlistRow>[]>(
         () => [
@@ -131,6 +208,7 @@ function Watchlist({ id, onRemove }: Props) {
                     locked: true,
                     removable: false,
                     sortable: true,
+                    align: "left",
                 },
                 size: 0,
                 minSize: 80,
@@ -141,31 +219,28 @@ function Watchlist({ id, onRemove }: Props) {
                 ),
             },
             {
-                id: "interval",
-                accessorKey: "interval",
-                header: "Interval",
-                meta: { label: "Interval", sortable: true },
-                sortingFn: (left, right) =>
-                    intervalOrder(left.original.interval) -
-                    intervalOrder(right.original.interval),
-                size: 110,
-                minSize: 100,
+                id: "price",
+                accessorFn: (row) => row.price,
+                header: "Price",
+                meta: { label: "Price", align: "right" },
+                size: 100,
+                minSize: 60,
                 cell: ({ row }) => (
-                    <span className={styles.mutedValue}>
-                        {getIntervalLabel(row.original.interval)}
-                    </span>
-                ),
-            },
-            {
-                id: "updated",
-                accessorFn: (row) => row.last_seen ?? 0,
-                header: "Updated",
-                meta: { label: "Updated", sortable: true },
-                size: 130,
-                minSize: 110,
-                cell: ({ row }) => (
-                    <span className={styles.mutedValue}>
-                        {formatRelativeTime(row.original.last_seen)}
+                    <span
+                        className={styles.priceCell}
+                        data-cell-pulse={
+                            row.original.isPricePulsing ? "true" : undefined
+                        }
+                    >
+                        {row.original.isPriceLoading ? (
+                            <Skeleton
+                                variant="text"
+                                width={68}
+                                className={styles.priceSkeleton}
+                            />
+                        ) : (
+                            formatPrice(row.original.price ?? 0)
+                        )}
                     </span>
                 ),
             },
@@ -244,13 +319,6 @@ function Watchlist({ id, onRemove }: Props) {
         [columnOptions, setColumnOptionsIfChanged],
     );
 
-    const handleResetColumns = useCallback(() => {
-        const tableController = tableControllerRef.current;
-        if (!tableController) return;
-        tableController.resetLayout();
-        setColumnOptionsIfChanged(tableController.getColumnOptions());
-    }, [setColumnOptionsIfChanged]);
-
     return (
         <div className={styles.root}>
             <div className={`${styles.handle} widget-handle`}>
@@ -258,41 +326,30 @@ function Watchlist({ id, onRemove }: Props) {
                     <div className={styles.heading}>Watchlist</div>
                     {!loading && !error && (
                         <span className={styles.count}>
-                            {rows.length} symbols
+                            {items.length} symbols
                         </span>
                     )}
                 </div>
                 <div className={`${styles.dragGrip} sc-drag-grip`} />
                 <div className={styles.controls}>
                     <Tooltip content="Columns">
-                    <Select
-                        className={styles.columnSelect}
-                        items={columnItems}
-                        multiple
-                        values={visibleColumnIds}
-                        onValuesChange={handleVisibleColumnsChange}
-                        onOpenChange={(open) => {
-                            if (open) refreshColumnOptions();
-                        }}
-                        placement="bottom-end"
-                        variant="widget"
-                        triggerVariant="icon"
-                        triggerIcon={<Columns3 />}
-                        triggerLabel="Columns"
-                        disabled={!hasController}
-                    />
+                        <Select
+                            className={styles.columnSelect}
+                            items={columnItems}
+                            multiple
+                            values={visibleColumnIds}
+                            onValuesChange={handleVisibleColumnsChange}
+                            onOpenChange={(open) => {
+                                if (open) refreshColumnOptions();
+                            }}
+                            placement="bottom-end"
+                            variant="widget"
+                            triggerVariant="icon"
+                            triggerIcon={<Columns3 />}
+                            triggerLabel="Columns"
+                            disabled={!hasController}
+                        />
                     </Tooltip>
-
-                    <button
-                        type="button"
-                        className={styles.controlButton}
-                        onClick={handleResetColumns}
-                        aria-label="Reset table layout"
-                        title="Reset table layout"
-                        disabled={!hasController}
-                    >
-                        <RotateCcw />
-                    </button>
 
                     <WidgetRemoveButton
                         class={styles.removeBtn}
@@ -312,12 +369,10 @@ function Watchlist({ id, onRemove }: Props) {
                                         className={styles.table}
                                         rows={rows}
                                         columns={columns}
-                                        getRowId={(row) =>
-                                            `${row.ticker}:${row.interval}`
-                                        }
+                                        getRowId={(row) => row.ticker}
                                         scopeType="widget"
                                         scopeId={id}
-                                        tableId="watchlist"
+                                        tableId="watchlist-v3"
                                         variant="widget"
                                         stickyColumnId="symbol"
                                         lockedColumnIds={

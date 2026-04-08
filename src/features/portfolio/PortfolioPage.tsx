@@ -182,7 +182,7 @@ export function PortfolioPage() {
                         getRowId={(row) => row.ticker}
                         scopeType="page"
                         scopeId="portfolio"
-                        tableId="positions"
+                        tableId="positions-v2"
                         variant="full"
                         stickyColumnId="symbol"
                         lockedColumnIds={["symbol"]}

@@ -150,8 +150,8 @@ export function useChartState(
     // Register with watchlist
     useEffect(() => {
         if (!stateReady) return;
-        void updateWatchlist([{ ticker: symbol, interval }]).catch(() => {});
-    }, [symbol, interval, stateReady]);
+        void updateWatchlist([{ ticker: symbol }]).catch(() => {});
+    }, [symbol, stateReady]);
 
     const applyBars = useCallback(
         (bars: Bar[], fit: boolean) => {

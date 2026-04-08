@@ -26,7 +26,6 @@ from ..core.models import (
     PriceResponse,
     LookupResponse,
     SymbolsResponse,
-    WatchlistUpdate,
 )
 from ..core.provider import DataProvider
 from ..services import alerts as alerts_service
@@ -35,7 +34,6 @@ from ..services import portfolio as portfolio_service
 from ..services import prices as prices_service
 from ..services import lookup as lookup_service
 from ..services import symbols as symbols_service
-from ..services import watchlist as watchlist_service
 
 
 def build_router(
@@ -277,16 +275,5 @@ def build_router(
             raise HTTPException(status_code=400, detail=str(exc))
         except Exception as exc:
             raise HTTPException(status_code=502, detail=str(exc))
-
-    @router.get("/watchlist")
-    def list_watchlist():
-        return watchlist_service.list_watchlist()
-
-    @router.post("/watchlist")
-    def update_watchlist(payload: WatchlistUpdate):
-        watchlist_service.upsert_watchlist(
-            [item.model_dump() for item in payload.items]
-        )
-        return {"ok": True}
 
     return router

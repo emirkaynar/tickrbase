@@ -53,7 +53,8 @@ class LivePricesClient {
     private readonly maxReconnectDelayMs = 30_000;
     private requestSeq = 0;
     private desiredSymbols = new Set<string>();
-    private symbolsByWidget = new Map<string, string>();
+    private manualSymbols = new Set<string>();
+    private symbolsByWidget = new Map<string, Set<string>>();
     private debug = false;
     private readonly tickListeners = new Set<TickListener>();
     private readonly statusListeners = new Set<StatusListener>();
@@ -83,18 +84,24 @@ class LivePricesClient {
 
     setDesiredSymbols(symbols: string[], options?: { debug?: boolean }): void {
         this.debug = Boolean(options?.debug);
-        this.desiredSymbols = new Set(
+        this.manualSymbols = new Set(
             symbols.map(normalize).filter((s) => s.length > 0),
         );
-        this.sendReplace();
+        this.rebuildDesiredSymbols();
     }
 
     updateSymbol(widgetId: string, symbol: string): void {
-        const normalized = normalize(symbol);
-        if (normalized.length > 0) {
-            this.symbolsByWidget.set(widgetId, normalized);
-        } else {
+        this.updateSymbols(widgetId, [symbol]);
+    }
+
+    updateSymbols(widgetId: string, symbols: string[]): void {
+        const normalized = symbols
+            .map(normalize)
+            .filter((symbol) => symbol.length > 0);
+        if (normalized.length === 0) {
             this.symbolsByWidget.delete(widgetId);
+        } else {
+            this.symbolsByWidget.set(widgetId, new Set(normalized));
         }
         this.rebuildDesiredSymbols();
     }
@@ -105,7 +112,13 @@ class LivePricesClient {
     }
 
     private rebuildDesiredSymbols(): void {
-        this.desiredSymbols = new Set(this.symbolsByWidget.values());
+        const next = new Set<string>(this.manualSymbols);
+        for (const symbols of this.symbolsByWidget.values()) {
+            for (const symbol of symbols) {
+                next.add(symbol);
+            }
+        }
+        this.desiredSymbols = next;
         this.sendReplace();
     }
 

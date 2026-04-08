@@ -42,6 +42,12 @@ export type UiStateRecord = {
     activeScreenId: string;
 };
 
+export type WatchlistRecord = {
+    ticker: string;
+    createdAt: number;
+    updatedAt: number;
+};
+
 export type TableScopeType = "widget" | "page";
 
 export type TableSortRecord = {
@@ -77,6 +83,7 @@ const db = new Dexie("lima") as Dexie & {
     widgets: EntityTable<WidgetRecord, "id">;
     uiState: EntityTable<UiStateRecord, "id">;
     tablePreferences: EntityTable<TablePreferencesRecord, "id">;
+    watchlist: EntityTable<WatchlistRecord, "ticker">;
 };
 
 // v1-v7: legacy migrations retained so existing users keep their data
@@ -145,6 +152,18 @@ db.version(10).stores({
     widgets: "id, screenId, type, createdAt",
     uiState: "id",
     tablePreferences: "id, scopeType, scopeId, tableId, updatedAt",
+});
+
+// v11: local watchlist source of truth keyed by ticker
+db.version(11).stores({
+    layout: null,
+    widgetState: "id",
+    chartState: "widget_id",
+    screens: "id, order, createdAt",
+    widgets: "id, screenId, type, createdAt",
+    uiState: "id",
+    tablePreferences: "id, scopeType, scopeId, tableId, updatedAt",
+    watchlist: "ticker, createdAt, updatedAt",
 });
 
 export { db };

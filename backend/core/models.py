@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class Candle(BaseModel):
@@ -59,15 +59,6 @@ class AlertRecord(BaseModel):
     active: bool
     created_at: str
     last_triggered_at: str | None = None
-
-
-class WatchlistItem(BaseModel):
-    ticker: str
-    interval: str
-
-
-class WatchlistUpdate(BaseModel):
-    items: list[WatchlistItem] = Field(default_factory=list)
 
 
 class SymbolItem(BaseModel):
