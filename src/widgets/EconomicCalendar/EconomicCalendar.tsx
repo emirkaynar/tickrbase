@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { WidgetRemoveButton } from "../../ui";
+import { Skeleton, WidgetRemoveButton } from "../../ui";
 import { registerWidget } from "../registry";
 import styles from "./EconomicCalendar.module.css";
 
@@ -92,7 +92,7 @@ function EconomicCalendar({ onRemove }: Props) {
                     class={`tradingview-widget-container ${styles.widgetHost}`}
                     ref={hostRef}
                 />
-                {loading && <div class={styles.skeletonOverlay} />}
+                {loading && <Skeleton variant="rect" />}
             </div>
         </div>
     );

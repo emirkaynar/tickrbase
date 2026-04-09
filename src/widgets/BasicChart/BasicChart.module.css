@@ -75,23 +75,6 @@
     overflow: hidden;
 }
 
-.overlay {
-    position: absolute;
-    inset: 0;
-    /* LW chart appends its canvas to the DOM *after* this div renders, so it
-       paints on top of anything with z-index <= 0. Use a concrete value >= 1. */
-    z-index: 10;
-    background: var(--color-bg-elevated);
-    background-image: linear-gradient(
-        90deg,
-        transparent 0%,
-        var(--color-bg-surface) 50%,
-        transparent 100%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.6s ease infinite;
-}
-
 .overlayError {
     position: absolute;
     inset: 0;
@@ -100,15 +83,6 @@
     align-items: center;
     justify-content: center;
     background: var(--color-bg-elevated);
-}
-
-@keyframes shimmer {
-    0% {
-        background-position: 200% 0;
-    }
-    100% {
-        background-position: -200% 0;
-    }
 }
 
 .errorMsg {

@@ -235,7 +235,6 @@ function Watchlist({ id, onRemove }: Props) {
                         {row.original.isPriceLoading ? (
                             <Skeleton
                                 variant="text"
-                                width={68}
                                 className={styles.priceSkeleton}
                             />
                         ) : (
@@ -322,15 +321,16 @@ function Watchlist({ id, onRemove }: Props) {
     return (
         <div className={styles.root}>
             <div className={`${styles.handle} widget-handle`}>
-                <div className={styles.widgetTitle}>
-                    <div className={styles.heading}>Watchlist</div>
-                    {!loading && !error && (
-                        <span className={styles.count}>
-                            {items.length} symbols
-                        </span>
-                    )}
+                <div className={`${styles.dragGrip} sc-drag-grip`}>
+                    <div className={styles.widgetTitle}>
+                        <div className={styles.heading}>Watchlist</div>
+                        {!loading && !error && (
+                            <span className={styles.count}>
+                                {items.length} symbols
+                            </span>
+                        )}
+                    </div>
                 </div>
-                <div className={`${styles.dragGrip} sc-drag-grip`} />
                 <div className={styles.controls}>
                     <Tooltip content="Columns">
                         <Select
@@ -342,7 +342,7 @@ function Watchlist({ id, onRemove }: Props) {
                             onOpenChange={(open) => {
                                 if (open) refreshColumnOptions();
                             }}
-                            placement="bottom-end"
+                            placement="bottom"
                             variant="widget"
                             triggerVariant="icon"
                             triggerIcon={<Columns3 />}
@@ -386,10 +386,6 @@ function Watchlist({ id, onRemove }: Props) {
                                     ></Table>
                                 </>
                             )}
-
-                            {loading && !error && (
-                                <div className={styles.loadingOverlay} />
-                            )}
                         </div>
                     </ArcScrollArea.Content>
                 </ArcScrollArea.Viewport>
@@ -407,6 +403,7 @@ function Watchlist({ id, onRemove }: Props) {
                 </ArcScrollArea.Scrollbar>
                 <ArcScrollArea.Corner className={styles.Corner} />
             </ArcScrollArea.Root>
+            {loading && !error && <Skeleton />}
         </div>
     );
 }
@@ -414,8 +411,8 @@ function Watchlist({ id, onRemove }: Props) {
 registerWidget({
     type: "watchlist",
     label: "Watchlist",
-    defaultSize: { w: 9, h: 14 },
-    minSize: { w: 7, h: 8 },
+    defaultSize: { w: 7, h: 29 },
+    minSize: { w: 6, h: 9 },
     component: Watchlist,
 });
 

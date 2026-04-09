@@ -34,10 +34,6 @@
     height: 24px;
 }
 
-.defaultTrigger {
-    min-width: 80px;
-}
-
 .iconTrigger {
     width: 22px;
     min-width: 22px;
@@ -104,7 +100,7 @@
 }
 
 .iconContent {
-    min-width: 220px;
+    min-width: none;
 }
 
 .content[data-state="closed"] {
@@ -115,7 +111,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--space-2);
+    gap: var(--space-3);
     padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-sm);
     font-size: var(--font-size-sm);
@@ -152,7 +148,7 @@
 }
 
 .item[data-state="checked"] {
-    color: var(--color-bull);
+    color: var(--color-primary);
 }
 
 .item[data-disabled] {
@@ -162,11 +158,11 @@
 .itemIndicator {
     display: flex;
     align-items: center;
-    color: var(--color-bull);
+    color: var(--color-primary);
 }
 
 .itemIndicator[data-state="unchecked"] {
-    display: none;
+    opacity: 0;
 }
 
 @keyframes scale-in {

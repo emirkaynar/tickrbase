@@ -17,7 +17,7 @@ export type SelectItem = {
 
 export type SelectTriggerVariant = "default" | "icon";
 
-export type SelectVariant = "widget" | "full";
+export type SelectVariant = "widget" | "preferences" | "full";
 
 function hasSameValues(left: string[], right: string[]): boolean {
     if (left === right) return true;
@@ -37,7 +37,12 @@ type Props = {
     values?: string[];
     onValuesChange?: (values: string[]) => void;
     multiple?: boolean;
-    placement?: "bottom-start" | "bottom-end" | "top-start" | "top-end";
+    placement?:
+        | "bottom-start"
+        | "bottom-end"
+        | "top-start"
+        | "top-end"
+        | "bottom";
     className?: string;
     variant?: SelectVariant;
     triggerVariant?: SelectTriggerVariant;
@@ -153,20 +158,22 @@ export function Select({
                                 item={item}
                                 className={styles.item}
                             >
+                                <span className={styles.itemMeta}>
+                                    {item.locked ? (
+                                        <Lock
+                                            className={styles.itemIndicator}
+                                        />
+                                    ) : (
+                                        <ArkSelect.ItemIndicator
+                                            className={styles.itemIndicator}
+                                        >
+                                            <CheckIcon />
+                                        </ArkSelect.ItemIndicator>
+                                    )}
+                                </span>
                                 <ArkSelect.ItemText className={styles.itemText}>
                                     {item.label}
                                 </ArkSelect.ItemText>
-
-                                <span className={styles.itemMeta}>
-                                    {item.locked && (
-                                        <Lock className={styles.lockIcon} />
-                                    )}
-                                    <ArkSelect.ItemIndicator
-                                        className={styles.itemIndicator}
-                                    >
-                                        <CheckIcon />
-                                    </ArkSelect.ItemIndicator>
-                                </span>
                             </ArkSelect.Item>
                         ))}
                     </ArkSelect.Content>

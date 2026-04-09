@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback } from "preact/hooks";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { createChart } from "lightweight-charts";
-import { Select, TickerSelector, WidgetRemoveButton } from "../../ui";
+import { Select, Skeleton, TickerSelector, WidgetRemoveButton } from "../../ui";
 import type { SelectItem } from "../../ui";
 import { useChartState } from "./useChartState";
 import { createChartConfig, getCandleColors } from "./chartConfig";
@@ -142,24 +142,26 @@ function BasicChart({ id, onRemove }: Props) {
                         placeholder="Ticker..."
                         onChange={handleSymbolSelect}
                     />
-                    <div class={styles.intervalSelect}>
-                        <Select
-                            items={INTERVAL_ITEMS}
-                            value={interval}
-                            onChange={handleIntervalSelect}
-                        />
-                    </div>
+                    <Select
+                        items={INTERVAL_ITEMS}
+                        value={interval}
+                        onChange={handleIntervalSelect}
+                        variant="widget"
+                    />
                 </div>
                 <div class={`${styles.dragGrip} sc-drag-grip`} />
                 <div class={styles.controls}>
-                    <WidgetRemoveButton class={styles.removeBtn} onClick={onRemove} />
+                    <WidgetRemoveButton
+                        class={styles.removeBtn}
+                        onClick={onRemove}
+                    />
                 </div>
             </div>
 
             {/* Chart canvas */}
             <div class={styles.chartContainer} ref={containerRef}>
                 {(!stateReady || status === "loading") && (
-                    <div class={styles.overlay} />
+                    <Skeleton variant="rect" />
                 )}
                 {status === "error" && (
                     <div class={styles.overlayError}>

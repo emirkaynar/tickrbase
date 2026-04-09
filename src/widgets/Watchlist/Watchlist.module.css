@@ -142,7 +142,6 @@
 
 .symbolCell {
     font-weight: 600;
-    letter-spacing: 0.01em;
 }
 
 .mutedValue {
@@ -150,15 +149,7 @@
 }
 
 .priceCell {
-    display: inline-flex;
-    align-items: center;
-    min-height: 1.25rem;
-    color: var(--color-text);
     font-variant-numeric: tabular-nums;
-}
-
-.priceSkeleton {
-    display: inline-block;
 }
 
 .errorState {
@@ -171,22 +162,6 @@
     font-size: var(--font-size-sm);
     text-align: center;
     background: var(--color-bg-elevated);
-}
-
-.loadingOverlay {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    pointer-events: none;
-    background: var(--color-bg-elevated);
-    background-image: linear-gradient(
-        90deg,
-        transparent 0%,
-        var(--color-bg-surface) 50%,
-        transparent 100%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.6s ease infinite;
 }
 
 .scrollRoot {
@@ -273,14 +248,4 @@
 
 .corner {
     background-color: transparent;
-}
-
-@keyframes shimmer {
-    0% {
-        background-position: 200% 0;
-    }
-
-    100% {
-        background-position: -200% 0;
-    }
 }

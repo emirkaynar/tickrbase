@@ -164,8 +164,8 @@
         "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", monospace;
 
     --font-size-xs: 10px;
-    --font-size-sm: 11px;
-    --font-size-base: 12px;
+    --font-size-sm: 12px;
+    --font-size-base: 14px;
     --font-size-md: 13px;
     --font-size-lg: 15px;
     --font-size-xl: 18px;

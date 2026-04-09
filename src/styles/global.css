@@ -21,7 +21,7 @@ html {
 body {
     font-family: var(--font-mono);
     font-size: var(--font-size-base);
-    line-height: var(--line-height-base);
+    line-height: 1;
     background: var(--color-bg);
     color: var(--color-text);
     -webkit-font-smoothing: antialiased;

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { registerWidget } from "../registry";
-import { WidgetDragButton, WidgetRemoveButton } from "../../ui";
+import { Skeleton, WidgetDragButton, WidgetRemoveButton } from "../../ui";
 import { db } from "../../db";
 import { getChartColors } from "../../styles/tokens";
 import styles from "./AdvancedChart.module.css";
@@ -285,7 +285,7 @@ function AdvancedChart({ id, onRemove }: Props) {
 
                 {error && (
                     <div class={styles.errorOverlay}>
-                        <p class={styles.errorText}>{error}</p>
+                        <Skeleton variant="rect" />
                         <button
                             type="button"
                             class={styles.retryBtn}

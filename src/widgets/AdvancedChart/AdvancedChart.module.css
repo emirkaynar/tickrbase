@@ -102,21 +102,6 @@
     opacity: 1;
 }
 
-.skeletonOverlay {
-    position: absolute;
-    inset: 0;
-    z-index: 10;
-    background: var(--color-bg-elevated);
-    background-image: linear-gradient(
-        90deg,
-        transparent 0%,
-        var(--color-bg-surface) 50%,
-        transparent 100%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.6s ease infinite;
-}
-
 .errorOverlay {
     position: absolute;
     inset: 0;
@@ -148,13 +133,4 @@
 
 .retryBtn:hover {
     border-color: var(--color-primary);
-}
-
-@keyframes shimmer {
-    0% {
-        background-position: 200% 0;
-    }
-    100% {
-        background-position: -200% 0;
-    }
 }
