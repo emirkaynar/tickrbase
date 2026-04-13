@@ -281,11 +281,11 @@ function AdvancedChart({ id, onRemove }: Props) {
                     ref={hostRef}
                 />
 
-                {loading && <div class={styles.skeletonOverlay}></div>}
+                {loading && <Skeleton variant="rect" />}
 
                 {error && (
                     <div class={styles.errorOverlay}>
-                        <Skeleton variant="rect" />
+                        <div class={styles.errorText}>{error}</div>
                         <button
                             type="button"
                             class={styles.retryBtn}

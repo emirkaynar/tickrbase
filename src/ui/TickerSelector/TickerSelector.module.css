@@ -135,7 +135,7 @@
 }
 
 .item[data-state="checked"] .itemTitle {
-    color: var(--color-bull);
+    color: var(--color-primary);
 }
 
 .itemText {
@@ -165,7 +165,7 @@
 .itemIndicator {
     display: flex;
     align-items: center;
-    color: var(--color-bull);
+    color: var(--color-primary);
 }
 
 .itemIndicator[data-state="unchecked"] {
