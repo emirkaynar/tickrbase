@@ -26,5 +26,13 @@ class DataProvider(ABC):
         raise NotImplementedError
 
     @abstractmethod
+    def get_quote_snapshot(
+        self,
+        ticker: str,
+        groups: set[str] | None = None,
+    ) -> tuple[dict, int]:
+        raise NotImplementedError
+
+    @abstractmethod
     def lookup(self, query: str, count: int) -> list[dict]:
         raise NotImplementedError

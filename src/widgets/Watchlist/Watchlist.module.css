@@ -274,6 +274,14 @@
     color: var(--color-text-muted);
 }
 
+.positiveValue {
+    color: var(--color-success);
+}
+
+.negativeValue {
+    color: var(--color-danger);
+}
+
 .priceCell {
     font-variant-numeric: tabular-nums;
 }

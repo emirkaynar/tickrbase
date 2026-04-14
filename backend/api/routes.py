@@ -5,13 +5,15 @@ import time
 from collections import deque
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 
 from ..core.cache import TTLCache
 from ..core.config import (
     CORS_ORIGINS,
     DEFAULT_INTERVAL,
     DEFAULT_PERIOD,
+    QUOTES_DEFAULT_GROUPS,
+    QUOTES_MAX_SYMBOLS_PER_REQUEST,
     WS_COMMAND_RATE_LIMIT_PER_SEC,
     WS_MAX_CLIENTS,
     YAHOO_MAX_RANGE,
@@ -25,6 +27,7 @@ from ..core.models import (
     PortfolioPosition,
     PriceResponse,
     LookupResponse,
+    QuotesResponse,
     SymbolsResponse,
 )
 from ..core.provider import DataProvider
@@ -32,6 +35,7 @@ from ..services import alerts as alerts_service
 from ..services.streaming import LivePriceStreamHub
 from ..services import portfolio as portfolio_service
 from ..services import prices as prices_service
+from ..services import quotes as quotes_service
 from ..services import lookup as lookup_service
 from ..services import symbols as symbols_service
 
@@ -39,6 +43,7 @@ from ..services import symbols as symbols_service
 def build_router(
     provider: DataProvider,
     price_cache: TTLCache[float],
+    quotes_cache: TTLCache[dict[str, object]],
     stream_hub: LivePriceStreamHub,
 ) -> APIRouter:
     router = APIRouter()
@@ -216,6 +221,64 @@ def build_router(
             }
         except Exception as exc:
             raise HTTPException(status_code=502, detail=str(exc))
+
+    @router.get("/quotes", response_model=QuotesResponse)
+    def get_quotes(
+        symbols: str = Query(..., description="Comma-separated ticker symbols"),
+        fields: str | None = Query(
+            None,
+            description="Comma-separated field groups: session,volume,quote",
+        ),
+    ):
+        normalized_symbols = quotes_service.normalize_symbols(symbols.split(","))
+        if not normalized_symbols:
+            raise HTTPException(status_code=400, detail="No valid symbols provided")
+
+        if len(normalized_symbols) > QUOTES_MAX_SYMBOLS_PER_REQUEST:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Too many symbols requested "
+                    f"(max {QUOTES_MAX_SYMBOLS_PER_REQUEST})"
+                ),
+            )
+
+        groups: set[str]
+        if fields is None or not fields.strip():
+            groups = set(QUOTES_DEFAULT_GROUPS)
+        else:
+            groups = {
+                value.strip().lower()
+                for value in fields.split(",")
+                if value.strip()
+            }
+            supported = {"session", "volume", "quote"}
+            invalid = sorted(group for group in groups if group not in supported)
+            if invalid:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Unsupported fields: "
+                        + ", ".join(invalid)
+                        + ". Supported: session,volume,quote"
+                    ),
+                )
+            if not groups:
+                groups = set(QUOTES_DEFAULT_GROUPS)
+
+        quotes, stale, fetched_at = quotes_service.get_quotes(
+            provider,
+            quotes_cache,
+            normalized_symbols,
+            groups,
+        )
+
+        return {
+            "symbols": normalized_symbols,
+            "quotes": quotes,
+            "stale": stale,
+            "last_updated": prices_service.iso_timestamp(fetched_at),
+        }
 
     @router.get("/portfolio", response_model=list[PortfolioPosition])
     def get_portfolio():

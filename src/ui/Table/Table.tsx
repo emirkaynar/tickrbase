@@ -672,8 +672,25 @@ export function Table<TData extends object>({
     );
 
     useEffect(() => {
-        setRowOrder((prev) => normalizeRowOrder(prev, allRowIds));
-    }, [allRowIds]);
+        setRowOrder((prev) => {
+            const hasPersistedDataRowIds = prev.some(
+                (id) => !id.startsWith(SPACER_PREFIX),
+            );
+            const hasPersistedSpacerRowIds = prev.some((id) =>
+                id.startsWith(SPACER_PREFIX),
+            );
+
+            if (dataRowIds.length === 0 && hasPersistedDataRowIds) {
+                return prev;
+            }
+
+            if (spacerIds.length === 0 && hasPersistedSpacerRowIds) {
+                return prev;
+            }
+
+            return normalizeRowOrder(prev, allRowIds);
+        });
+    }, [allRowIds, dataRowIds, spacerIds]);
 
     useEffect(() => {
         setSorting((prev) => normalizeSorting(prev, allColumnIds));
@@ -855,10 +872,9 @@ export function Table<TData extends object>({
                 if (!active || !persisted) return;
 
                 const loadedSpacers = normalizeSpacerRows(persisted.spacers);
-                const loadedRowOrder = normalizeRowOrder(persisted.rowOrder, [
-                    ...dataRowIds,
-                    ...loadedSpacers.map((spacer) => spacer.id),
-                ]);
+                // Keep persisted ordering as-is during hydrate. Rows may not be
+                // loaded yet; normalizing too early can drop IDs permanently.
+                const loadedRowOrder = uniqueOrdered(persisted.rowOrder);
 
                 setRowOrder(loadedRowOrder);
                 setSpacers(loadedSpacers);
@@ -885,6 +901,21 @@ export function Table<TData extends object>({
     useEffect(() => {
         if (!rowStateHydrated) return;
         if (draggingRowId) return;
+
+        const hasPersistedDataRowIds = rowOrder.some(
+            (id) => !id.startsWith(SPACER_PREFIX),
+        );
+        const hasPersistedSpacerRowIds = rowOrder.some((id) =>
+            id.startsWith(SPACER_PREFIX),
+        );
+        if (dataRowIds.length === 0 && hasPersistedDataRowIds) {
+            // Avoid truncating a restored row order before data rows hydrate.
+            return;
+        }
+        if (spacerIds.length === 0 && hasPersistedSpacerRowIds) {
+            // Avoid truncating restored spacer positions before spacers hydrate.
+            return;
+        }
 
         const persistedSpacers = normalizeSpacerRows(spacers);
         const persistedRowOrder = normalizeRowOrder(rowOrder, [
@@ -942,7 +973,9 @@ export function Table<TData extends object>({
         draggingRowId,
         rowOrder,
         spacers,
+        dataRowIds,
         dataRowIdsKey,
+        spacerIds,
         effectiveRowStateId,
     ]);
 

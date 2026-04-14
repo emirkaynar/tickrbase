@@ -41,8 +41,14 @@ import {
     fetchLists,
     removeSymbolFromList,
 } from "../../services/watchlist";
+import { fetchQuotes } from "../../services/quotes";
 import { livePricesClient } from "../../services/livePrices";
-import type { ListItem, ListRecord } from "../../services/types";
+import type {
+    ListItem,
+    ListRecord,
+    QuoteFieldGroup,
+    QuoteSnapshot,
+} from "../../services/types";
 import { ScrollArea as ArcScrollArea } from "@ark-ui/react/scroll-area";
 import { registerWidget } from "../registry";
 import styles from "./Watchlist.module.css";
@@ -51,18 +57,112 @@ type Props = { id: string; onRemove: () => void };
 
 type ListTableRow = ListItem & {
     price: number | null;
+    previousClose: number | null;
+    open: number | null;
+    dayLow: number | null;
+    dayHigh: number | null;
+    changePercent: number | null;
+    volume: number | null;
+    volumeValue: number | null;
+    bid: number | null;
+    ask: number | null;
     isPriceLoading: boolean;
-    isPricePulsing: boolean;
 };
 
 const LISTS_LOCKED_COLUMN_IDS = ["symbol", "actions"];
-const PRICE_PULSE_MS = 260;
+const CELL_PULSE_MS = 260;
+const SNAPSHOT_REFRESH_MS = 15_000;
+const PULSABLE_COLUMN_IDS = [
+    "price",
+    "changePercent",
+    "previousClose",
+    "open",
+    "dayLow",
+    "dayHigh",
+    "volume",
+    "volumeValue",
+    "bid",
+    "ask",
+] as const;
+
+type PulsableColumnId = (typeof PULSABLE_COLUMN_IDS)[number];
+
+const SNAPSHOT_GROUP_BY_COLUMN_ID: Partial<Record<string, QuoteFieldGroup>> = {
+    previousClose: "session",
+    open: "session",
+    dayLow: "session",
+    dayHigh: "session",
+    changePercent: "session",
+    volume: "volume",
+    volumeValue: "volume",
+    bid: "quote",
+    ask: "quote",
+};
+
+const PERCENT_FORMATTER = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
+
+const INTEGER_FORMATTER = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+});
 
 function formatPrice(value: number): string {
     return value.toLocaleString("en-US", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
+}
+
+function formatPercent(value: number): string {
+    const prefix = value > 0 ? "+" : "";
+    return `${prefix}${PERCENT_FORMATTER.format(value)}%`;
+}
+
+function formatWhole(value: number): string {
+    return INTEGER_FORMATTER.format(value);
+}
+
+function toFiniteNumber(value: number | null | undefined): number | null {
+    return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function formatOptionalPrice(value: number | null): string {
+    return value === null ? "-" : formatPrice(value);
+}
+
+function formatOptionalWhole(value: number | null): string {
+    return value === null ? "-" : formatWhole(value);
+}
+
+function formatOptionalPercent(value: number | null): string {
+    return value === null ? "-" : formatPercent(value);
+}
+
+function createCellPulseKey(
+    ticker: string,
+    columnId: PulsableColumnId,
+): string {
+    return `${ticker}|${columnId}`;
+}
+
+function getPulsableCellValues(
+    row: ListTableRow,
+): Record<PulsableColumnId, number | null> {
+    return {
+        price: row.price,
+        changePercent: row.changePercent,
+        previousClose: row.previousClose,
+        open: row.open,
+        dayLow: row.dayLow,
+        dayHigh: row.dayHigh,
+        volume: row.volume,
+        volumeValue: row.volumeValue,
+        bid: row.bid,
+        ask: row.ask,
+    };
 }
 
 function areColumnOptionsEqual(
@@ -97,15 +197,19 @@ function Watchlist({ id, onRemove }: Props) {
     const [priceByTicker, setPriceByTicker] = useState<Record<string, number>>(
         {},
     );
-    const [pulsingByTicker, setPulsingByTicker] = useState<
-        Record<string, boolean>
+    const [quotesByTicker, setQuotesByTicker] = useState<
+        Record<string, QuoteSnapshot>
     >({});
+    const [, setPulseRenderTick] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const tableControllerRef = useRef<TableController | null>(null);
     const [hasController, setHasController] = useState(false);
     const [columnOptions, setColumnOptions] = useState<TableColumnOption[]>([]);
-    const pulseTimersRef = useRef<Record<string, number>>({});
+    const pulsingCellByKeyRef = useRef<Record<string, true>>({});
+    const cellPulseTimersRef = useRef<Record<string, number>>({});
+    const pulseRenderRafRef = useRef<number | null>(null);
+    const cellSignatureByKeyRef = useRef<Record<string, number | null>>({});
     const [listPopoverOpen, setListPopoverOpen] = useState(false);
     const [newListName, setNewListName] = useState("");
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -113,6 +217,9 @@ function Watchlist({ id, onRemove }: Props) {
     const [addGroupPopoverOpen, setAddGroupPopoverOpen] = useState(false);
     const [newSymbol, setNewSymbol] = useState("");
     const [newGroupLabel, setNewGroupLabel] = useState("");
+    const [isPageVisible, setIsPageVisible] = useState(
+        () => document.visibilityState === "visible",
+    );
 
     const refreshLists = useCallback(async (preferredListId?: string) => {
         const nextLists = await fetchLists();
@@ -189,6 +296,20 @@ function Watchlist({ id, onRemove }: Props) {
     }, [id, activeListId]);
 
     useEffect(() => {
+        const handleVisibilityChange = () => {
+            setIsPageVisible(document.visibilityState === "visible");
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            document.removeEventListener(
+                "visibilitychange",
+                handleVisibilityChange,
+            );
+        };
+    }, []);
+
+    useEffect(() => {
         const subscriptionId = `lists:${id}`;
         const symbols = items.map((item) => item.ticker);
 
@@ -206,50 +327,42 @@ function Watchlist({ id, onRemove }: Props) {
 
     useEffect(() => {
         const unsubscribe = livePricesClient.onTick((tick) => {
-            let didPriceChange = false;
-
             setPriceByTicker((prev) => {
                 if (!Number.isFinite(tick.price)) return prev;
                 const nextPrice = tick.price;
                 if (prev[tick.symbol] === nextPrice) return prev;
-                didPriceChange = true;
                 return {
                     ...prev,
                     [tick.symbol]: nextPrice,
                 };
             });
-
-            if (!didPriceChange) {
-                return;
-            }
-
-            setPulsingByTicker((prev) => ({
-                ...prev,
-                [tick.symbol]: true,
-            }));
-
-            const existingTimer = pulseTimersRef.current[tick.symbol];
-            if (existingTimer != null) {
-                window.clearTimeout(existingTimer);
-            }
-
-            pulseTimersRef.current[tick.symbol] = window.setTimeout(() => {
-                setPulsingByTicker((prev) => {
-                    if (!prev[tick.symbol]) return prev;
-                    const next = { ...prev };
-                    delete next[tick.symbol];
-                    return next;
-                });
-                delete pulseTimersRef.current[tick.symbol];
-            }, PRICE_PULSE_MS);
         });
 
         return () => {
             unsubscribe();
-            for (const timer of Object.values(pulseTimersRef.current)) {
+        };
+    }, []);
+
+    const schedulePulseRender = useCallback(() => {
+        if (pulseRenderRafRef.current != null) return;
+
+        pulseRenderRafRef.current = window.requestAnimationFrame(() => {
+            pulseRenderRafRef.current = null;
+            setPulseRenderTick((value) => value + 1);
+        });
+    }, []);
+
+    useEffect(() => {
+        return () => {
+            for (const timer of Object.values(cellPulseTimersRef.current)) {
                 window.clearTimeout(timer);
             }
-            pulseTimersRef.current = {};
+            cellPulseTimersRef.current = {};
+
+            if (pulseRenderRafRef.current != null) {
+                window.cancelAnimationFrame(pulseRenderRafRef.current);
+                pulseRenderRafRef.current = null;
+            }
         };
     }, []);
 
@@ -257,16 +370,126 @@ function Watchlist({ id, onRemove }: Props) {
         () =>
             items.map((item) => {
                 const ticker = item.ticker;
-                const price = priceByTicker[ticker];
+                const livePrice = toFiniteNumber(priceByTicker[ticker]);
+                const quote = quotesByTicker[ticker];
+                const quotePrice = toFiniteNumber(quote?.current_price);
+                const resolvedPrice = livePrice ?? quotePrice;
+
+                const previousClose = toFiniteNumber(quote?.previous_close);
+                const open = toFiniteNumber(quote?.open);
+                const dayLow = toFiniteNumber(quote?.day_low);
+                const dayHigh = toFiniteNumber(quote?.day_high);
+                const bid = toFiniteNumber(quote?.bid);
+                const ask = toFiniteNumber(quote?.ask);
+                const volume = toFiniteNumber(quote?.volume);
+
+                const derivedChangePercent =
+                    resolvedPrice !== null &&
+                    previousClose !== null &&
+                    previousClose !== 0
+                        ? ((resolvedPrice - previousClose) / previousClose) *
+                          100
+                        : null;
+
+                const changePercent =
+                    derivedChangePercent ??
+                    toFiniteNumber(quote?.change_percent);
+
+                const volumeValue =
+                    toFiniteNumber(quote?.volume_value) ??
+                    (resolvedPrice !== null && volume !== null
+                        ? resolvedPrice * volume
+                        : null);
 
                 return {
                     ...item,
-                    price: Number.isFinite(price) ? price : null,
-                    isPriceLoading: !Number.isFinite(price),
-                    isPricePulsing: Boolean(pulsingByTicker[ticker]),
+                    price: resolvedPrice,
+                    previousClose,
+                    open,
+                    dayLow,
+                    dayHigh,
+                    changePercent,
+                    volume,
+                    volumeValue,
+                    bid,
+                    ask,
+                    isPriceLoading: resolvedPrice === null,
                 };
             }),
-        [items, priceByTicker, pulsingByTicker],
+        [items, priceByTicker, quotesByTicker],
+    );
+
+    useEffect(() => {
+        const nextSignatures: Record<string, number | null> = {};
+        const changedCellKeys: string[] = [];
+
+        for (const row of rows) {
+            const cellValues = getPulsableCellValues(row);
+
+            for (const columnId of PULSABLE_COLUMN_IDS) {
+                const key = createCellPulseKey(row.ticker, columnId);
+                const signature = cellValues[columnId];
+                nextSignatures[key] = signature;
+
+                const previousSignature = cellSignatureByKeyRef.current[key];
+                if (
+                    previousSignature !== undefined &&
+                    previousSignature !== signature
+                ) {
+                    changedCellKeys.push(key);
+                }
+            }
+        }
+
+        cellSignatureByKeyRef.current = nextSignatures;
+
+        let prunedPulseKeys = false;
+        for (const [key, timer] of Object.entries(cellPulseTimersRef.current)) {
+            if (nextSignatures[key] !== undefined) continue;
+            window.clearTimeout(timer);
+            delete cellPulseTimersRef.current[key];
+
+            if (pulsingCellByKeyRef.current[key]) {
+                delete pulsingCellByKeyRef.current[key];
+                prunedPulseKeys = true;
+            }
+        }
+
+        if (changedCellKeys.length === 0) {
+            if (prunedPulseKeys) {
+                schedulePulseRender();
+            }
+            return;
+        }
+
+        for (const key of changedCellKeys) {
+            pulsingCellByKeyRef.current[key] = true;
+
+            const existingTimer = cellPulseTimersRef.current[key];
+            if (existingTimer != null) {
+                window.clearTimeout(existingTimer);
+            }
+
+            cellPulseTimersRef.current[key] = window.setTimeout(() => {
+                if (pulsingCellByKeyRef.current[key]) {
+                    delete pulsingCellByKeyRef.current[key];
+                    schedulePulseRender();
+                }
+                delete cellPulseTimersRef.current[key];
+            }, CELL_PULSE_MS);
+        }
+
+        schedulePulseRender();
+    }, [rows, schedulePulseRender]);
+
+    const isCellPulsing = useCallback(
+        (ticker: string, columnId: PulsableColumnId) =>
+            Boolean(
+                pulsingCellByKeyRef.current[
+                    createCellPulseKey(ticker, columnId)
+                ],
+            ),
+        [],
     );
 
     const handleRemoveSymbol = useCallback(
@@ -339,7 +562,9 @@ function Watchlist({ id, onRemove }: Props) {
                     <span
                         className={styles.priceCell}
                         data-cell-pulse={
-                            row.original.isPricePulsing ? "true" : undefined
+                            isCellPulsing(row.original.ticker, "price")
+                                ? "true"
+                                : undefined
                         }
                     >
                         {row.original.isPriceLoading ? (
@@ -350,6 +575,289 @@ function Watchlist({ id, onRemove }: Props) {
                         ) : (
                             formatPrice(row.original.price ?? 0)
                         )}
+                    </span>
+                ),
+            },
+            {
+                id: "changePercent",
+                accessorFn: (row) => row.changePercent,
+                header: "Change %",
+                meta: {
+                    label: "Change %",
+                    align: "right",
+                    sortable: true,
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowDown size={14} />
+                        ) : (
+                            <ArrowUp size={14} />
+                        ),
+                },
+                size: 96,
+                minSize: 84,
+                cell: ({ row }) => {
+                    const value = row.original.changePercent;
+                    const className =
+                        value === null
+                            ? styles.mutedValue
+                            : value >= 0
+                              ? styles.positiveValue
+                              : styles.negativeValue;
+
+                    return (
+                        <span
+                            className={className}
+                            data-cell-pulse={
+                                isCellPulsing(
+                                    row.original.ticker,
+                                    "changePercent",
+                                )
+                                    ? "true"
+                                    : undefined
+                            }
+                        >
+                            {formatOptionalPercent(value)}
+                        </span>
+                    );
+                },
+            },
+            {
+                id: "previousClose",
+                accessorFn: (row) => row.previousClose,
+                header: "Previous Close",
+                meta: {
+                    label: "Previous Close",
+                    align: "right",
+                    sortable: true,
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowDown size={14} />
+                        ) : (
+                            <ArrowUp size={14} />
+                        ),
+                },
+                size: 120,
+                minSize: 96,
+                cell: ({ row }) => (
+                    <span
+                        className={styles.mutedValue}
+                        data-cell-pulse={
+                            isCellPulsing(row.original.ticker, "previousClose")
+                                ? "true"
+                                : undefined
+                        }
+                    >
+                        {formatOptionalPrice(row.original.previousClose)}
+                    </span>
+                ),
+            },
+            {
+                id: "open",
+                accessorFn: (row) => row.open,
+                header: "Open",
+                meta: {
+                    label: "Open",
+                    align: "right",
+                    sortable: true,
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowDown size={14} />
+                        ) : (
+                            <ArrowUp size={14} />
+                        ),
+                },
+                size: 100,
+                minSize: 88,
+                cell: ({ row }) => (
+                    <span
+                        className={styles.mutedValue}
+                        data-cell-pulse={
+                            isCellPulsing(row.original.ticker, "open")
+                                ? "true"
+                                : undefined
+                        }
+                    >
+                        {formatOptionalPrice(row.original.open)}
+                    </span>
+                ),
+            },
+            {
+                id: "dayLow",
+                accessorFn: (row) => row.dayLow,
+                header: "Day Low",
+                meta: {
+                    label: "Day Low",
+                    align: "right",
+                    sortable: true,
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowDown size={14} />
+                        ) : (
+                            <ArrowUp size={14} />
+                        ),
+                },
+                size: 100,
+                minSize: 88,
+                cell: ({ row }) => (
+                    <span
+                        className={styles.mutedValue}
+                        data-cell-pulse={
+                            isCellPulsing(row.original.ticker, "dayLow")
+                                ? "true"
+                                : undefined
+                        }
+                    >
+                        {formatOptionalPrice(row.original.dayLow)}
+                    </span>
+                ),
+            },
+            {
+                id: "dayHigh",
+                accessorFn: (row) => row.dayHigh,
+                header: "Day High",
+                meta: {
+                    label: "Day High",
+                    align: "right",
+                    sortable: true,
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowDown size={14} />
+                        ) : (
+                            <ArrowUp size={14} />
+                        ),
+                },
+                size: 100,
+                minSize: 88,
+                cell: ({ row }) => (
+                    <span
+                        className={styles.mutedValue}
+                        data-cell-pulse={
+                            isCellPulsing(row.original.ticker, "dayHigh")
+                                ? "true"
+                                : undefined
+                        }
+                    >
+                        {formatOptionalPrice(row.original.dayHigh)}
+                    </span>
+                ),
+            },
+            {
+                id: "volume",
+                accessorFn: (row) => row.volume,
+                header: "Volume",
+                meta: {
+                    label: "Volume",
+                    align: "right",
+                    sortable: true,
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowDown size={14} />
+                        ) : (
+                            <ArrowUp size={14} />
+                        ),
+                },
+                size: 120,
+                minSize: 96,
+                cell: ({ row }) => (
+                    <span
+                        className={styles.mutedValue}
+                        data-cell-pulse={
+                            isCellPulsing(row.original.ticker, "volume")
+                                ? "true"
+                                : undefined
+                        }
+                    >
+                        {formatOptionalWhole(row.original.volume)}
+                    </span>
+                ),
+            },
+            {
+                id: "volumeValue",
+                accessorFn: (row) => row.volumeValue,
+                header: "Volume Value",
+                meta: {
+                    label: "Volume Value",
+                    align: "right",
+                    sortable: true,
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowDown size={14} />
+                        ) : (
+                            <ArrowUp size={14} />
+                        ),
+                },
+                size: 132,
+                minSize: 110,
+                cell: ({ row }) => (
+                    <span
+                        className={styles.mutedValue}
+                        data-cell-pulse={
+                            isCellPulsing(row.original.ticker, "volumeValue")
+                                ? "true"
+                                : undefined
+                        }
+                    >
+                        {formatOptionalWhole(row.original.volumeValue)}
+                    </span>
+                ),
+            },
+            {
+                id: "bid",
+                accessorFn: (row) => row.bid,
+                header: "Bid",
+                meta: {
+                    label: "Bid",
+                    align: "right",
+                    sortable: true,
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowDown size={14} />
+                        ) : (
+                            <ArrowUp size={14} />
+                        ),
+                },
+                size: 96,
+                minSize: 84,
+                cell: ({ row }) => (
+                    <span
+                        className={styles.mutedValue}
+                        data-cell-pulse={
+                            isCellPulsing(row.original.ticker, "bid")
+                                ? "true"
+                                : undefined
+                        }
+                    >
+                        {formatOptionalPrice(row.original.bid)}
+                    </span>
+                ),
+            },
+            {
+                id: "ask",
+                accessorFn: (row) => row.ask,
+                header: "Ask",
+                meta: {
+                    label: "Ask",
+                    align: "right",
+                    sortable: true,
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowDown size={14} />
+                        ) : (
+                            <ArrowUp size={14} />
+                        ),
+                },
+                size: 96,
+                minSize: 84,
+                cell: ({ row }) => (
+                    <span
+                        className={styles.mutedValue}
+                        data-cell-pulse={
+                            isCellPulsing(row.original.ticker, "ask")
+                                ? "true"
+                                : undefined
+                        }
+                    >
+                        {formatOptionalPrice(row.original.ask)}
                     </span>
                 ),
             },
@@ -380,12 +888,43 @@ function Watchlist({ id, onRemove }: Props) {
                 ),
             },
         ],
-        [handleRemoveSymbol],
+        [handleRemoveSymbol, isCellPulsing],
     );
 
     const selectedList = useMemo(
         () => lists.find((list) => list.id === activeListId) ?? null,
         [lists, activeListId],
+    );
+
+    const selectorOrderByColumnId = useMemo(() => {
+        const order = new Map<string, number>();
+
+        for (const [index, column] of columns.entries()) {
+            const columnId = column.id;
+            if (!columnId) continue;
+            order.set(columnId, index);
+        }
+
+        return order;
+    }, [columns]);
+
+    const toSelectorOrderedOptions = useCallback(
+        (next: TableColumnOption[]): TableColumnOption[] => {
+            const sorted = [...next];
+            sorted.sort((left, right) => {
+                const leftOrder = selectorOrderByColumnId.get(left.id);
+                const rightOrder = selectorOrderByColumnId.get(right.id);
+
+                if (leftOrder == null && rightOrder == null) {
+                    return left.label.localeCompare(right.label);
+                }
+                if (leftOrder == null) return 1;
+                if (rightOrder == null) return -1;
+                return leftOrder - rightOrder;
+            });
+            return sorted;
+        },
+        [selectorOrderByColumnId],
     );
 
     const handleCreateList = useCallback(async () => {
@@ -455,11 +994,12 @@ function Watchlist({ id, onRemove }: Props) {
 
     const setColumnOptionsIfChanged = useCallback(
         (next: TableColumnOption[]) => {
+            const ordered = toSelectorOrderedOptions(next);
             setColumnOptions((prev) =>
-                areColumnOptionsEqual(prev, next) ? prev : next,
+                areColumnOptionsEqual(prev, ordered) ? prev : ordered,
             );
         },
-        [],
+        [toSelectorOrderedOptions],
     );
 
     const refreshColumnOptions = useCallback(() => {
@@ -495,6 +1035,87 @@ function Watchlist({ id, onRemove }: Props) {
                 .map((option) => option.id),
         [columnOptions],
     );
+
+    const listSymbols = useMemo(() => {
+        const seen = new Set<string>();
+        const ordered: string[] = [];
+
+        for (const item of items) {
+            const symbol = item.ticker.trim().toUpperCase();
+            if (!symbol || seen.has(symbol)) continue;
+            seen.add(symbol);
+            ordered.push(symbol);
+        }
+
+        return ordered;
+    }, [items]);
+
+    const requestedQuoteGroups = useMemo<QuoteFieldGroup[]>(() => {
+        const groups = new Set<QuoteFieldGroup>();
+
+        for (const columnId of visibleColumnIds) {
+            const group = SNAPSHOT_GROUP_BY_COLUMN_ID[columnId];
+            if (!group) continue;
+            groups.add(group);
+        }
+
+        return Array.from(groups).sort();
+    }, [visibleColumnIds]);
+
+    const listSymbolsKey = useMemo(() => listSymbols.join("|"), [listSymbols]);
+    const requestedQuoteGroupsKey = useMemo(
+        () => requestedQuoteGroups.join(","),
+        [requestedQuoteGroups],
+    );
+
+    useEffect(() => {
+        if (!activeListId) return;
+        if (!isPageVisible) return;
+        if (requestedQuoteGroups.length === 0) return;
+        if (listSymbols.length === 0) return;
+
+        let cancelled = false;
+        const controller = new AbortController();
+
+        const loadQuotes = async () => {
+            try {
+                const payload = await fetchQuotes(
+                    listSymbols,
+                    requestedQuoteGroups,
+                    controller.signal,
+                );
+                if (cancelled || controller.signal.aborted) return;
+
+                const nextMap: Record<string, QuoteSnapshot> = {};
+                for (const quote of payload.quotes) {
+                    nextMap[quote.symbol] = quote;
+                }
+
+                setQuotesByTicker(nextMap);
+            } catch {
+                if (controller.signal.aborted) return;
+            }
+        };
+
+        void loadQuotes();
+
+        const timer = window.setInterval(() => {
+            void loadQuotes();
+        }, SNAPSHOT_REFRESH_MS);
+
+        return () => {
+            cancelled = true;
+            controller.abort();
+            window.clearInterval(timer);
+        };
+    }, [
+        activeListId,
+        isPageVisible,
+        listSymbols,
+        listSymbolsKey,
+        requestedQuoteGroups,
+        requestedQuoteGroupsKey,
+    ]);
 
     const handleVisibleColumnsChange = useCallback(
         (nextVisibleIds: string[]) => {

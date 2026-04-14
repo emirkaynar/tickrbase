@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 
 from .api.routes import build_router
 from .core.cache import TTLCache
-from .core.config import CORS_ORIGINS, PRICE_TTL_SECONDS
+from .core.config import CORS_ORIGINS, PRICE_TTL_SECONDS, QUOTES_TTL_SECONDS
 from .core.db import init_db
 from .core.yahoo import YahooFinanceProvider
 from .scheduler import create_scheduler
@@ -17,6 +17,7 @@ from .services.streaming import LivePriceStreamHub
 
 provider = YahooFinanceProvider()
 price_cache = TTLCache[float](PRICE_TTL_SECONDS)
+quotes_cache = TTLCache[dict[str, object]](QUOTES_TTL_SECONDS)
 stream_hub = LivePriceStreamHub()
 
 
@@ -61,4 +62,4 @@ async def unhandled_exception_handler(_request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"error": True, "message": str(exc)})
 
 
-app.include_router(build_router(provider, price_cache, stream_hub))
+app.include_router(build_router(provider, price_cache, quotes_cache, stream_hub))

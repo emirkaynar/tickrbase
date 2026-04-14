@@ -116,6 +116,132 @@ class YahooFinanceProvider(DataProvider):
         except Exception:
             return {}
 
+    def get_quote_snapshot(
+        self,
+        ticker: str,
+        groups: set[str] | None = None,
+    ) -> tuple[dict, int]:
+        import yfinance as yf
+
+        normalized = normalize_ticker(ticker)
+        yf_ticker = yf.Ticker(normalized)
+        requested = groups or {"session", "volume", "quote"}
+
+        fast: dict[str, object] = {}
+        try:
+            fast_info = yf_ticker.fast_info
+            if fast_info:
+                fast = dict(fast_info)
+        except Exception:
+            fast = {}
+
+        def pick(source: dict[str, object], *aliases: str) -> float | None:
+            for alias in aliases:
+                value = _coerce_float(source.get(alias))
+                if value is not None:
+                    return value
+            return None
+
+        current_price = pick(
+            fast,
+            "lastPrice",
+            "last_price",
+            "regularMarketPrice",
+            "currentPrice",
+        )
+        previous_close = pick(
+            fast,
+            "regularMarketPreviousClose",
+            "previousClose",
+            "previous_close",
+        )
+        open_price = pick(fast, "regularMarketOpen", "open")
+        day_low = pick(fast, "regularMarketDayLow", "dayLow", "low")
+        day_high = pick(fast, "regularMarketDayHigh", "dayHigh", "high")
+        volume = pick(fast, "lastVolume", "regularMarketVolume", "volume")
+        bid = pick(fast, "bid")
+        ask = pick(fast, "ask")
+        change = pick(fast, "regularMarketChange")
+        change_percent = pick(fast, "regularMarketChangePercent")
+
+        needs_info_fallback = (
+            current_price is None
+            or ("session" in requested and previous_close is None)
+            or ("session" in requested and open_price is None)
+            or ("session" in requested and day_low is None)
+            or ("session" in requested and day_high is None)
+            or ("volume" in requested and volume is None)
+            or ("quote" in requested and (bid is None or ask is None))
+            or ("session" in requested and change_percent is None)
+        )
+
+        if needs_info_fallback:
+            try:
+                info = yf_ticker.get_info() or {}
+            except Exception:
+                info = {}
+
+            if current_price is None:
+                current_price = pick(info, "currentPrice", "regularMarketPrice")
+            if "session" in requested:
+                if previous_close is None:
+                    previous_close = pick(
+                        info,
+                        "regularMarketPreviousClose",
+                        "previousClose",
+                    )
+                if open_price is None:
+                    open_price = pick(info, "regularMarketOpen", "open")
+                if day_low is None:
+                    day_low = pick(info, "regularMarketDayLow", "dayLow")
+                if day_high is None:
+                    day_high = pick(info, "regularMarketDayHigh", "dayHigh")
+                if change is None:
+                    change = pick(info, "regularMarketChange")
+                if change_percent is None:
+                    change_percent = pick(info, "regularMarketChangePercent")
+            if "volume" in requested and volume is None:
+                volume = pick(info, "regularMarketVolume", "volume")
+            if "quote" in requested:
+                if bid is None:
+                    bid = pick(info, "bid")
+                if ask is None:
+                    ask = pick(info, "ask")
+
+        if change is None and current_price is not None and previous_close is not None:
+            change = current_price - previous_close
+
+        if (
+            change_percent is None
+            and current_price is not None
+            and previous_close is not None
+            and previous_close != 0
+        ):
+            change_percent = ((current_price - previous_close) / previous_close) * 100.0
+
+        volume_value = (
+            current_price * volume
+            if current_price is not None and volume is not None
+            else None
+        )
+
+        payload = {
+            "symbol": normalized,
+            "current_price": current_price,
+            "previous_close": previous_close if "session" in requested else None,
+            "open": open_price if "session" in requested else None,
+            "day_low": day_low if "session" in requested else None,
+            "day_high": day_high if "session" in requested else None,
+            "change": change if "session" in requested else None,
+            "change_percent": change_percent if "session" in requested else None,
+            "volume": volume if "volume" in requested else None,
+            "volume_value": volume_value if "volume" in requested else None,
+            "bid": bid if "quote" in requested else None,
+            "ask": ask if "quote" in requested else None,
+        }
+
+        return payload, int(datetime.now(tz=timezone.utc).timestamp())
+
     def lookup(self, query: str, count: int) -> list[dict]:
         import yfinance as yf
 

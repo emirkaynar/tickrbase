@@ -82,6 +82,32 @@ export type LookupResponse = {
     last_updated: string;
 };
 
+export type QuoteFieldGroup = "session" | "volume" | "quote";
+
+export type QuoteSnapshot = {
+    symbol: string;
+    current_price: number | null;
+    previous_close: number | null;
+    open: number | null;
+    day_low: number | null;
+    day_high: number | null;
+    change: number | null;
+    change_percent: number | null;
+    volume: number | null;
+    volume_value: number | null;
+    bid: number | null;
+    ask: number | null;
+    stale: boolean;
+    last_updated: string;
+};
+
+export type QuotesResponse = {
+    symbols: string[];
+    quotes: QuoteSnapshot[];
+    stale: boolean;
+    last_updated: string;
+};
+
 export type ListItem = { ticker: string };
 
 export type ListRecord = {

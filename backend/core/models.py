@@ -86,6 +86,30 @@ class LookupResponse(BaseModel):
     last_updated: str
 
 
+class QuoteSnapshot(BaseModel):
+    symbol: str
+    current_price: float | None = None
+    previous_close: float | None = None
+    open: float | None = None
+    day_low: float | None = None
+    day_high: float | None = None
+    change: float | None = None
+    change_percent: float | None = None
+    volume: float | None = None
+    volume_value: float | None = None
+    bid: float | None = None
+    ask: float | None = None
+    stale: bool = False
+    last_updated: str
+
+
+class QuotesResponse(BaseModel):
+    symbols: list[str]
+    quotes: list[QuoteSnapshot]
+    stale: bool = False
+    last_updated: str
+
+
 class ErrorResponse(BaseModel):
     error: bool = True
     message: str
