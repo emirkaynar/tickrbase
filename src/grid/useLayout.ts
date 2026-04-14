@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "preact/hooks";
 import type { Layout, LayoutItem } from "react-grid-layout";
 import { db } from "../db";
-import { updateWatchlist } from "../services/watchlist";
 import { useDebounce } from "../hooks/useDebounce";
 import {
     createWidgetInstance,
@@ -312,9 +311,6 @@ export function useLayout() {
 
             await db.widgets.add(record);
             setWidgets((prev) => [...prev, record]);
-
-            // Register with watchlist — best effort
-            void updateWatchlist([{ ticker: "XU100.IS" }]).catch(() => {});
 
             return { success: true };
         },

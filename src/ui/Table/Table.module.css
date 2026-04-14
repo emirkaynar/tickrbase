@@ -3,6 +3,7 @@
     min-height: 0;
     display: flex;
     flex-direction: row;
+    align-items: flex-start;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-bg-elevated);
@@ -68,7 +69,6 @@
     z-index: 5;
     min-width: 96px;
     border-bottom: 1px solid var(--color-border);
-    background: var(--color-bg-surface);
     color: var(--color-text-muted);
     padding: 0;
     text-align: left;
@@ -85,8 +85,8 @@
     display: flex;
     align-items: center;
     gap: var(--space-1);
-    min-height: 24px;
-    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+    min-height: 32px;
+    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-1-5);
 }
 
 .headerContent {
@@ -128,7 +128,7 @@
 }
 
 .sortIndicator {
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
     font-size: var(--font-size-xs);
     line-height: 1;
 }
@@ -315,42 +315,69 @@
 }
 
 .spacerRow {
-    background: var(--color-bg);
+    background: var(--color-bg-elevated);
+    will-change: transform, box-shadow;
+    transition:
+        background var(--transition-fast),
+        transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow var(--transition-fast);
 }
 
 .spacerCell {
     padding: 0;
-    border-bottom: 1px dashed var(--color-border-subtle);
+    border-bottom: 1px solid var(--color-border);
     background: var(--color-bg-elevated);
 }
 
 .spacer {
     display: flex;
     align-items: center;
-    gap: var(--space-2);
-    padding: 0 var(--space-3);
+    gap: var(--space-1);
+    min-height: 32px;
+    padding: var(--space-1-5);
+}
+
+.spacerRemoveButton {
+    margin-left: auto;
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--color-text-subtle);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+    padding: 0 var(--space-1);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity var(--transition-fast),
+        color var(--transition-fast);
+}
+
+.spacerRemoveButton:hover {
+    color: var(--color-danger);
+}
+
+.spacerRow:hover .spacerRemoveButton,
+.spacerRow[data-drag-state="dragging"] .spacerRemoveButton,
+.spacerRow[data-drag-state="over"] .spacerRemoveButton {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .spacerRow[data-draggable="true"] .spacer {
-    cursor: grab;
+    cursor: pointer;
 }
 
 .spacerRow[data-draggable="true"]:active .spacer {
     cursor: grabbing;
 }
 
-.spacerLine {
-    display: block;
-    width: 100%;
-    height: 1px;
-    background: color-mix(in hsl, var(--color-border), transparent 30%);
-}
-
 .spacerLabel {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-subtle);
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
+    font-size: var(--font-size-lg);
+    color: var(--color-text-muted);
+    letter-spacing: 0.01em;
+    text-transform: none;
+    line-height: 1.2;
     white-space: nowrap;
 }
 

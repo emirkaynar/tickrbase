@@ -80,10 +80,10 @@ export const widgetProvider: CommandProvider = {
             },
             {
                 id: "widget-watchlist",
-                label: "Watchlist",
+                label: "Lists",
                 badge: "LIMA Bridge",
-                hint: "Track symbols and intervals in a reorderable table",
-                keywords: ["watchlist", "symbols", "table", "portfolio"],
+                hint: "Track symbols in named lists with groups",
+                keywords: ["lists", "watchlist", "symbols", "table"],
                 enabled: true,
                 section: "Watch",
                 action: { kind: "add-widget", widget: "watchlist" },

@@ -37,6 +37,7 @@
     height: 32px;
     min-height: 32px;
     padding: 0 var(--space-2);
+    padding-left: var(--space-0-5);
     border-bottom: 1px solid var(--color-border);
     background: var(--color-bg-elevated);
     flex-shrink: 0;
@@ -48,12 +49,116 @@
     align-items: center;
     gap: var(--space-1);
     min-width: 0;
+    position: relative;
+}
+
+.listTitleButton {
+    border: none;
+    background: transparent;
+    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    border-radius: var(--radius-sm);
+    gap: var(--space-1);
+    padding: var(--space-1-5) var(--space-1-5);
+    cursor: pointer;
+    transition: var(--transition-base);
+}
+
+.listTitleButton:hover {
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+}
+
+.listMenu {
+    min-width: 220px;
+    max-width: 280px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: var(--z-dropdown);
+    padding: var(--space-2);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    &[data-state="open"] {
+        animation: scale-fade-in 0.15s ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: scale-fade-out 0.1s ease-in;
+    }
+}
+
+.listMenu[data-state="closed"] {
+    display: none;
+}
+
+.listMenuSectionTitle {
+    font-size: var(--font-size-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-subtle);
+}
+
+.listMenuItems {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    max-height: 180px;
+    overflow-y: auto;
+}
+
+.listMenuItem,
+.listMenuItemActive {
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-elevated);
+    color: var(--color-text);
+    border-radius: var(--radius-sm);
+    padding: var(--space-1) var(--space-2);
+    text-align: left;
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+}
+
+.listMenuItem:hover,
+.listMenuItemActive {
+    border-color: var(--color-primary);
+    background: color-mix(in hsl, var(--color-primary), transparent 88%);
+}
+
+.listMenuCreateRow {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--space-1);
+}
+
+.listInput {
+    min-width: 0;
+}
+
+.listMenuAction {
+    white-space: nowrap;
+}
+
+.deleteListButton {
+    border: 1px solid var(--color-danger);
+    background: transparent;
+    color: var(--color-danger);
+    border-radius: var(--radius-sm);
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--font-size-xs);
+    cursor: pointer;
+}
+
+.deleteListButton:hover {
+    background: color-mix(in hsl, var(--color-danger), transparent 88%);
 }
 
 .heading {
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
     letter-spacing: 0.03em;
-    text-transform: uppercase;
     font-weight: var(--font-weight-semibold);
     color: var(--color-text-muted);
 }
@@ -140,6 +245,27 @@
     user-select: none;
 }
 
+.rowDeleteButton {
+    border: none;
+    background: transparent;
+    color: var(--color-text-subtle);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    width: 18px;
+    height: 18px;
+    transition:
+        color var(--transition-fast),
+        background var(--transition-fast);
+}
+
+.rowDeleteButton:hover {
+    color: var(--color-danger);
+    background: var(--color-bg-elevated);
+}
+
 .symbolCell {
     font-weight: 600;
 }
@@ -177,6 +303,70 @@
     width: 100%;
     height: 100%;
     box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+.bottomActions {
+    border-top: 1px solid var(--color-border-subtle);
+    background: var(--color-bg-elevated);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    row-gap: var(--space-1);
+    flex-wrap: wrap;
+}
+
+.bottomActionButton {
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-2);
+    cursor: pointer;
+}
+
+.bottomActionButton:hover {
+    color: var(--color-text);
+}
+
+.bottomActionEditor {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.bottomActionPopover {
+    border: 1px solid var(--color-border);
+    background: var(--color-bg-surface);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-2);
+    z-index: var(--z-dropdown);
+    &[data-state="open"] {
+        animation: scale-fade-in 0.15s ease-out;
+    }
+
+    &[data-state="closed"] {
+        animation: scale-fade-out 0.1s ease-in;
+    }
+}
+
+.symbolSelector {
+    min-width: 180px;
+}
+
+.groupInput {
+    min-width: 140px;
+}
+
+.deleteDialogActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
 }
 .scrollbar {
     display: flex;
@@ -248,4 +438,26 @@
 
 .corner {
     background-color: transparent;
+}
+
+@keyframes scale-fade-in {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes scale-fade-out {
+    from {
+        opacity: 1;
+        transform: scale(1);
+    }
+    to {
+        opacity: 0;
+        transform: scale(0.96);
+    }
 }

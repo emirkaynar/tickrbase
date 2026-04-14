@@ -42,8 +42,27 @@ export type UiStateRecord = {
     activeScreenId: string;
 };
 
-export type WatchlistRecord = {
+export type ListRecord = {
+    id: string;
+    name: string;
+    nameLower: string;
+    order: number;
+    createdAt: number;
+    updatedAt: number;
+};
+
+export type ListItemRecord = {
+    id: string;
+    listId: string;
     ticker: string;
+    createdAt: number;
+    updatedAt: number;
+};
+
+export type TableRowStateRecord = {
+    id: string;
+    rowOrder: string[];
+    spacers: TableSpacerRecord[];
     createdAt: number;
     updatedAt: number;
 };
@@ -83,7 +102,9 @@ const db = new Dexie("lima") as Dexie & {
     widgets: EntityTable<WidgetRecord, "id">;
     uiState: EntityTable<UiStateRecord, "id">;
     tablePreferences: EntityTable<TablePreferencesRecord, "id">;
-    watchlist: EntityTable<WatchlistRecord, "ticker">;
+    tableRowState: EntityTable<TableRowStateRecord, "id">;
+    lists: EntityTable<ListRecord, "id">;
+    listItems: EntityTable<ListItemRecord, "id">;
 };
 
 // v1-v7: legacy migrations retained so existing users keep their data
@@ -164,6 +185,21 @@ db.version(11).stores({
     uiState: "id",
     tablePreferences: "id, scopeType, scopeId, tableId, updatedAt",
     watchlist: "ticker, createdAt, updatedAt",
+});
+
+// v12: Lists model + generic row-state storage (no migration path by request)
+db.version(12).stores({
+    layout: null,
+    widgetState: "id",
+    chartState: "widget_id",
+    screens: "id, order, createdAt",
+    widgets: "id, screenId, type, createdAt",
+    uiState: "id",
+    tablePreferences: "id, scopeType, scopeId, tableId, updatedAt",
+    tableRowState: "id, updatedAt",
+    lists: "id, nameLower, order, createdAt, updatedAt",
+    listItems: "id, listId, ticker, [listId+ticker], createdAt, updatedAt",
+    watchlist: null,
 });
 
 export { db };

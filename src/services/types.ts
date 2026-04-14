@@ -82,9 +82,46 @@ export type LookupResponse = {
     last_updated: string;
 };
 
-export type WatchlistItem = { ticker: string };
+export type ListItem = { ticker: string };
 
-export type WatchlistResponse = WatchlistItem[];
+export type ListRecord = {
+    id: string;
+    name: string;
+    order: number;
+    createdAt: number;
+    updatedAt: number;
+};
+
+export type ListRowState = {
+    rowOrder: string[];
+    spacers: Array<{
+        id: string;
+        label?: string;
+        height?: number;
+    }>;
+};
+
+export type ListDeleteResponse =
+    | {
+          ok: true;
+          deleted: true;
+          activeListId: string;
+      }
+    | {
+          ok: false;
+          deleted: false;
+          activeListId: string;
+          reason: "last-list" | "not-found";
+      };
+
+export type ListsResponse = ListRecord[];
+
+export type ListItemsResponse = ListItem[];
+
+// Legacy aliases kept during rename migration to Lists.
+export type WatchlistItem = ListItem;
+
+export type WatchlistResponse = ListItemsResponse;
 
 export type OkResponse = { ok: boolean };
 

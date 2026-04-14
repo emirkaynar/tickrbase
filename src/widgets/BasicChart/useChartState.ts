@@ -8,7 +8,6 @@ import type {
 import { db } from "../../db";
 import { fetchHistory } from "../../services/history";
 import { livePricesClient } from "../../services/livePrices";
-import { updateWatchlist } from "../../services/watchlist";
 import type { Bar, Interval } from "../../services/types";
 import { INTERVALS } from "../../services/types";
 
@@ -146,12 +145,6 @@ export function useChartState(
         if (!stateReady) return;
         void db.widgetState.put({ id, symbol, interval });
     }, [id, symbol, interval, stateReady]);
-
-    // Register with watchlist
-    useEffect(() => {
-        if (!stateReady) return;
-        void updateWatchlist([{ ticker: symbol }]).catch(() => {});
-    }, [symbol, stateReady]);
 
     const applyBars = useCallback(
         (bars: Bar[], fit: boolean) => {

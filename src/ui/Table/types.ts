@@ -1,4 +1,5 @@
 import type { ColumnDef, SortingState } from "@tanstack/react-table";
+import type { ComponentChildren } from "preact";
 
 export type TableVariant = "widget" | "full";
 
@@ -16,6 +17,7 @@ export type TableColumnMeta = {
     removable?: boolean;
     sortable?: boolean;
     align?: "left" | "center" | "right";
+    sortIcon?: (direction: "asc" | "desc" | undefined) => ComponentChildren;
 };
 
 export type TableColumnDef<TData extends object> = ColumnDef<TData, unknown> & {
@@ -75,5 +77,6 @@ export type TableProps<TData extends object> = {
     enableColumnReorder?: boolean;
     enableRowReorder?: boolean;
     disableRowReorderWhenSorted?: boolean;
+    rowStateId?: string;
     onControllerReady?: (controller: TableController) => void;
 };

@@ -3,9 +3,11 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
     flexRender,
     getCoreRowModel,
+    getSortedRowModel,
     useReactTable,
     type ColumnSizingState,
     type Row,
+    type SortingState,
     type Updater,
     type VisibilityState,
 } from "@tanstack/react-table";
@@ -49,6 +51,10 @@ function uniqueOrdered(values: string[]): string[] {
     return next;
 }
 
+function toIdKey(ids: string[]): string {
+    return ids.join("\u001f");
+}
+
 function normalizeColumnOrder(
     columnOrder: string[],
     allColumnIds: string[],
@@ -89,6 +95,43 @@ function normalizeRowOrder(rowOrder: string[], rowIds: string[]): string[] {
 
     for (const id of rowIds) {
         if (!next.includes(id)) next.push(id);
+    }
+
+    return next;
+}
+
+function normalizeSorting(
+    sorting: SortingState,
+    allColumnIds: string[],
+): SortingState {
+    const available = new Set(allColumnIds);
+    const next: SortingState = [];
+
+    for (const item of sorting) {
+        if (!available.has(item.id)) continue;
+        next.push({ id: item.id, desc: Boolean(item.desc) });
+        if (next.length >= 1) break;
+    }
+
+    return next;
+}
+
+function normalizeSpacerRows(spacers: TableSpacerRow[]): TableSpacerRow[] {
+    const seen = new Set<string>();
+    const next: TableSpacerRow[] = [];
+
+    for (const spacer of spacers) {
+        const id = normalizeSpacerId(spacer.id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        next.push({
+            id,
+            label: spacer.label?.trim() || undefined,
+            height:
+                typeof spacer.height === "number" && spacer.height > 0
+                    ? spacer.height
+                    : undefined,
+        });
     }
 
     return next;
@@ -151,10 +194,6 @@ function moveById(
     const [moved] = next.splice(from, 1);
     next.splice(to, 0, moved);
     return next;
-}
-
-function rowOrderKey(rowOrder: string[]): string {
-    return JSON.stringify(rowOrder);
 }
 
 function toCssSize(value: number | string | undefined): string | undefined {
@@ -256,7 +295,7 @@ function DraggableHeader({
                     dragEnabled ? (onPointerCancel as never) : undefined
                 }
             >
-                <span className={styles.headerContent}>{children}</span>
+                {children}
             </div>
 
             <div
@@ -286,6 +325,24 @@ type DraggableDataRowProps<TData extends object> = {
     onDrop: (event: DragEvent) => void;
     onDragEnd: () => void;
 };
+
+type DraggableSpacerRowProps = {
+    spacer: TableSpacerRow;
+    colSpan: number;
+    draggable: boolean;
+    isDragSource: boolean;
+    isDropTarget: boolean;
+    isSettled: boolean;
+    onDragStart: (event: DragEvent) => void;
+    onDragOver: (event: DragEvent) => void;
+    onDrop: (event: DragEvent) => void;
+    onDragEnd: () => void;
+    onRemove: () => void;
+};
+
+type DisplayRow<TData extends object> =
+    | { kind: "data"; id: string; row: Row<TData> }
+    | { kind: "spacer"; id: string; spacer: TableSpacerRow };
 
 function getAlignmentClassName(
     align: "left" | "center" | "right" | undefined,
@@ -366,6 +423,67 @@ function DraggableDataRow<TData extends object>({
     );
 }
 
+function DraggableSpacerRow({
+    spacer,
+    colSpan,
+    draggable,
+    isDragSource,
+    isDropTarget,
+    isSettled,
+    onDragStart,
+    onDragOver,
+    onDrop,
+    onDragEnd,
+    onRemove,
+}: DraggableSpacerRowProps) {
+    return (
+        <tr
+            draggable={draggable}
+            onDragStart={draggable ? (onDragStart as never) : undefined}
+            onDragOver={draggable ? (onDragOver as never) : undefined}
+            onDrop={draggable ? (onDrop as never) : undefined}
+            onDragEnd={draggable ? (onDragEnd as never) : undefined}
+            data-draggable={draggable ? "true" : undefined}
+            data-drag-state={
+                isDragSource
+                    ? "dragging"
+                    : isDropTarget
+                      ? "over"
+                      : isSettled
+                        ? "settled"
+                        : undefined
+            }
+            className={cx(
+                styles.spacerRow,
+                isDragSource && styles.dragSource,
+                isDropTarget && styles.dropTarget,
+            )}
+        >
+            <td colSpan={colSpan} className={styles.spacerCell}>
+                <div className={styles.spacer}>
+                    <span className={styles.spacerLabel} title={spacer.label}>
+                        {spacer.label || "Group"}
+                    </span>
+                    <button
+                        type="button"
+                        className={styles.spacerRemoveButton}
+                        draggable={false}
+                        onPointerDown={(event) => {
+                            event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onRemove();
+                        }}
+                    >
+                        Remove
+                    </button>
+                </div>
+            </td>
+        </tr>
+    );
+}
+
 export function Table<TData extends object>({
     rows,
     columns,
@@ -384,6 +502,7 @@ export function Table<TData extends object>({
     enableColumnReorder = true,
     enableRowReorder = true,
     disableRowReorderWhenSorted: _disableRowReorderWhenSorted = true,
+    rowStateId,
     onControllerReady,
 }: TableProps<TData>) {
     const [draggingRowId, setDraggingRowId] = useState("");
@@ -393,6 +512,8 @@ export function Table<TData extends object>({
     const [dragOverColumnId, setDragOverColumnId] = useState("");
     const draggingRowIdRef = useRef("");
     const settledRowTimerRef = useRef<number | null>(null);
+    const lastSavedPreferencesKeyRef = useRef("");
+    const lastSavedRowStateKeyRef = useRef("");
     const draggingColumnIdRef = useRef("");
     const dragOverColumnIdRef = useRef("");
     const armedColumnDragIdRef = useRef("");
@@ -434,6 +555,7 @@ export function Table<TData extends object>({
         () => rows.map((row, index) => getRowId(row, index)),
         [rows, getRowId],
     );
+    const dataRowIdsKey = useMemo(() => toIdKey(dataRowIds), [dataRowIds]);
 
     const dataById = useMemo(() => {
         const map = new Map<string, TData>();
@@ -482,9 +604,17 @@ export function Table<TData extends object>({
         [defaultColumnWidths, allColumnIds],
     );
 
+    const defaultSpacers = useMemo(
+        () => normalizeSpacerRows(_initialSpacerRows),
+        [_initialSpacerRows],
+    );
+    const defaultAllRowIds = useMemo(
+        () => [...dataRowIds, ...defaultSpacers.map((spacer) => spacer.id)],
+        [dataRowIds, defaultSpacers],
+    );
     const defaultRowOrder = useMemo(
-        () => normalizeRowOrder([], dataRowIds),
-        [dataRowIds],
+        () => normalizeRowOrder([], defaultAllRowIds),
+        [defaultAllRowIds],
     );
 
     const [visibleColumnIds, setVisibleColumnIds] = useState<string[]>(
@@ -495,13 +625,16 @@ export function Table<TData extends object>({
     const [columnWidths, setColumnWidths] = useState<ColumnSizingState>(
         defaultNormalizedColumnWidths,
     );
+    const [sorting, setSorting] = useState<SortingState>([]);
     const [rowOrder, setRowOrder] = useState<string[]>(defaultRowOrder);
-    const [rowOrderHydrated, setRowOrderHydrated] = useState(false);
-    const lastSavedRowOrderKeyRef = useRef("");
+    const [spacers, setSpacers] = useState<TableSpacerRow[]>(defaultSpacers);
+    const [preferencesHydrated, setPreferencesHydrated] = useState(false);
+    const [rowStateHydrated, setRowStateHydrated] = useState(false);
     const persistenceId = useMemo(
         () => `${_scopeType}:${_scopeId}:${_tableId}`,
         [_scopeType, _scopeId, _tableId],
     );
+    const effectiveRowStateId = rowStateId ?? persistenceId;
 
     useEffect(() => {
         setVisibleColumnIds((prev) =>
@@ -524,55 +657,127 @@ export function Table<TData extends object>({
         defaultNormalizedColumnWidths,
     ]);
 
+    const normalizedSpacers = useMemo(
+        () => normalizeSpacerRows(spacers),
+        [spacers],
+    );
+    const spacerIds = useMemo(
+        () => normalizedSpacers.map((spacer) => spacer.id),
+        [normalizedSpacers],
+    );
+    const spacerIdsKey = useMemo(() => toIdKey(spacerIds), [spacerIds]);
+    const allRowIds = useMemo(
+        () => [...dataRowIds, ...spacerIds],
+        [dataRowIdsKey, spacerIdsKey],
+    );
+
     useEffect(() => {
-        setRowOrder((prev) => normalizeRowOrder(prev, dataRowIds));
-    }, [dataRowIds]);
+        setRowOrder((prev) => normalizeRowOrder(prev, allRowIds));
+    }, [allRowIds]);
+
+    useEffect(() => {
+        setSorting((prev) => normalizeSorting(prev, allColumnIds));
+    }, [allColumnIds]);
 
     useEffect(() => {
         let active = true;
 
-        setRowOrderHydrated(false);
-        lastSavedRowOrderKeyRef.current = "";
+        setPreferencesHydrated(false);
+        lastSavedPreferencesKeyRef.current = "";
 
-        const loadRowOrder = async () => {
+        const loadPreferences = async () => {
             try {
                 const persisted = await db.tablePreferences.get(persistenceId);
-                if (!active) return;
+                if (!active || !persisted) return;
 
-                const loadedRowOrder = normalizeRowOrder(
-                    persisted?.rowOrder ?? [],
-                    dataRowIds,
+                setVisibleColumnIds(
+                    normalizeVisibleColumnIds(
+                        persisted.visibleColumnIds,
+                        allColumnIds,
+                        normalizedLockedColumnIds,
+                    ),
                 );
+                setColumnOrder(
+                    normalizeColumnOrder(persisted.columnOrder, allColumnIds),
+                );
+                setColumnWidths(
+                    mergeDefaultColumnWidths(
+                        normalizeColumnWidths(
+                            persisted.columnWidths,
+                            allColumnIds,
+                        ),
+                        defaultNormalizedColumnWidths,
+                    ),
+                );
+                setSorting(normalizeSorting(persisted.sorting, allColumnIds));
 
-                setRowOrder(loadedRowOrder);
-                lastSavedRowOrderKeyRef.current = rowOrderKey(loadedRowOrder);
+                const key = JSON.stringify({
+                    visibleColumnIds: normalizeVisibleColumnIds(
+                        persisted.visibleColumnIds,
+                        allColumnIds,
+                        normalizedLockedColumnIds,
+                    ),
+                    columnOrder: normalizeColumnOrder(
+                        persisted.columnOrder,
+                        allColumnIds,
+                    ),
+                    columnWidths: mergeDefaultColumnWidths(
+                        normalizeColumnWidths(
+                            persisted.columnWidths,
+                            allColumnIds,
+                        ),
+                        defaultNormalizedColumnWidths,
+                    ),
+                    sorting: normalizeSorting(persisted.sorting, allColumnIds),
+                });
+                lastSavedPreferencesKeyRef.current = key;
             } catch (error) {
-                console.warn("[Table] Failed to hydrate row order", error);
+                console.warn("[Table] Failed to hydrate preferences", error);
             } finally {
                 if (active) {
-                    setRowOrderHydrated(true);
+                    setPreferencesHydrated(true);
                 }
             }
         };
 
-        void loadRowOrder();
+        void loadPreferences();
 
         return () => {
             active = false;
         };
-    }, [persistenceId]);
+    }, [
+        persistenceId,
+        allColumnIds,
+        normalizedLockedColumnIds,
+        defaultNormalizedColumnWidths,
+    ]);
 
     useEffect(() => {
-        if (!rowOrderHydrated) return;
-        if (draggingRowId) return;
+        if (!preferencesHydrated) return;
 
-        const persistedRowOrder = normalizeRowOrder(rowOrder, dataRowIds);
-        const nextRowOrderKey = rowOrderKey(persistedRowOrder);
-        if (nextRowOrderKey === lastSavedRowOrderKeyRef.current) return;
+        const normalizedVisible = normalizeVisibleColumnIds(
+            visibleColumnIds,
+            allColumnIds,
+            normalizedLockedColumnIds,
+        );
+        const normalizedOrder = normalizeColumnOrder(columnOrder, allColumnIds);
+        const normalizedWidths = mergeDefaultColumnWidths(
+            normalizeColumnWidths(columnWidths, allColumnIds),
+            defaultNormalizedColumnWidths,
+        );
+        const normalizedSorting = normalizeSorting(sorting, allColumnIds);
+
+        const nextPreferencesKey = JSON.stringify({
+            visibleColumnIds: normalizedVisible,
+            columnOrder: normalizedOrder,
+            columnWidths: normalizedWidths,
+            sorting: normalizedSorting,
+        });
+        if (nextPreferencesKey === lastSavedPreferencesKeyRef.current) return;
 
         let active = true;
 
-        const saveRowOrder = async () => {
+        const savePreferences = async () => {
             const now = Date.now();
 
             try {
@@ -582,7 +787,10 @@ export function Table<TData extends object>({
                         scopeType: _scopeType,
                         scopeId: _scopeId,
                         tableId: _tableId,
-                        rowOrder: persistedRowOrder,
+                        visibleColumnIds: normalizedVisible,
+                        columnOrder: normalizedOrder,
+                        columnWidths: normalizedWidths,
+                        sorting: normalizedSorting,
                         updatedAt: now,
                     },
                 );
@@ -595,46 +803,156 @@ export function Table<TData extends object>({
                         scopeType: _scopeType,
                         scopeId: _scopeId,
                         tableId: _tableId,
-                        visibleColumnIds: [],
-                        columnOrder: [],
-                        columnWidths: {},
-                        rowOrder: persistedRowOrder,
+                        visibleColumnIds: normalizedVisible,
+                        columnOrder: normalizedOrder,
+                        columnWidths: normalizedWidths,
+                        rowOrder: [],
                         spacers: [],
-                        sorting: [],
+                        sorting: normalizedSorting,
                         createdAt: now,
                         updatedAt: now,
                     });
                 }
 
                 if (active) {
-                    lastSavedRowOrderKeyRef.current = nextRowOrderKey;
+                    lastSavedPreferencesKeyRef.current = nextPreferencesKey;
                 }
             } catch (error) {
-                console.warn("[Table] Failed to persist row order", error);
+                console.warn("[Table] Failed to persist preferences", error);
             }
         };
 
-        void saveRowOrder();
+        void savePreferences();
 
         return () => {
             active = false;
         };
     }, [
-        rowOrderHydrated,
-        draggingRowId,
-        rowOrder,
-        dataRowIds,
+        preferencesHydrated,
         persistenceId,
         _scopeType,
         _scopeId,
         _tableId,
+        visibleColumnIds,
+        columnOrder,
+        columnWidths,
+        sorting,
+        allColumnIds,
+        normalizedLockedColumnIds,
+        defaultNormalizedColumnWidths,
+    ]);
+
+    useEffect(() => {
+        let active = true;
+
+        setRowStateHydrated(false);
+        lastSavedRowStateKeyRef.current = "";
+
+        const loadRowState = async () => {
+            try {
+                const persisted =
+                    await db.tableRowState.get(effectiveRowStateId);
+                if (!active || !persisted) return;
+
+                const loadedSpacers = normalizeSpacerRows(persisted.spacers);
+                const loadedRowOrder = normalizeRowOrder(persisted.rowOrder, [
+                    ...dataRowIds,
+                    ...loadedSpacers.map((spacer) => spacer.id),
+                ]);
+
+                setRowOrder(loadedRowOrder);
+                setSpacers(loadedSpacers);
+                lastSavedRowStateKeyRef.current = JSON.stringify({
+                    rowOrder: loadedRowOrder,
+                    spacers: loadedSpacers,
+                });
+            } catch (error) {
+                console.warn("[Table] Failed to hydrate row state", error);
+            } finally {
+                if (active) {
+                    setRowStateHydrated(true);
+                }
+            }
+        };
+
+        void loadRowState();
+
+        return () => {
+            active = false;
+        };
+    }, [effectiveRowStateId]);
+
+    useEffect(() => {
+        if (!rowStateHydrated) return;
+        if (draggingRowId) return;
+
+        const persistedSpacers = normalizeSpacerRows(spacers);
+        const persistedRowOrder = normalizeRowOrder(rowOrder, [
+            ...dataRowIds,
+            ...persistedSpacers.map((spacer) => spacer.id),
+        ]);
+        const nextRowStateKey = JSON.stringify({
+            rowOrder: persistedRowOrder,
+            spacers: persistedSpacers,
+        });
+        if (nextRowStateKey === lastSavedRowStateKeyRef.current) return;
+
+        let active = true;
+
+        const saveRowState = async () => {
+            const now = Date.now();
+
+            try {
+                const updated = await db.tableRowState.update(
+                    effectiveRowStateId,
+                    {
+                        rowOrder: persistedRowOrder,
+                        spacers: persistedSpacers,
+                        updatedAt: now,
+                    },
+                );
+
+                if (!active) return;
+
+                if (updated === 0) {
+                    await db.tableRowState.put({
+                        id: effectiveRowStateId,
+                        rowOrder: persistedRowOrder,
+                        spacers: persistedSpacers,
+                        createdAt: now,
+                        updatedAt: now,
+                    });
+                }
+
+                if (active) {
+                    lastSavedRowStateKeyRef.current = nextRowStateKey;
+                }
+            } catch (error) {
+                console.warn("[Table] Failed to persist row state", error);
+            }
+        };
+
+        void saveRowState();
+
+        return () => {
+            active = false;
+        };
+    }, [
+        rowStateHydrated,
+        draggingRowId,
+        rowOrder,
+        spacers,
+        dataRowIdsKey,
+        effectiveRowStateId,
     ]);
 
     const resetToDefaults = () => {
         setVisibleColumnIds(defaultVisibleColumnIds);
         setColumnOrder(defaultColumnOrder);
         setColumnWidths(defaultNormalizedColumnWidths);
+        setSorting([]);
         setRowOrder(defaultRowOrder);
+        setSpacers(defaultSpacers);
     };
 
     const columnVisibility = useMemo<VisibilityState>(() => {
@@ -649,29 +967,40 @@ export function Table<TData extends object>({
     }, [visibleColumnIds, allColumnIds, lockedSet]);
 
     const orderedRowIds = useMemo(
-        () => normalizeRowOrder(rowOrder, dataRowIds),
-        [rowOrder, dataRowIds],
+        () => normalizeRowOrder(rowOrder, allRowIds),
+        [rowOrder, allRowIds],
+    );
+
+    const orderedDataRowIds = useMemo(
+        () => orderedRowIds.filter((id) => !id.startsWith(SPACER_PREFIX)),
+        [orderedRowIds],
     );
 
     const orderedRows = useMemo(() => {
         const next: TData[] = [];
 
-        for (const id of orderedRowIds) {
+        for (const id of orderedDataRowIds) {
             const row = dataById.get(id);
             if (row !== undefined) next.push(row);
         }
 
         return next;
-    }, [orderedRowIds, dataById]);
+    }, [orderedDataRowIds, dataById]);
 
     const table = useReactTable({
         data: orderedRows,
         columns,
         getRowId: (row, index) => getRowId(row, index),
         state: {
+            sorting,
             columnOrder,
             columnSizing: columnWidths,
             columnVisibility,
+        },
+        onSortingChange: (updater) => {
+            setSorting((prev) =>
+                normalizeSorting(resolveUpdater(updater, prev), allColumnIds),
+            );
         },
         onColumnOrderChange: (updater) => {
             setColumnOrder((prev) =>
@@ -706,6 +1035,8 @@ export function Table<TData extends object>({
             });
         },
         getCoreRowModel: getCoreRowModel(),
+        getSortedRowModel: getSortedRowModel(),
+        enableMultiSort: false,
         columnResizeMode: "onChange",
         enableColumnResizing: true,
     });
@@ -713,8 +1044,43 @@ export function Table<TData extends object>({
     const visibleLeafColumns = table.getVisibleLeafColumns();
     const renderedColumnCount = Math.max(visibleLeafColumns.length + 1, 1);
     const tableRows = table.getRowModel().rows;
+    const tableRowsById = useMemo(() => {
+        const map = new Map<string, Row<TData>>();
+        for (const row of tableRows) {
+            map.set(row.id, row);
+        }
+        return map;
+    }, [tableRows]);
+    const spacerById = useMemo(() => {
+        const map = new Map<string, TableSpacerRow>();
+        for (const spacer of normalizedSpacers) {
+            map.set(spacer.id, spacer);
+        }
+        return map;
+    }, [normalizedSpacers]);
 
-    const canReorderRows = enableRowReorder;
+    const hasActiveSorting = sorting.length > 0;
+    const canReorderRows =
+        enableRowReorder &&
+        (!_disableRowReorderWhenSorted || !hasActiveSorting);
+    const orderedDisplayRows = useMemo<DisplayRow<TData>[]>(() => {
+        const next: DisplayRow<TData>[] = [];
+
+        for (const id of orderedRowIds) {
+            const dataRow = tableRowsById.get(id);
+            if (dataRow) {
+                next.push({ kind: "data", id, row: dataRow });
+                continue;
+            }
+
+            const spacer = spacerById.get(id);
+            if (spacer) {
+                next.push({ kind: "spacer", id, spacer });
+            }
+        }
+
+        return next;
+    }, [orderedRowIds, tableRowsById, spacerById]);
 
     const markRowSettled = (rowId: string) => {
         if (!rowId) return;
@@ -770,7 +1136,7 @@ export function Table<TData extends object>({
         setDragOverRowId(targetRowId);
 
         setRowOrder((prev) => {
-            const normalized = normalizeRowOrder(prev, dataRowIds);
+            const normalized = normalizeRowOrder(prev, allRowIds);
             return moveById(normalized, sourceRowId, targetRowId);
         });
     };
@@ -999,12 +1365,43 @@ export function Table<TData extends object>({
                 });
             },
             addSpacer: (spacer) => {
-                return spacer?.id
+                const id = spacer?.id
                     ? normalizeSpacerId(spacer.id)
                     : createSpacerId();
+                const label = spacer?.label?.trim() || undefined;
+
+                setSpacers((prev) => {
+                    if (prev.some((item) => item.id === id)) return prev;
+                    return [
+                        ...prev,
+                        {
+                            id,
+                            label,
+                            height:
+                                typeof spacer?.height === "number" &&
+                                spacer.height > 0
+                                    ? spacer.height
+                                    : undefined,
+                        },
+                    ];
+                });
+
+                setRowOrder((prev) => {
+                    const next = normalizeRowOrder(prev, [...allRowIds, id]);
+                    if (next.includes(id)) return next;
+                    return [...next, id];
+                });
+
+                return id;
             },
-            removeSpacer: () => {
-                // Spacers are temporarily disabled in this minimal stability pass.
+            removeSpacer: (id: string) => {
+                const normalizedId = normalizeSpacerId(id);
+                setSpacers((prev) =>
+                    prev.filter((spacer) => spacer.id !== normalizedId),
+                );
+                setRowOrder((prev) =>
+                    prev.filter((rowId) => rowId !== normalizedId),
+                );
             },
             resetLayout: () => {
                 resetToDefaults();
@@ -1016,6 +1413,7 @@ export function Table<TData extends object>({
             columnOrder,
             lockedSet,
             normalizedLockedColumnIds,
+            allRowIds,
             resetToDefaults,
             setVisibleColumnIds,
             visibleColumnIds,
@@ -1103,6 +1501,19 @@ export function Table<TData extends object>({
                                         .meta as TableColumnMeta | undefined;
                                     const alignClassName =
                                         getAlignmentClassName(meta?.align);
+                                    const sortState =
+                                        header.column.getIsSorted();
+                                    const sortDirection =
+                                        sortState === false
+                                            ? undefined
+                                            : sortState;
+                                    const canSort =
+                                        meta?.sortable === true &&
+                                        header.column.getCanSort();
+                                    const sortIndicator = sortDirection
+                                        ? (meta?.sortIcon?.(sortDirection) ??
+                                          (sortDirection === "asc" ? "↑" : "↓"))
+                                        : null;
 
                                     return (
                                         <DraggableHeader
@@ -1159,9 +1570,78 @@ export function Table<TData extends object>({
                                             }
                                             alignmentClassName={alignClassName}
                                         >
-                                            {flexRender(
-                                                header.column.columnDef.header,
-                                                header.getContext(),
+                                            {canSort ? (
+                                                <button
+                                                    type="button"
+                                                    draggable={false}
+                                                    className={
+                                                        styles.sortButton
+                                                    }
+                                                    onClick={(event) => {
+                                                        event.preventDefault();
+                                                        event.stopPropagation();
+
+                                                        if (
+                                                            sortDirection ===
+                                                            "asc"
+                                                        ) {
+                                                            header.column.toggleSorting(
+                                                                true,
+                                                            );
+                                                            return;
+                                                        }
+
+                                                        if (
+                                                            sortDirection ===
+                                                            "desc"
+                                                        ) {
+                                                            header.column.clearSorting();
+                                                            return;
+                                                        }
+
+                                                        header.column.toggleSorting(
+                                                            false,
+                                                        );
+                                                    }}
+                                                    onPointerDown={(event) => {
+                                                        event.stopPropagation();
+                                                    }}
+                                                >
+                                                    <span
+                                                        className={
+                                                            styles.headerContent
+                                                        }
+                                                    >
+                                                        {flexRender(
+                                                            header.column
+                                                                .columnDef
+                                                                .header,
+                                                            header.getContext(),
+                                                        )}
+                                                    </span>
+                                                    {sortIndicator ? (
+                                                        <span
+                                                            className={
+                                                                styles.sortIndicator
+                                                            }
+                                                            aria-hidden="true"
+                                                        >
+                                                            {sortIndicator}
+                                                        </span>
+                                                    ) : null}
+                                                </button>
+                                            ) : (
+                                                <span
+                                                    className={
+                                                        styles.headerContent
+                                                    }
+                                                >
+                                                    {flexRender(
+                                                        header.column.columnDef
+                                                            .header,
+                                                        header.getContext(),
+                                                    )}
+                                                </span>
                                             )}
                                         </DraggableHeader>
                                     );
@@ -1176,7 +1656,42 @@ export function Table<TData extends object>({
                     </thead>
 
                     <tbody className={styles.body}>
-                        {tableRows.length === 0 ? (
+                        {hasActiveSorting ? (
+                            tableRows.length === 0 ? (
+                                <tr>
+                                    <td
+                                        colSpan={renderedColumnCount}
+                                        className={styles.emptyCell}
+                                    >
+                                        {emptyMessage}
+                                    </td>
+                                </tr>
+                            ) : (
+                                tableRows.map((row) => (
+                                    <DraggableDataRow
+                                        key={row.id}
+                                        row={row}
+                                        stickyColumnId={stickyColumnId}
+                                        draggable={canReorderRows}
+                                        isDragSource={draggingRowId === row.id}
+                                        isDropTarget={
+                                            Boolean(draggingRowId) &&
+                                            dragOverRowId === row.id &&
+                                            draggingRowId !== row.id
+                                        }
+                                        isSettled={settledRowId === row.id}
+                                        onDragStart={(event) =>
+                                            handleRowDragStart(row.id, event)
+                                        }
+                                        onDragOver={(event) =>
+                                            handleRowDragOver(row.id, event)
+                                        }
+                                        onDrop={handleRowDrop}
+                                        onDragEnd={handleRowDragEnd}
+                                    />
+                                ))
+                            )
+                        ) : orderedDisplayRows.length === 0 ? (
                             <tr>
                                 <td
                                     colSpan={renderedColumnCount}
@@ -1186,29 +1701,78 @@ export function Table<TData extends object>({
                                 </td>
                             </tr>
                         ) : (
-                            tableRows.map((row) => (
-                                <DraggableDataRow
-                                    key={row.id}
-                                    row={row}
-                                    stickyColumnId={stickyColumnId}
-                                    draggable={canReorderRows}
-                                    isDragSource={draggingRowId === row.id}
-                                    isDropTarget={
-                                        Boolean(draggingRowId) &&
-                                        dragOverRowId === row.id &&
-                                        draggingRowId !== row.id
-                                    }
-                                    isSettled={settledRowId === row.id}
-                                    onDragStart={(event) =>
-                                        handleRowDragStart(row.id, event)
-                                    }
-                                    onDragOver={(event) =>
-                                        handleRowDragOver(row.id, event)
-                                    }
-                                    onDrop={handleRowDrop}
-                                    onDragEnd={handleRowDragEnd}
-                                />
-                            ))
+                            orderedDisplayRows.map((displayRow) =>
+                                displayRow.kind === "data" ? (
+                                    <DraggableDataRow
+                                        key={displayRow.id}
+                                        row={displayRow.row}
+                                        stickyColumnId={stickyColumnId}
+                                        draggable={canReorderRows}
+                                        isDragSource={
+                                            draggingRowId === displayRow.id
+                                        }
+                                        isDropTarget={
+                                            Boolean(draggingRowId) &&
+                                            dragOverRowId === displayRow.id &&
+                                            draggingRowId !== displayRow.id
+                                        }
+                                        isSettled={
+                                            settledRowId === displayRow.id
+                                        }
+                                        onDragStart={(event) =>
+                                            handleRowDragStart(
+                                                displayRow.id,
+                                                event,
+                                            )
+                                        }
+                                        onDragOver={(event) =>
+                                            handleRowDragOver(
+                                                displayRow.id,
+                                                event,
+                                            )
+                                        }
+                                        onDrop={handleRowDrop}
+                                        onDragEnd={handleRowDragEnd}
+                                    />
+                                ) : (
+                                    <DraggableSpacerRow
+                                        key={displayRow.id}
+                                        spacer={displayRow.spacer}
+                                        colSpan={renderedColumnCount}
+                                        draggable={canReorderRows}
+                                        isDragSource={
+                                            draggingRowId === displayRow.id
+                                        }
+                                        isDropTarget={
+                                            Boolean(draggingRowId) &&
+                                            dragOverRowId === displayRow.id &&
+                                            draggingRowId !== displayRow.id
+                                        }
+                                        isSettled={
+                                            settledRowId === displayRow.id
+                                        }
+                                        onDragStart={(event) =>
+                                            handleRowDragStart(
+                                                displayRow.id,
+                                                event,
+                                            )
+                                        }
+                                        onDragOver={(event) =>
+                                            handleRowDragOver(
+                                                displayRow.id,
+                                                event,
+                                            )
+                                        }
+                                        onDrop={handleRowDrop}
+                                        onDragEnd={handleRowDragEnd}
+                                        onRemove={() =>
+                                            controller.removeSpacer(
+                                                displayRow.id,
+                                            )
+                                        }
+                                    />
+                                ),
+                            )
                         )}
                     </tbody>
                 </table>

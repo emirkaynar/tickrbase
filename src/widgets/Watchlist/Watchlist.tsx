@@ -1,4 +1,13 @@
-import { Columns3 } from "lucide-react";
+import {
+    ArrowDown,
+    ArrowDownAZ,
+    ArrowUp,
+    ArrowUpAZ,
+    ChevronsUpDown,
+    Columns3,
+    Plus,
+    Trash2,
+} from "lucide-react";
 import {
     useCallback,
     useEffect,
@@ -6,10 +15,16 @@ import {
     useRef,
     useState,
 } from "preact/hooks";
+import { Popover as ArkPopover } from "@ark-ui/react/popover";
+import { Portal } from "@ark-ui/react/portal";
 import {
+    Button,
+    Dialog,
+    Input,
     Skeleton,
     Select,
     Table,
+    TickerSelector,
     type SelectItem,
     type TableColumnDef,
     type TableColumnOption,
@@ -17,22 +32,30 @@ import {
     WidgetRemoveButton,
     Tooltip,
 } from "../../ui";
-import { fetchWatchlist } from "../../services/watchlist";
+import { db } from "../../db";
+import {
+    addSymbolToList,
+    createList,
+    deleteList,
+    fetchListItems,
+    fetchLists,
+    removeSymbolFromList,
+} from "../../services/watchlist";
 import { livePricesClient } from "../../services/livePrices";
-import type { WatchlistItem } from "../../services/types";
+import type { ListItem, ListRecord } from "../../services/types";
 import { ScrollArea as ArcScrollArea } from "@ark-ui/react/scroll-area";
 import { registerWidget } from "../registry";
 import styles from "./Watchlist.module.css";
 
 type Props = { id: string; onRemove: () => void };
 
-type WatchlistRow = WatchlistItem & {
+type ListTableRow = ListItem & {
     price: number | null;
     isPriceLoading: boolean;
     isPricePulsing: boolean;
 };
 
-const WATCHLIST_LOCKED_COLUMN_IDS = ["symbol"];
+const LISTS_LOCKED_COLUMN_IDS = ["symbol", "actions"];
 const PRICE_PULSE_MS = 260;
 
 function formatPrice(value: number): string {
@@ -68,7 +91,9 @@ function areColumnOptionsEqual(
 }
 
 function Watchlist({ id, onRemove }: Props) {
-    const [items, setItems] = useState<WatchlistItem[]>([]);
+    const [lists, setLists] = useState<ListRecord[]>([]);
+    const [activeListId, setActiveListId] = useState("");
+    const [items, setItems] = useState<ListItem[]>([]);
     const [priceByTicker, setPriceByTicker] = useState<Record<string, number>>(
         {},
     );
@@ -81,18 +106,39 @@ function Watchlist({ id, onRemove }: Props) {
     const [hasController, setHasController] = useState(false);
     const [columnOptions, setColumnOptions] = useState<TableColumnOption[]>([]);
     const pulseTimersRef = useRef<Record<string, number>>({});
+    const [listPopoverOpen, setListPopoverOpen] = useState(false);
+    const [newListName, setNewListName] = useState("");
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [addSymbolPopoverOpen, setAddSymbolPopoverOpen] = useState(false);
+    const [addGroupPopoverOpen, setAddGroupPopoverOpen] = useState(false);
+    const [newSymbol, setNewSymbol] = useState("");
+    const [newGroupLabel, setNewGroupLabel] = useState("");
+
+    const refreshLists = useCallback(async (preferredListId?: string) => {
+        const nextLists = await fetchLists();
+        setLists(nextLists);
+        setActiveListId((prev) => {
+            const candidate = preferredListId ?? prev;
+            if (candidate && nextLists.some((list) => list.id === candidate)) {
+                return candidate;
+            }
+            return nextLists[0]?.id ?? "";
+        });
+    }, []);
 
     useEffect(() => {
         const controller = new AbortController();
 
         const load = async () => {
             try {
+                const saved = await db.widgetState.get(id);
+                const savedActiveListId = saved?.symbol ?? "";
+
                 setError("");
-                const data = await fetchWatchlist(controller.signal);
-                setItems(data);
+                await refreshLists(savedActiveListId);
             } catch {
                 if (!controller.signal.aborted) {
-                    setError("Could not load watchlist.");
+                    setError("Could not load lists.");
                 }
             } finally {
                 if (!controller.signal.aborted) {
@@ -104,20 +150,46 @@ function Watchlist({ id, onRemove }: Props) {
         setLoading(true);
         void load();
 
-        const timer = window.setInterval(() => {
-            if (!controller.signal.aborted) {
-                void load();
+        return () => {
+            controller.abort();
+        };
+    }, [id, refreshLists]);
+
+    useEffect(() => {
+        if (!activeListId) {
+            setItems([]);
+            return;
+        }
+
+        const controller = new AbortController();
+
+        const loadItems = async () => {
+            try {
+                setError("");
+                const nextItems = await fetchListItems(
+                    activeListId,
+                    controller.signal,
+                );
+                if (controller.signal.aborted) return;
+
+                setItems(nextItems);
+                await db.widgetState.put({ id, symbol: activeListId });
+            } catch {
+                if (!controller.signal.aborted) {
+                    setError("Could not load list items.");
+                }
             }
-        }, 5_000);
+        };
+
+        void loadItems();
 
         return () => {
             controller.abort();
-            window.clearInterval(timer);
         };
-    }, []);
+    }, [id, activeListId]);
 
     useEffect(() => {
-        const subscriptionId = `watchlist:${id}`;
+        const subscriptionId = `lists:${id}`;
         const symbols = items.map((item) => item.ticker);
 
         if (!symbols.length) {
@@ -181,7 +253,7 @@ function Watchlist({ id, onRemove }: Props) {
         };
     }, []);
 
-    const rows = useMemo<WatchlistRow[]>(
+    const rows = useMemo<ListTableRow[]>(
         () =>
             items.map((item) => {
                 const ticker = item.ticker;
@@ -197,7 +269,29 @@ function Watchlist({ id, onRemove }: Props) {
         [items, priceByTicker, pulsingByTicker],
     );
 
-    const columns = useMemo<TableColumnDef<WatchlistRow>[]>(
+    const handleRemoveSymbol = useCallback(
+        async (ticker: string) => {
+            if (!activeListId) return;
+
+            try {
+                await removeSymbolFromList(activeListId, ticker);
+                setItems((prev) =>
+                    prev.filter((item) => item.ticker !== ticker),
+                );
+                setPriceByTicker((prev) => {
+                    if (!(ticker in prev)) return prev;
+                    const next = { ...prev };
+                    delete next[ticker];
+                    return next;
+                });
+            } catch {
+                setError("Could not remove symbol from list.");
+            }
+        },
+        [activeListId],
+    );
+
+    const columns = useMemo<TableColumnDef<ListTableRow>[]>(
         () => [
             {
                 id: "symbol",
@@ -209,6 +303,12 @@ function Watchlist({ id, onRemove }: Props) {
                     removable: false,
                     sortable: true,
                     align: "left",
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowUpAZ size={14} />
+                        ) : (
+                            <ArrowDownAZ size={14} />
+                        ),
                 },
                 size: 0,
                 minSize: 80,
@@ -222,7 +322,17 @@ function Watchlist({ id, onRemove }: Props) {
                 id: "price",
                 accessorFn: (row) => row.price,
                 header: "Price",
-                meta: { label: "Price", align: "right" },
+                meta: {
+                    label: "Price",
+                    align: "right",
+                    sortable: true,
+                    sortIcon: (direction) =>
+                        direction === "desc" ? (
+                            <ArrowDown size={14} />
+                        ) : (
+                            <ArrowUp size={14} />
+                        ),
+                },
                 size: 100,
                 minSize: 60,
                 cell: ({ row }) => (
@@ -243,9 +353,105 @@ function Watchlist({ id, onRemove }: Props) {
                     </span>
                 ),
             },
+            {
+                id: "actions",
+                header: "",
+                meta: {
+                    label: "Actions",
+                    align: "right",
+                    locked: true,
+                    removable: false,
+                },
+                size: 48,
+                minSize: 48,
+                cell: ({ row }) => (
+                    <Tooltip content="Remove">
+                        <button
+                            type="button"
+                            className={styles.rowDeleteButton}
+                            onClick={() =>
+                                handleRemoveSymbol(row.original.ticker)
+                            }
+                            aria-label="Remove symbol"
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    </Tooltip>
+                ),
+            },
         ],
-        [],
+        [handleRemoveSymbol],
     );
+
+    const selectedList = useMemo(
+        () => lists.find((list) => list.id === activeListId) ?? null,
+        [lists, activeListId],
+    );
+
+    const handleCreateList = useCallback(async () => {
+        try {
+            const created = await createList(newListName);
+            setNewListName("");
+            await refreshLists(created.id);
+            setActiveListId(created.id);
+            setListPopoverOpen(false);
+        } catch (cause) {
+            const message =
+                cause instanceof Error
+                    ? cause.message
+                    : "Could not create list.";
+            setError(message);
+        }
+    }, [newListName, refreshLists]);
+
+    const handleDeleteList = useCallback(async () => {
+        if (!activeListId) return;
+
+        try {
+            const result = await deleteList(activeListId);
+            setDeleteDialogOpen(false);
+
+            if (!result.deleted) {
+                if (result.reason === "last-list") {
+                    setError("At least one list must remain.");
+                }
+                await refreshLists(result.activeListId);
+                setActiveListId(result.activeListId);
+                return;
+            }
+
+            await refreshLists(result.activeListId);
+            setActiveListId(result.activeListId);
+        } catch {
+            setError("Could not delete list.");
+        }
+    }, [activeListId, refreshLists]);
+
+    const handleAddSymbol = useCallback(async () => {
+        if (!activeListId || !newSymbol.trim()) return;
+
+        try {
+            await addSymbolToList(activeListId, newSymbol);
+            const nextItems = await fetchListItems(activeListId);
+            setItems(nextItems);
+            setNewSymbol("");
+            setAddSymbolPopoverOpen(false);
+        } catch {
+            setError("Could not add symbol to list.");
+        }
+    }, [activeListId, newSymbol]);
+
+    const handleAddGroup = useCallback(() => {
+        const label = newGroupLabel.trim();
+        if (!label) return;
+
+        const controller = tableControllerRef.current;
+        if (!controller) return;
+
+        controller.addSpacer({ label });
+        setNewGroupLabel("");
+        setAddGroupPopoverOpen(false);
+    }, [newGroupLabel]);
 
     const setColumnOptionsIfChanged = useCallback(
         (next: TableColumnOption[]) => {
@@ -321,16 +527,109 @@ function Watchlist({ id, onRemove }: Props) {
     return (
         <div className={styles.root}>
             <div className={`${styles.handle} widget-handle`}>
-                <div className={`${styles.dragGrip} sc-drag-grip`}>
-                    <div className={styles.widgetTitle}>
-                        <div className={styles.heading}>Watchlist</div>
-                        {!loading && !error && (
-                            <span className={styles.count}>
-                                {items.length} symbols
-                            </span>
-                        )}
-                    </div>
+                <div className={styles.widgetTitle}>
+                    <ArkPopover.Root
+                        open={listPopoverOpen}
+                        onOpenChange={(details) => {
+                            setListPopoverOpen(details.open);
+                            if (details.open) {
+                                setAddSymbolPopoverOpen(false);
+                                setAddGroupPopoverOpen(false);
+                            }
+                        }}
+                        closeOnInteractOutside
+                        closeOnEscape
+                        onInteractOutside={() => {
+                            setListPopoverOpen(false);
+                        }}
+                        onEscapeKeyDown={() => {
+                            setListPopoverOpen(false);
+                        }}
+                        positioning={{ placement: "bottom-start" }}
+                        lazyMount
+                    >
+                        <ArkPopover.Trigger asChild>
+                            <button
+                                type="button"
+                                className={styles.listTitleButton}
+                            >
+                                <span className={styles.heading}>
+                                    {selectedList?.name ?? "Lists"}
+                                </span>
+                                {!loading && !error && (
+                                    <span className={styles.count}>
+                                        ({items.length})
+                                    </span>
+                                )}
+                                <ChevronsUpDown size={12} />
+                            </button>
+                        </ArkPopover.Trigger>
+                        <Portal>
+                            <ArkPopover.Positioner>
+                                <ArkPopover.Content className={styles.listMenu}>
+                                    <div
+                                        className={styles.listMenuSectionTitle}
+                                    >
+                                        Lists
+                                    </div>
+                                    <div className={styles.listMenuItems}>
+                                        {lists.map((list) => (
+                                            <button
+                                                key={list.id}
+                                                type="button"
+                                                className={
+                                                    list.id === activeListId
+                                                        ? styles.listMenuItemActive
+                                                        : styles.listMenuItem
+                                                }
+                                                onClick={() => {
+                                                    setActiveListId(list.id);
+                                                    setListPopoverOpen(false);
+                                                }}
+                                            >
+                                                {list.name}
+                                            </button>
+                                        ))}
+                                    </div>
+
+                                    <form
+                                        className={styles.listMenuCreateRow}
+                                        onSubmit={(event) => {
+                                            event.preventDefault();
+                                            void handleCreateList();
+                                        }}
+                                    >
+                                        <Input
+                                            value={newListName}
+                                            onChange={setNewListName}
+                                            placeholder="New list name"
+                                            className={styles.listInput}
+                                        />
+                                        <Button
+                                            type="submit"
+                                            variant="outline"
+                                            className={styles.listMenuAction}
+                                        >
+                                            Create
+                                        </Button>
+                                    </form>
+
+                                    <button
+                                        type="button"
+                                        className={styles.deleteListButton}
+                                        onClick={() => {
+                                            setDeleteDialogOpen(true);
+                                            setListPopoverOpen(false);
+                                        }}
+                                    >
+                                        Delete Current List
+                                    </button>
+                                </ArkPopover.Content>
+                            </ArkPopover.Positioner>
+                        </Portal>
+                    </ArkPopover.Root>
                 </div>
+                <div className={`${styles.dragGrip} sc-drag-grip`} />
                 <div className={styles.controls}>
                     <Tooltip content="Columns">
                         <Select
@@ -374,11 +673,10 @@ function Watchlist({ id, onRemove }: Props) {
                                     tableId="watchlist-v3"
                                     variant="widget"
                                     stickyColumnId="symbol"
-                                    lockedColumnIds={
-                                        WATCHLIST_LOCKED_COLUMN_IDS
-                                    }
+                                    lockedColumnIds={LISTS_LOCKED_COLUMN_IDS}
+                                    rowStateId={activeListId || undefined}
                                     height="100%"
-                                    emptyMessage="No watchlist symbols yet."
+                                    emptyMessage="No symbols in this list yet."
                                     onControllerReady={handleControllerReady}
                                 />
                             )}
@@ -399,14 +697,147 @@ function Watchlist({ id, onRemove }: Props) {
                 </ArcScrollArea.Scrollbar>
                 <ArcScrollArea.Corner className={styles.Corner} />
             </ArcScrollArea.Root>
+            <div className={styles.bottomActions}>
+                <ArkPopover.Root
+                    open={addSymbolPopoverOpen}
+                    onOpenChange={(details) => {
+                        setAddSymbolPopoverOpen(details.open);
+                        if (details.open) {
+                            setAddGroupPopoverOpen(false);
+                            setListPopoverOpen(false);
+                        }
+                        if (!details.open) {
+                            setNewSymbol("");
+                        }
+                    }}
+                    positioning={{ placement: "top-start" }}
+                    lazyMount
+                >
+                    <ArkPopover.Trigger asChild>
+                        <button
+                            type="button"
+                            className={styles.bottomActionButton}
+                        >
+                            <Plus size={12} /> Add Symbol
+                        </button>
+                    </ArkPopover.Trigger>
+                    <Portal>
+                        <ArkPopover.Positioner>
+                            <ArkPopover.Content
+                                className={styles.bottomActionPopover}
+                            >
+                                <div className={styles.bottomActionEditor}>
+                                    <TickerSelector
+                                        value={newSymbol}
+                                        onChange={setNewSymbol}
+                                        placeholder="Search symbol"
+                                        className={styles.symbolSelector}
+                                    />
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => void handleAddSymbol()}
+                                    >
+                                        Add
+                                    </Button>
+                                    <Button
+                                        onClick={() => {
+                                            setAddSymbolPopoverOpen(false);
+                                            setNewSymbol("");
+                                        }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </ArkPopover.Content>
+                        </ArkPopover.Positioner>
+                    </Portal>
+                </ArkPopover.Root>
+
+                <ArkPopover.Root
+                    open={addGroupPopoverOpen}
+                    onOpenChange={(details) => {
+                        setAddGroupPopoverOpen(details.open);
+                        if (details.open) {
+                            setAddSymbolPopoverOpen(false);
+                            setListPopoverOpen(false);
+                        }
+                        if (!details.open) {
+                            setNewGroupLabel("");
+                        }
+                    }}
+                    positioning={{ placement: "top-start" }}
+                    lazyMount
+                >
+                    <ArkPopover.Trigger asChild>
+                        <button
+                            type="button"
+                            className={styles.bottomActionButton}
+                        >
+                            <Plus size={12} /> Add Group
+                        </button>
+                    </ArkPopover.Trigger>
+                    <Portal>
+                        <ArkPopover.Positioner>
+                            <ArkPopover.Content
+                                className={styles.bottomActionPopover}
+                            >
+                                <form
+                                    className={styles.bottomActionEditor}
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        handleAddGroup();
+                                    }}
+                                >
+                                    <Input
+                                        value={newGroupLabel}
+                                        onChange={setNewGroupLabel}
+                                        placeholder="Group label"
+                                        className={styles.groupInput}
+                                    />
+                                    <Button type="submit" variant="outline">
+                                        Create
+                                    </Button>
+                                    <Button
+                                        onClick={() => {
+                                            setAddGroupPopoverOpen(false);
+                                            setNewGroupLabel("");
+                                        }}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </form>
+                            </ArkPopover.Content>
+                        </ArkPopover.Positioner>
+                    </Portal>
+                </ArkPopover.Root>
+            </div>
             {loading && !error && <Skeleton />}
+
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => setDeleteDialogOpen(false)}
+                title="Delete List"
+                description="This list will be removed from all Lists widgets."
+            >
+                <div className={styles.deleteDialogActions}>
+                    <Button onClick={() => setDeleteDialogOpen(false)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        variant="solid"
+                        onClick={() => void handleDeleteList()}
+                    >
+                        Delete
+                    </Button>
+                </div>
+            </Dialog>
         </div>
     );
 }
 
 registerWidget({
     type: "watchlist",
-    label: "Watchlist",
+    label: "Lists",
     defaultSize: { w: 7, h: 29 },
     minSize: { w: 6, h: 9 },
     component: Watchlist,
