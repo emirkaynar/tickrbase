@@ -364,27 +364,23 @@ function Watchlist({ id, onRemove }: Props) {
                             {error ? (
                                 <div className={styles.errorState}>{error}</div>
                             ) : (
-                                <>
-                                    <Table
-                                        className={styles.table}
-                                        rows={rows}
-                                        columns={columns}
-                                        getRowId={(row) => row.ticker}
-                                        scopeType="widget"
-                                        scopeId={id}
-                                        tableId="watchlist-v3"
-                                        variant="widget"
-                                        stickyColumnId="symbol"
-                                        lockedColumnIds={
-                                            WATCHLIST_LOCKED_COLUMN_IDS
-                                        }
-                                        height="100%"
-                                        emptyMessage="No watchlist symbols yet."
-                                        onControllerReady={
-                                            handleControllerReady
-                                        }
-                                    ></Table>
-                                </>
+                                <Table
+                                    className={styles.table}
+                                    rows={rows}
+                                    columns={columns}
+                                    getRowId={(row) => row.ticker}
+                                    scopeType="widget"
+                                    scopeId={id}
+                                    tableId="watchlist-v3"
+                                    variant="widget"
+                                    stickyColumnId="symbol"
+                                    lockedColumnIds={
+                                        WATCHLIST_LOCKED_COLUMN_IDS
+                                    }
+                                    height="100%"
+                                    emptyMessage="No watchlist symbols yet."
+                                    onControllerReady={handleControllerReady}
+                                />
                             )}
                         </div>
                     </ArcScrollArea.Content>

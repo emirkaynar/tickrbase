@@ -1,13 +1,6 @@
 import type { ComponentChildren, JSX } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
-    DragDropProvider,
-    KeyboardSensor,
-    PointerSensor,
-    type DragDropEventHandlers,
-} from "@dnd-kit/react";
-import { isSortableOperation, useSortable } from "@dnd-kit/react/sortable";
-import {
     flexRender,
     getCoreRowModel,
     useReactTable,
@@ -16,16 +9,15 @@ import {
     type Updater,
     type VisibilityState,
 } from "@tanstack/react-table";
-import { Modifier } from "@dnd-kit/abstract";
 import type {
     TableColumnMeta,
     TableController,
     TableProps,
     TableSpacerRow,
 } from "./types";
+import { db } from "../../db";
 import styles from "./Table.module.css";
 
-const ROW_DND_PREFIX = "row:";
 const SPACER_PREFIX = "spacer:";
 const COLUMN_DRAG_HOLD_DELAY_MS = 100;
 const COLUMN_DRAG_HOLD_TOLERANCE_PX = 6;
@@ -39,19 +31,6 @@ function normalizeSpacerId(id: string): string {
 function createSpacerId(): string {
     return `${SPACER_PREFIX}${Date.now()}-${Math.floor(Math.random() * 100_000)}`;
 }
-
-class RestrictVerticalAxisModifier extends Modifier {
-    apply(operation: any) {
-        return {
-            x: 0,
-            y: operation.transform.y,
-        };
-    }
-}
-
-type DragEndPayload = Parameters<
-    NonNullable<DragDropEventHandlers["onDragEnd"]>
->[0];
 
 function cx(...parts: Array<string | false | null | undefined>): string {
     return parts.filter(Boolean).join(" ");
@@ -174,25 +153,8 @@ function moveById(
     return next;
 }
 
-function moveByIndex(items: string[], from: number, to: number): string[] {
-    if (from === to) return items;
-    if (from < 0 || to < 0) return items;
-    if (from >= items.length || to >= items.length) return items;
-
-    const next = [...items];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    return next;
-}
-
-function toRowDragId(rowId: string): string {
-    return `${ROW_DND_PREFIX}${rowId}`;
-}
-
-function fromRowDragId(dragId: string): string | null {
-    return dragId.startsWith(ROW_DND_PREFIX)
-        ? dragId.slice(ROW_DND_PREFIX.length)
-        : null;
+function rowOrderKey(rowOrder: string[]): string {
+    return JSON.stringify(rowOrder);
 }
 
 function toCssSize(value: number | string | undefined): string | undefined {
@@ -215,7 +177,7 @@ function getDefaultColumnWidth(
     return undefined;
 }
 
-type SortableHeaderProps = {
+type DraggableHeaderProps = {
     dragEnabled: boolean;
     draggable: boolean;
     sticky: boolean;
@@ -237,7 +199,7 @@ type SortableHeaderProps = {
     children: ComponentChildren;
 };
 
-function SortableHeader({
+function DraggableHeader({
     dragEnabled,
     draggable,
     sticky,
@@ -257,7 +219,7 @@ function SortableHeader({
     onPointerCancel,
     alignmentClassName,
     children,
-}: SortableHeaderProps) {
+}: DraggableHeaderProps) {
     return (
         <th
             data-draggable={dragEnabled ? "true" : undefined}
@@ -312,13 +274,17 @@ function SortableHeader({
     );
 }
 
-type SortableDataRowProps<TData extends object> = {
-    id: string;
-    index: number;
+type DraggableDataRowProps<TData extends object> = {
     row: Row<TData>;
-    groupId: string;
     stickyColumnId: string;
     draggable: boolean;
+    isDragSource: boolean;
+    isDropTarget: boolean;
+    isSettled: boolean;
+    onDragStart: (event: DragEvent) => void;
+    onDragOver: (event: DragEvent) => void;
+    onDrop: (event: DragEvent) => void;
+    onDragEnd: () => void;
 };
 
 function getAlignmentClassName(
@@ -329,32 +295,35 @@ function getAlignmentClassName(
     return styles.alignLeft;
 }
 
-function SortableDataRow<TData extends object>({
-    id,
-    index,
+function DraggableDataRow<TData extends object>({
     row,
-    groupId,
     stickyColumnId,
     draggable,
-}: SortableDataRowProps<TData>) {
-    const { ref, isDragSource, isDropTarget } = useSortable({
-        id: toRowDragId(id),
-        index,
-        group: groupId,
-        disabled: !draggable,
-        modifiers: draggable ? [RestrictVerticalAxisModifier] : undefined,
-        feedback: draggable ? "clone" : "default",
-        transition: {
-            duration: 180,
-            easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-            idle: true,
-        },
-    });
-
+    isDragSource,
+    isDropTarget,
+    onDragStart,
+    onDragOver,
+    onDrop,
+    onDragEnd,
+    isSettled,
+}: DraggableDataRowProps<TData>) {
     return (
         <tr
-            ref={ref as never}
+            draggable={draggable}
+            onDragStart={draggable ? (onDragStart as never) : undefined}
+            onDragOver={draggable ? (onDragOver as never) : undefined}
+            onDrop={draggable ? (onDrop as never) : undefined}
+            onDragEnd={draggable ? (onDragEnd as never) : undefined}
             data-draggable={draggable ? "true" : undefined}
+            data-drag-state={
+                isDragSource
+                    ? "dragging"
+                    : isDropTarget
+                      ? "over"
+                      : isSettled
+                        ? "settled"
+                        : undefined
+            }
             className={cx(
                 styles.bodyRow,
                 isDragSource && styles.dragSource,
@@ -417,8 +386,13 @@ export function Table<TData extends object>({
     disableRowReorderWhenSorted: _disableRowReorderWhenSorted = true,
     onControllerReady,
 }: TableProps<TData>) {
+    const [draggingRowId, setDraggingRowId] = useState("");
+    const [dragOverRowId, setDragOverRowId] = useState("");
+    const [settledRowId, setSettledRowId] = useState("");
     const [draggingColumnId, setDraggingColumnId] = useState("");
     const [dragOverColumnId, setDragOverColumnId] = useState("");
+    const draggingRowIdRef = useRef("");
+    const settledRowTimerRef = useRef<number | null>(null);
     const draggingColumnIdRef = useRef("");
     const dragOverColumnIdRef = useRef("");
     const armedColumnDragIdRef = useRef("");
@@ -522,6 +496,12 @@ export function Table<TData extends object>({
         defaultNormalizedColumnWidths,
     );
     const [rowOrder, setRowOrder] = useState<string[]>(defaultRowOrder);
+    const [rowOrderHydrated, setRowOrderHydrated] = useState(false);
+    const lastSavedRowOrderKeyRef = useRef("");
+    const persistenceId = useMemo(
+        () => `${_scopeType}:${_scopeId}:${_tableId}`,
+        [_scopeType, _scopeId, _tableId],
+    );
 
     useEffect(() => {
         setVisibleColumnIds((prev) =>
@@ -547,6 +527,108 @@ export function Table<TData extends object>({
     useEffect(() => {
         setRowOrder((prev) => normalizeRowOrder(prev, dataRowIds));
     }, [dataRowIds]);
+
+    useEffect(() => {
+        let active = true;
+
+        setRowOrderHydrated(false);
+        lastSavedRowOrderKeyRef.current = "";
+
+        const loadRowOrder = async () => {
+            try {
+                const persisted = await db.tablePreferences.get(persistenceId);
+                if (!active) return;
+
+                const loadedRowOrder = normalizeRowOrder(
+                    persisted?.rowOrder ?? [],
+                    dataRowIds,
+                );
+
+                setRowOrder(loadedRowOrder);
+                lastSavedRowOrderKeyRef.current = rowOrderKey(loadedRowOrder);
+            } catch (error) {
+                console.warn("[Table] Failed to hydrate row order", error);
+            } finally {
+                if (active) {
+                    setRowOrderHydrated(true);
+                }
+            }
+        };
+
+        void loadRowOrder();
+
+        return () => {
+            active = false;
+        };
+    }, [persistenceId]);
+
+    useEffect(() => {
+        if (!rowOrderHydrated) return;
+        if (draggingRowId) return;
+
+        const persistedRowOrder = normalizeRowOrder(rowOrder, dataRowIds);
+        const nextRowOrderKey = rowOrderKey(persistedRowOrder);
+        if (nextRowOrderKey === lastSavedRowOrderKeyRef.current) return;
+
+        let active = true;
+
+        const saveRowOrder = async () => {
+            const now = Date.now();
+
+            try {
+                const updated = await db.tablePreferences.update(
+                    persistenceId,
+                    {
+                        scopeType: _scopeType,
+                        scopeId: _scopeId,
+                        tableId: _tableId,
+                        rowOrder: persistedRowOrder,
+                        updatedAt: now,
+                    },
+                );
+
+                if (!active) return;
+
+                if (updated === 0) {
+                    await db.tablePreferences.put({
+                        id: persistenceId,
+                        scopeType: _scopeType,
+                        scopeId: _scopeId,
+                        tableId: _tableId,
+                        visibleColumnIds: [],
+                        columnOrder: [],
+                        columnWidths: {},
+                        rowOrder: persistedRowOrder,
+                        spacers: [],
+                        sorting: [],
+                        createdAt: now,
+                        updatedAt: now,
+                    });
+                }
+
+                if (active) {
+                    lastSavedRowOrderKeyRef.current = nextRowOrderKey;
+                }
+            } catch (error) {
+                console.warn("[Table] Failed to persist row order", error);
+            }
+        };
+
+        void saveRowOrder();
+
+        return () => {
+            active = false;
+        };
+    }, [
+        rowOrderHydrated,
+        draggingRowId,
+        rowOrder,
+        dataRowIds,
+        persistenceId,
+        _scopeType,
+        _scopeId,
+        _tableId,
+    ]);
 
     const resetToDefaults = () => {
         setVisibleColumnIds(defaultVisibleColumnIds);
@@ -632,9 +714,75 @@ export function Table<TData extends object>({
     const renderedColumnCount = Math.max(visibleLeafColumns.length + 1, 1);
     const tableRows = table.getRowModel().rows;
 
-    const rowGroupId = "table:rows";
-
     const canReorderRows = enableRowReorder;
+
+    const markRowSettled = (rowId: string) => {
+        if (!rowId) return;
+
+        if (settledRowTimerRef.current != null) {
+            window.clearTimeout(settledRowTimerRef.current);
+            settledRowTimerRef.current = null;
+        }
+
+        setSettledRowId(rowId);
+        settledRowTimerRef.current = window.setTimeout(() => {
+            setSettledRowId((prev) => (prev === rowId ? "" : prev));
+            settledRowTimerRef.current = null;
+        }, 240);
+    };
+
+    const resetRowDragState = (settledId?: string) => {
+        draggingRowIdRef.current = "";
+        setDraggingRowId("");
+        setDragOverRowId("");
+        if (settledId) {
+            markRowSettled(settledId);
+        }
+    };
+
+    const handleRowDragStart = (rowId: string, event: DragEvent) => {
+        if (!canReorderRows) return;
+
+        draggingRowIdRef.current = rowId;
+        setDraggingRowId(rowId);
+        setDragOverRowId(rowId);
+
+        if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = "move";
+            event.dataTransfer.setData("text/plain", rowId);
+        }
+    };
+
+    const handleRowDragOver = (targetRowId: string, event: DragEvent) => {
+        if (!canReorderRows) return;
+
+        const sourceRowId =
+            draggingRowIdRef.current ||
+            event.dataTransfer?.getData("text/plain") ||
+            "";
+
+        if (!sourceRowId || sourceRowId === targetRowId) return;
+
+        event.preventDefault();
+
+        if (dragOverRowId === targetRowId) return;
+
+        setDragOverRowId(targetRowId);
+
+        setRowOrder((prev) => {
+            const normalized = normalizeRowOrder(prev, dataRowIds);
+            return moveById(normalized, sourceRowId, targetRowId);
+        });
+    };
+
+    const handleRowDrop = (event: DragEvent) => {
+        event.preventDefault();
+        resetRowDragState(draggingRowIdRef.current);
+    };
+
+    const handleRowDragEnd = () => {
+        resetRowDragState(draggingRowIdRef.current);
+    };
 
     const clearColumnDragHoldTimer = () => {
         if (columnDragHoldTimerRef.current == null) return;
@@ -762,31 +910,6 @@ export function Table<TData extends object>({
         resetColumnDragState();
     };
 
-    const handleDragEnd = (event: DragEndPayload) => {
-        const operation = event.operation;
-        if (event.canceled || !isSortableOperation(operation)) return;
-
-        const { source, target } = operation;
-        if (!source || !target) return;
-
-        const sourceId = fromRowDragId(String(source.id));
-        const targetId = fromRowDragId(String(target.id));
-
-        if (!sourceId || !targetId || sourceId === targetId) return;
-
-        setRowOrder((prev) => {
-            const normalized = normalizeRowOrder(prev, dataRowIds);
-            const from = normalized.indexOf(sourceId);
-            const to = normalized.indexOf(targetId);
-
-            if (from < 0 || to < 0 || from === to) {
-                return normalized;
-            }
-
-            return moveByIndex(normalized, from, to);
-        });
-    };
-
     const columnMetaMap = useMemo(() => {
         const map = new Map<
             string,
@@ -907,6 +1030,9 @@ export function Table<TData extends object>({
     useEffect(
         () => () => {
             clearColumnDragHoldTimer();
+            if (settledRowTimerRef.current != null) {
+                window.clearTimeout(settledRowTimerRef.current);
+            }
         },
         [],
     );
@@ -919,8 +1045,6 @@ export function Table<TData extends object>({
         [height, maxHeight],
     );
 
-    const sensors = useMemo(() => [PointerSensor, KeyboardSensor], []);
-
     return (
         <>
             <div
@@ -931,162 +1055,163 @@ export function Table<TData extends object>({
                 )}
                 style={rootStyle}
             >
-                <DragDropProvider sensors={sensors} onDragEnd={handleDragEnd}>
-                    <table
-                        className={styles.table}
-                        style={{
-                            width: `max(100%, ${Math.max(table.getTotalSize(), 1)}px)`,
-                        }}
-                    >
-                        <colgroup>
-                            {visibleLeafColumns.map((column) => (
-                                <col
-                                    key={column.id}
-                                    style={{
-                                        width: `${column.getSize()}px`,
-                                        minWidth: `${column.getSize()}px`,
-                                        maxWidth: `${column.getSize()}px`,
-                                    }}
-                                />
-                            ))}
-                            <col className={styles.fillColumn} />
-                        </colgroup>
+                <table
+                    className={styles.table}
+                    style={{
+                        width: `max(100%, ${Math.max(table.getTotalSize(), 1)}px)`,
+                    }}
+                >
+                    <colgroup>
+                        {visibleLeafColumns.map((column) => (
+                            <col
+                                key={column.id}
+                                style={{
+                                    width: `${column.getSize()}px`,
+                                    minWidth: `${column.getSize()}px`,
+                                    maxWidth: `${column.getSize()}px`,
+                                }}
+                            />
+                        ))}
+                        <col className={styles.fillColumn} />
+                    </colgroup>
 
-                        <thead className={styles.head}>
-                            {table.getHeaderGroups().map((headerGroup) => (
-                                <tr
-                                    key={headerGroup.id}
-                                    className={styles.headerRow}
-                                >
-                                    {headerGroup.headers.map((header) => {
-                                        if (header.isPlaceholder) {
-                                            return (
-                                                <th
-                                                    key={header.id}
-                                                    style={{
-                                                        width: `${header.getSize()}px`,
-                                                        minWidth: `${header.getSize()}px`,
-                                                        maxWidth: `${header.getSize()}px`,
-                                                    }}
-                                                    className={
-                                                        styles.headerCell
-                                                    }
-                                                />
-                                            );
-                                        }
-
-                                        const canDragColumn =
-                                            enableColumnReorder &&
-                                            !lockedSet.has(header.column.id);
-                                        const meta = header.column.columnDef
-                                            .meta as
-                                            | TableColumnMeta
-                                            | undefined;
-                                        const alignClassName =
-                                            getAlignmentClassName(meta?.align);
-
+                    <thead className={styles.head}>
+                        {table.getHeaderGroups().map((headerGroup) => (
+                            <tr
+                                key={headerGroup.id}
+                                className={styles.headerRow}
+                            >
+                                {headerGroup.headers.map((header) => {
+                                    if (header.isPlaceholder) {
                                         return (
-                                            <SortableHeader
+                                            <th
                                                 key={header.id}
-                                                dragEnabled={canDragColumn}
-                                                draggable={canDragColumn}
-                                                sticky={
-                                                    header.column.id ===
-                                                    stickyColumnId
-                                                }
-                                                size={header.getSize()}
-                                                isDragSource={
-                                                    draggingColumnId ===
-                                                    header.column.id
-                                                }
-                                                isDropTarget={
-                                                    Boolean(draggingColumnId) &&
-                                                    dragOverColumnId ===
-                                                        header.column.id &&
-                                                    draggingColumnId !==
-                                                        header.column.id
-                                                }
-                                                isResizing={header.column.getIsResizing()}
-                                                onResizeStart={header.getResizeHandler()}
-                                                onDragStart={(event) =>
-                                                    handleColumnDragStart(
-                                                        header.column.id,
-                                                        event,
-                                                    )
-                                                }
-                                                onDragOver={(event) =>
-                                                    handleColumnDragOver(
-                                                        header.column.id,
-                                                        event,
-                                                    )
-                                                }
-                                                onDrop={handleColumnDrop}
-                                                onDragEnd={resetColumnDragState}
-                                                onPointerDown={(event) =>
-                                                    handleColumnPointerDown(
-                                                        header.column.id,
-                                                        event,
-                                                    )
-                                                }
-                                                onPointerMove={
-                                                    handleColumnPointerMove
-                                                }
-                                                onPointerUp={
-                                                    handleColumnPointerUp
-                                                }
-                                                onPointerLeave={
-                                                    handleColumnPointerLeave
-                                                }
-                                                onPointerCancel={
-                                                    handleColumnPointerCancel
-                                                }
-                                                alignmentClassName={
-                                                    alignClassName
-                                                }
-                                            >
-                                                {flexRender(
-                                                    header.column.columnDef
-                                                        .header,
-                                                    header.getContext(),
-                                                )}
-                                            </SortableHeader>
+                                                style={{
+                                                    width: `${header.getSize()}px`,
+                                                    minWidth: `${header.getSize()}px`,
+                                                    maxWidth: `${header.getSize()}px`,
+                                                }}
+                                                className={styles.headerCell}
+                                            />
                                         );
-                                    })}
+                                    }
 
-                                    <th
-                                        className={styles.fillHeaderCell}
-                                        aria-hidden="true"
-                                    />
-                                </tr>
-                            ))}
-                        </thead>
+                                    const canDragColumn =
+                                        enableColumnReorder &&
+                                        !lockedSet.has(header.column.id);
+                                    const meta = header.column.columnDef
+                                        .meta as TableColumnMeta | undefined;
+                                    const alignClassName =
+                                        getAlignmentClassName(meta?.align);
 
-                        <tbody className={styles.body}>
-                            {tableRows.length === 0 ? (
-                                <tr>
-                                    <td
-                                        colSpan={renderedColumnCount}
-                                        className={styles.emptyCell}
-                                    >
-                                        {emptyMessage}
-                                    </td>
-                                </tr>
-                            ) : (
-                                tableRows.map((row, index) => (
-                                    <SortableDataRow
-                                        key={row.id}
-                                        id={row.id}
-                                        index={index}
-                                        row={row}
-                                        groupId={rowGroupId}
-                                        stickyColumnId={stickyColumnId}
-                                        draggable={canReorderRows}
-                                    />
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </DragDropProvider>
+                                    return (
+                                        <DraggableHeader
+                                            key={header.id}
+                                            dragEnabled={canDragColumn}
+                                            draggable={canDragColumn}
+                                            sticky={
+                                                header.column.id ===
+                                                stickyColumnId
+                                            }
+                                            size={header.getSize()}
+                                            isDragSource={
+                                                draggingColumnId ===
+                                                header.column.id
+                                            }
+                                            isDropTarget={
+                                                Boolean(draggingColumnId) &&
+                                                dragOverColumnId ===
+                                                    header.column.id &&
+                                                draggingColumnId !==
+                                                    header.column.id
+                                            }
+                                            isResizing={header.column.getIsResizing()}
+                                            onResizeStart={header.getResizeHandler()}
+                                            onDragStart={(event) =>
+                                                handleColumnDragStart(
+                                                    header.column.id,
+                                                    event,
+                                                )
+                                            }
+                                            onDragOver={(event) =>
+                                                handleColumnDragOver(
+                                                    header.column.id,
+                                                    event,
+                                                )
+                                            }
+                                            onDrop={handleColumnDrop}
+                                            onDragEnd={resetColumnDragState}
+                                            onPointerDown={(event) =>
+                                                handleColumnPointerDown(
+                                                    header.column.id,
+                                                    event,
+                                                )
+                                            }
+                                            onPointerMove={
+                                                handleColumnPointerMove
+                                            }
+                                            onPointerUp={handleColumnPointerUp}
+                                            onPointerLeave={
+                                                handleColumnPointerLeave
+                                            }
+                                            onPointerCancel={
+                                                handleColumnPointerCancel
+                                            }
+                                            alignmentClassName={alignClassName}
+                                        >
+                                            {flexRender(
+                                                header.column.columnDef.header,
+                                                header.getContext(),
+                                            )}
+                                        </DraggableHeader>
+                                    );
+                                })}
+
+                                <th
+                                    className={styles.fillHeaderCell}
+                                    aria-hidden="true"
+                                />
+                            </tr>
+                        ))}
+                    </thead>
+
+                    <tbody className={styles.body}>
+                        {tableRows.length === 0 ? (
+                            <tr>
+                                <td
+                                    colSpan={renderedColumnCount}
+                                    className={styles.emptyCell}
+                                >
+                                    {emptyMessage}
+                                </td>
+                            </tr>
+                        ) : (
+                            tableRows.map((row) => (
+                                <DraggableDataRow
+                                    key={row.id}
+                                    row={row}
+                                    stickyColumnId={stickyColumnId}
+                                    draggable={canReorderRows}
+                                    isDragSource={draggingRowId === row.id}
+                                    isDropTarget={
+                                        Boolean(draggingRowId) &&
+                                        dragOverRowId === row.id &&
+                                        draggingRowId !== row.id
+                                    }
+                                    isSettled={settledRowId === row.id}
+                                    onDragStart={(event) =>
+                                        handleRowDragStart(row.id, event)
+                                    }
+                                    onDragOver={(event) =>
+                                        handleRowDragOver(row.id, event)
+                                    }
+                                    onDrop={handleRowDrop}
+                                    onDragEnd={handleRowDragEnd}
+                                />
+                            ))
+                        )}
+                    </tbody>
+                </table>
             </div>
         </>
     );

@@ -155,8 +155,6 @@
     transition: background var(--transition-fast);
 }
 
-
-
 .headerCell:hover .columnResizer::after {
     background: var(--color-text);
 }
@@ -168,7 +166,9 @@
 }
 
 .bodyRow {
+    position: relative;
     width: 100%;
+    will-change: transform, box-shadow;
     transition:
         background var(--transition-fast),
         transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -181,6 +181,19 @@
 
 .bodyRow[data-draggable="true"]:active {
     cursor: grabbing;
+}
+
+.bodyRow[data-drag-state="dragging"] {
+    animation: rowLift 160ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.bodyRow[data-drag-state="over"] .cell,
+.bodyRow[data-drag-state="over"] .fillCell {
+    animation: rowTargetFlash 220ms ease-out;
+}
+
+.bodyRow[data-drag-state="settled"] {
+    animation: rowSettle 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .cell {
@@ -263,6 +276,42 @@
     box-shadow:
         inset 0 0 0 1px var(--color-bg-surface),
         0 0 0 2px color-mix(in hsl, var(--color-bg-surface), transparent 75%);
+}
+
+@keyframes rowLift {
+    from {
+        transform: translateY(0);
+        box-shadow: inset 0 0 0 1px transparent;
+    }
+
+    to {
+        transform: scale(1.005);
+        box-shadow:
+            inset 0 0 0 1px var(--color-accent),
+            0 10px 20px color-mix(in hsl, var(--color-bg), transparent 70%);
+    }
+}
+
+@keyframes rowTargetFlash {
+    0% {
+        background: color-mix(in hsl, var(--color-accent), transparent 90%);
+    }
+
+    100% {
+        background: transparent;
+    }
+}
+
+@keyframes rowSettle {
+    0% {
+        transform: scale(0.998);
+        box-shadow: inset 0 0 0 1px var(--color-accent);
+    }
+
+    100% {
+        transform: scale(1);
+        box-shadow: inset 0 0 0 1px transparent;
+    }
 }
 
 .spacerRow {
