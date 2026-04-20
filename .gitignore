@@ -1,5 +1,6 @@
 # Custom
 backend/data/lima.db
+backend/testing.py
 __pycache__/
 *.pyc
 

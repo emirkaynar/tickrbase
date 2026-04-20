@@ -74,20 +74,19 @@
     min-width: 220px;
     max-width: 280px;
     border: 1px solid var(--color-border);
-    background: var(--color-bg-surface);
+    background: var(--color-bg-elevated);
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-md);
     z-index: var(--z-dropdown);
     padding: var(--space-2);
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
+    outline: none;
+    max-height: min(var(--available-height, 320px), 320px);
+    overflow: hidden;
     &[data-state="open"] {
-        animation: scale-fade-in 0.15s ease-out;
-    }
-
-    &[data-state="closed"] {
-        animation: scale-fade-out 0.1s ease-in;
+        animation: scale-in var(--transition-fast) forwards;
     }
 }
 
@@ -114,18 +113,27 @@
 .listMenuItemActive {
     border: 1px solid var(--color-border);
     background: var(--color-bg-elevated);
-    color: var(--color-text);
+    color: var(--color-text-muted);
     border-radius: var(--radius-sm);
     padding: var(--space-1) var(--space-2);
     text-align: left;
     cursor: pointer;
-    font-size: var(--font-size-xs);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    outline: none;
 }
 
 .listMenuItem:hover,
+.listMenuItem:focus-visible {
+    border-color: var(--color-border-subtle);
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+}
+
 .listMenuItemActive {
     border-color: var(--color-primary);
-    background: color-mix(in hsl, var(--color-primary), transparent 88%);
+    background: var(--color-bg-surface);
+    color: var(--color-primary);
 }
 
 .listMenuCreateRow {
@@ -232,13 +240,17 @@
 
 .content {
     position: relative;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
+    flex: 0 0 auto;
+    min-height: 100%;
+}
+
+.content > * {
+    min-height: 100%;
 }
 
 .table {
-    height: 100%;
+    height: auto;
+    min-height: 100%;
     border: none;
     border-radius: 0;
     background: transparent;
@@ -286,6 +298,12 @@
     font-variant-numeric: tabular-nums;
 }
 
+.cellPulse {
+    animation: cell-value-pulse 320ms ease-out;
+    will-change: background-color;
+    --pulse-flash: color-mix(in hsl, var(--color-text-muted), transparent 84%);
+}
+
 .errorState {
     display: grid;
     place-items: center;
@@ -300,16 +318,18 @@
 
 .scrollRoot {
     width: 100%;
-    height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
     box-sizing: border-box;
 }
 .scrollViewport {
     height: 100%;
+    min-height: 0;
     scrollbar-width: none;
 }
 .scrollContent {
     width: 100%;
-    height: 100%;
+    min-height: 100%;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
@@ -323,6 +343,7 @@
     justify-content: center;
     row-gap: var(--space-1);
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .bottomActionButton {
@@ -349,18 +370,19 @@
 
 .bottomActionPopover {
     border: 1px solid var(--color-border);
-    background: var(--color-bg-surface);
+    background: var(--color-bg-elevated);
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-lg);
+    box-shadow: var(--shadow-md);
     padding: var(--space-2);
     z-index: var(--z-dropdown);
+    outline: none;
     &[data-state="open"] {
-        animation: scale-fade-in 0.15s ease-out;
+        animation: scale-in var(--transition-fast) forwards;
     }
+}
 
-    &[data-state="closed"] {
-        animation: scale-fade-out 0.1s ease-in;
-    }
+.bottomActionPopover[data-state="closed"] {
+    display: none;
 }
 
 .symbolSelector {
@@ -448,7 +470,7 @@
     background-color: transparent;
 }
 
-@keyframes scale-fade-in {
+@keyframes scale-in {
     from {
         opacity: 0;
         transform: scale(0.96);
@@ -459,13 +481,11 @@
     }
 }
 
-@keyframes scale-fade-out {
+@keyframes cell-value-pulse {
     from {
-        opacity: 1;
-        transform: scale(1);
+        background-color: var(--pulse-flash);
     }
     to {
-        opacity: 0;
-        transform: scale(0.96);
+        background-color: transparent;
     }
 }

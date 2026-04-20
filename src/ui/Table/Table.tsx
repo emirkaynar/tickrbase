@@ -55,6 +55,17 @@ function toIdKey(ids: string[]): string {
     return ids.join("\u001f");
 }
 
+function areStringArraysEqual(left: string[], right: string[]): boolean {
+    if (left === right) return true;
+    if (left.length !== right.length) return false;
+
+    for (let i = 0; i < left.length; i += 1) {
+        if (left[i] !== right[i]) return false;
+    }
+
+    return true;
+}
+
 function normalizeColumnOrder(
     columnOrder: string[],
     allColumnIds: string[],
@@ -555,6 +566,7 @@ export function Table<TData extends object>({
         () => rows.map((row, index) => getRowId(row, index)),
         [rows, getRowId],
     );
+    const dataRowCount = dataRowIds.length;
     const dataRowIdsKey = useMemo(() => toIdKey(dataRowIds), [dataRowIds]);
 
     const dataById = useMemo(() => {
@@ -665,6 +677,7 @@ export function Table<TData extends object>({
         () => normalizedSpacers.map((spacer) => spacer.id),
         [normalizedSpacers],
     );
+    const spacerCount = spacerIds.length;
     const spacerIdsKey = useMemo(() => toIdKey(spacerIds), [spacerIds]);
     const allRowIds = useMemo(
         () => [...dataRowIds, ...spacerIds],
@@ -680,17 +693,18 @@ export function Table<TData extends object>({
                 id.startsWith(SPACER_PREFIX),
             );
 
-            if (dataRowIds.length === 0 && hasPersistedDataRowIds) {
+            if (dataRowCount === 0 && hasPersistedDataRowIds) {
                 return prev;
             }
 
-            if (spacerIds.length === 0 && hasPersistedSpacerRowIds) {
+            if (spacerCount === 0 && hasPersistedSpacerRowIds) {
                 return prev;
             }
 
-            return normalizeRowOrder(prev, allRowIds);
+            const normalized = normalizeRowOrder(prev, allRowIds);
+            return areStringArraysEqual(prev, normalized) ? prev : normalized;
         });
-    }, [allRowIds, dataRowIds, spacerIds]);
+    }, [allRowIds, dataRowCount, spacerCount, dataRowIdsKey, spacerIdsKey]);
 
     useEffect(() => {
         setSorting((prev) => normalizeSorting(prev, allColumnIds));
@@ -908,11 +922,11 @@ export function Table<TData extends object>({
         const hasPersistedSpacerRowIds = rowOrder.some((id) =>
             id.startsWith(SPACER_PREFIX),
         );
-        if (dataRowIds.length === 0 && hasPersistedDataRowIds) {
+        if (dataRowCount === 0 && hasPersistedDataRowIds) {
             // Avoid truncating a restored row order before data rows hydrate.
             return;
         }
-        if (spacerIds.length === 0 && hasPersistedSpacerRowIds) {
+        if (spacerCount === 0 && hasPersistedSpacerRowIds) {
             // Avoid truncating restored spacer positions before spacers hydrate.
             return;
         }
@@ -973,9 +987,10 @@ export function Table<TData extends object>({
         draggingRowId,
         rowOrder,
         spacers,
-        dataRowIds,
+        dataRowCount,
         dataRowIdsKey,
-        spacerIds,
+        spacerCount,
+        spacerIdsKey,
         effectiveRowStateId,
     ]);
 

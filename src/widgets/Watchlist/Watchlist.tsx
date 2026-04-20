@@ -70,8 +70,8 @@ type ListTableRow = ListItem & {
 };
 
 const LISTS_LOCKED_COLUMN_IDS = ["symbol", "actions"];
-const CELL_PULSE_MS = 260;
 const SNAPSHOT_REFRESH_MS = 15_000;
+const PRICE_FLUSH_INTERVAL_MS = 1000;
 const PULSABLE_COLUMN_IDS = [
     "price",
     "changePercent",
@@ -127,6 +127,24 @@ function formatWhole(value: number): string {
 
 function toFiniteNumber(value: number | null | undefined): number | null {
     return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function pruneTickerMap<T>(
+    source: Record<string, T>,
+    allowedSymbols: Set<string>,
+): Record<string, T> | null {
+    let didPrune = false;
+    const next: Record<string, T> = {};
+
+    for (const [symbol, value] of Object.entries(source)) {
+        if (!allowedSymbols.has(symbol)) {
+            didPrune = true;
+            continue;
+        }
+        next[symbol] = value;
+    }
+
+    return didPrune ? next : null;
 }
 
 function formatOptionalPrice(value: number | null): string {
@@ -191,6 +209,9 @@ function areColumnOptionsEqual(
 }
 
 function Watchlist({ id, onRemove }: Props) {
+    const listTriggerRef = useRef<HTMLButtonElement | null>(null);
+    const addSymbolTriggerRef = useRef<HTMLButtonElement | null>(null);
+    const addGroupTriggerRef = useRef<HTMLButtonElement | null>(null);
     const [lists, setLists] = useState<ListRecord[]>([]);
     const [activeListId, setActiveListId] = useState("");
     const [items, setItems] = useState<ListItem[]>([]);
@@ -200,15 +221,23 @@ function Watchlist({ id, onRemove }: Props) {
     const [quotesByTicker, setQuotesByTicker] = useState<
         Record<string, QuoteSnapshot>
     >({});
-    const [, setPulseRenderTick] = useState(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const tableControllerRef = useRef<TableController | null>(null);
     const [hasController, setHasController] = useState(false);
     const [columnOptions, setColumnOptions] = useState<TableColumnOption[]>([]);
-    const pulsingCellByKeyRef = useRef<Record<string, true>>({});
-    const cellPulseTimersRef = useRef<Record<string, number>>({});
-    const pulseRenderRafRef = useRef<number | null>(null);
+    const pulseCellElementByKeyRef = useRef<
+        Record<string, HTMLDivElement | null>
+    >({});
+    const pulseCellRefCallbackByKeyRef = useRef<
+        Record<string, (element: HTMLSpanElement | null) => void>
+    >({});
+    const pendingPulseByKeyRef = useRef<Record<string, true>>({});
+    const pulseDispatchRafRef = useRef<number | null>(null);
+    const priceFlushTimerRef = useRef<number | null>(null);
+    const pendingPriceByTickerRef = useRef<Record<string, number>>({});
+    const activeSymbolsRef = useRef<Set<string>>(new Set());
+    const unmountedRef = useRef(false);
     const cellSignatureByKeyRef = useRef<Record<string, number | null>>({});
     const [listPopoverOpen, setListPopoverOpen] = useState(false);
     const [newListName, setNewListName] = useState("");
@@ -311,7 +340,15 @@ function Watchlist({ id, onRemove }: Props) {
 
     useEffect(() => {
         const subscriptionId = `lists:${id}`;
-        const symbols = items.map((item) => item.ticker);
+        const symbols: string[] = [];
+        const seen = new Set<string>();
+
+        for (const item of items) {
+            const symbol = item.ticker.trim().toUpperCase();
+            if (!symbol || seen.has(symbol)) continue;
+            seen.add(symbol);
+            symbols.push(symbol);
+        }
 
         if (!symbols.length) {
             livePricesClient.removeWidget(subscriptionId);
@@ -326,45 +363,186 @@ function Watchlist({ id, onRemove }: Props) {
     }, [id, items]);
 
     useEffect(() => {
+        const nextSymbols = new Set<string>();
+        for (const item of items) {
+            const symbol = item.ticker.trim().toUpperCase();
+            if (!symbol) continue;
+            nextSymbols.add(symbol);
+        }
+
+        activeSymbolsRef.current = nextSymbols;
+
+        for (const symbol of Object.keys(pendingPriceByTickerRef.current)) {
+            if (nextSymbols.has(symbol)) continue;
+            delete pendingPriceByTickerRef.current[symbol];
+        }
+
+        setPriceByTicker((prev) => pruneTickerMap(prev, nextSymbols) ?? prev);
+        setQuotesByTicker((prev) => pruneTickerMap(prev, nextSymbols) ?? prev);
+    }, [items]);
+
+    const flushPendingPrices = useCallback(() => {
+        priceFlushTimerRef.current = null;
+        if (unmountedRef.current) return;
+
+        const pendingEntries = Object.entries(pendingPriceByTickerRef.current);
+        if (pendingEntries.length === 0) return;
+        pendingPriceByTickerRef.current = {};
+
+        const activeSymbols = activeSymbolsRef.current;
+
+        setPriceByTicker((prev) => {
+            const pruned = pruneTickerMap(prev, activeSymbols);
+            const current = pruned ?? prev;
+            let next = pruned;
+
+            for (const [symbol, value] of pendingEntries) {
+                if (!activeSymbols.has(symbol)) continue;
+                if (current[symbol] === value) continue;
+
+                if (next == null) {
+                    next = { ...current };
+                }
+                next[symbol] = value;
+            }
+
+            return next ?? prev;
+        });
+    }, []);
+
+    const schedulePriceFlush = useCallback(() => {
+        if (priceFlushTimerRef.current != null) return;
+
+        priceFlushTimerRef.current = window.setTimeout(
+            flushPendingPrices,
+            PRICE_FLUSH_INTERVAL_MS,
+        );
+    }, [flushPendingPrices]);
+
+    useEffect(() => {
         const unsubscribe = livePricesClient.onTick((tick) => {
-            setPriceByTicker((prev) => {
-                if (!Number.isFinite(tick.price)) return prev;
-                const nextPrice = tick.price;
-                if (prev[tick.symbol] === nextPrice) return prev;
-                return {
-                    ...prev,
-                    [tick.symbol]: nextPrice,
-                };
-            });
+            if (!Number.isFinite(tick.price)) return;
+            if (!activeSymbolsRef.current.has(tick.symbol)) return;
+
+            pendingPriceByTickerRef.current[tick.symbol] = tick.price;
+            schedulePriceFlush();
         });
 
         return () => {
             unsubscribe();
         };
+    }, [schedulePriceFlush]);
+
+    const clearPulseClasses = useCallback((element: HTMLElement) => {
+        element.classList.remove(styles.cellPulse);
     }, []);
 
-    const schedulePulseRender = useCallback(() => {
-        if (pulseRenderRafRef.current != null) return;
+    const handlePulseAnimationEnd = useCallback(
+        (event: Event) => {
+            clearPulseClasses(event.currentTarget as HTMLElement);
+        },
+        [clearPulseClasses],
+    );
 
-        pulseRenderRafRef.current = window.requestAnimationFrame(() => {
-            pulseRenderRafRef.current = null;
-            setPulseRenderTick((value) => value + 1);
-        });
-    }, []);
+    const dispatchQueuedPulses = useCallback(() => {
+        pulseDispatchRafRef.current = null;
+        if (unmountedRef.current) return;
+
+        const queued = Object.keys(pendingPulseByKeyRef.current);
+        if (queued.length === 0) return;
+        pendingPulseByKeyRef.current = {};
+
+        for (const key of queued) {
+            const element = pulseCellElementByKeyRef.current[key];
+            if (!element) continue;
+
+            clearPulseClasses(element);
+            // Force a reflow so pulse animation reliably restarts.
+            void element.offsetWidth;
+
+            element.classList.add(styles.cellPulse);
+        }
+    }, [clearPulseClasses]);
+
+    const queueCellPulse = useCallback(
+        (key: string) => {
+            pendingPulseByKeyRef.current[key] = true;
+            if (pulseDispatchRafRef.current != null) return;
+
+            pulseDispatchRafRef.current =
+                window.requestAnimationFrame(dispatchQueuedPulses);
+        },
+        [dispatchQueuedPulses],
+    );
+
+    const getPulseCellRef = useCallback(
+        (ticker: string, columnId: PulsableColumnId) => {
+            const key = createCellPulseKey(ticker, columnId);
+            const cached = pulseCellRefCallbackByKeyRef.current[key];
+            if (cached) return cached;
+
+            const callback = (element: HTMLSpanElement | null) => {
+                const previous = pulseCellElementByKeyRef.current[key];
+                const next =
+                    element?.parentElement?.parentElement instanceof
+                    HTMLDivElement
+                        ? element.parentElement.parentElement
+                        : null;
+
+                if (previous && previous !== next) {
+                    previous.removeEventListener(
+                        "animationend",
+                        handlePulseAnimationEnd,
+                    );
+                }
+
+                if (next) {
+                    if (previous !== next) {
+                        next.addEventListener(
+                            "animationend",
+                            handlePulseAnimationEnd,
+                        );
+                    }
+                    pulseCellElementByKeyRef.current[key] = next;
+                } else {
+                    delete pulseCellElementByKeyRef.current[key];
+                }
+            };
+
+            pulseCellRefCallbackByKeyRef.current[key] = callback;
+            return callback;
+        },
+        [handlePulseAnimationEnd],
+    );
 
     useEffect(() => {
         return () => {
-            for (const timer of Object.values(cellPulseTimersRef.current)) {
-                window.clearTimeout(timer);
-            }
-            cellPulseTimersRef.current = {};
+            unmountedRef.current = true;
 
-            if (pulseRenderRafRef.current != null) {
-                window.cancelAnimationFrame(pulseRenderRafRef.current);
-                pulseRenderRafRef.current = null;
+            if (priceFlushTimerRef.current != null) {
+                window.clearTimeout(priceFlushTimerRef.current);
+                priceFlushTimerRef.current = null;
             }
+            pendingPriceByTickerRef.current = {};
+
+            if (pulseDispatchRafRef.current != null) {
+                window.cancelAnimationFrame(pulseDispatchRafRef.current);
+                pulseDispatchRafRef.current = null;
+            }
+            pendingPulseByKeyRef.current = {};
+            for (const element of Object.values(
+                pulseCellElementByKeyRef.current,
+            )) {
+                if (!element) continue;
+                element.removeEventListener(
+                    "animationend",
+                    handlePulseAnimationEnd,
+                );
+            }
+            pulseCellElementByKeyRef.current = {};
+            pulseCellRefCallbackByKeyRef.current = {};
         };
-    }, []);
+    }, [handlePulseAnimationEnd]);
 
     const rows = useMemo<ListTableRow[]>(
         () =>
@@ -421,7 +599,9 @@ function Watchlist({ id, onRemove }: Props) {
 
     useEffect(() => {
         const nextSignatures: Record<string, number | null> = {};
+        const activeKeys = new Set<string>();
         const changedCellKeys: string[] = [];
+        const previousSignatures = cellSignatureByKeyRef.current;
 
         for (const row of rows) {
             const cellValues = getPulsableCellValues(row);
@@ -430,8 +610,9 @@ function Watchlist({ id, onRemove }: Props) {
                 const key = createCellPulseKey(row.ticker, columnId);
                 const signature = cellValues[columnId];
                 nextSignatures[key] = signature;
+                activeKeys.add(key);
 
-                const previousSignature = cellSignatureByKeyRef.current[key];
+                const previousSignature = previousSignatures[key];
                 if (
                     previousSignature !== undefined &&
                     previousSignature !== signature
@@ -443,54 +624,19 @@ function Watchlist({ id, onRemove }: Props) {
 
         cellSignatureByKeyRef.current = nextSignatures;
 
-        let prunedPulseKeys = false;
-        for (const [key, timer] of Object.entries(cellPulseTimersRef.current)) {
-            if (nextSignatures[key] !== undefined) continue;
-            window.clearTimeout(timer);
-            delete cellPulseTimersRef.current[key];
-
-            if (pulsingCellByKeyRef.current[key]) {
-                delete pulsingCellByKeyRef.current[key];
-                prunedPulseKeys = true;
-            }
+        for (const key of Object.keys(pulseCellElementByKeyRef.current)) {
+            if (activeKeys.has(key)) continue;
+            delete pulseCellElementByKeyRef.current[key];
+            delete pulseCellRefCallbackByKeyRef.current[key];
+            delete pendingPulseByKeyRef.current[key];
         }
 
-        if (changedCellKeys.length === 0) {
-            if (prunedPulseKeys) {
-                schedulePulseRender();
-            }
-            return;
-        }
+        if (changedCellKeys.length === 0) return;
 
         for (const key of changedCellKeys) {
-            pulsingCellByKeyRef.current[key] = true;
-
-            const existingTimer = cellPulseTimersRef.current[key];
-            if (existingTimer != null) {
-                window.clearTimeout(existingTimer);
-            }
-
-            cellPulseTimersRef.current[key] = window.setTimeout(() => {
-                if (pulsingCellByKeyRef.current[key]) {
-                    delete pulsingCellByKeyRef.current[key];
-                    schedulePulseRender();
-                }
-                delete cellPulseTimersRef.current[key];
-            }, CELL_PULSE_MS);
+            queueCellPulse(key);
         }
-
-        schedulePulseRender();
-    }, [rows, schedulePulseRender]);
-
-    const isCellPulsing = useCallback(
-        (ticker: string, columnId: PulsableColumnId) =>
-            Boolean(
-                pulsingCellByKeyRef.current[
-                    createCellPulseKey(ticker, columnId)
-                ],
-            ),
-        [],
-    );
+    }, [rows, queueCellPulse]);
 
     const handleRemoveSymbol = useCallback(
         async (ticker: string) => {
@@ -502,6 +648,12 @@ function Watchlist({ id, onRemove }: Props) {
                     prev.filter((item) => item.ticker !== ticker),
                 );
                 setPriceByTicker((prev) => {
+                    if (!(ticker in prev)) return prev;
+                    const next = { ...prev };
+                    delete next[ticker];
+                    return next;
+                });
+                setQuotesByTicker((prev) => {
                     if (!(ticker in prev)) return prev;
                     const next = { ...prev };
                     delete next[ticker];
@@ -560,12 +712,8 @@ function Watchlist({ id, onRemove }: Props) {
                 minSize: 60,
                 cell: ({ row }) => (
                     <span
+                        ref={getPulseCellRef(row.original.ticker, "price")}
                         className={styles.priceCell}
-                        data-cell-pulse={
-                            isCellPulsing(row.original.ticker, "price")
-                                ? "true"
-                                : undefined
-                        }
                     >
                         {row.original.isPriceLoading ? (
                             <Skeleton
@@ -606,15 +754,11 @@ function Watchlist({ id, onRemove }: Props) {
 
                     return (
                         <span
+                            ref={getPulseCellRef(
+                                row.original.ticker,
+                                "changePercent",
+                            )}
                             className={className}
-                            data-cell-pulse={
-                                isCellPulsing(
-                                    row.original.ticker,
-                                    "changePercent",
-                                )
-                                    ? "true"
-                                    : undefined
-                            }
                         >
                             {formatOptionalPercent(value)}
                         </span>
@@ -640,12 +784,11 @@ function Watchlist({ id, onRemove }: Props) {
                 minSize: 96,
                 cell: ({ row }) => (
                     <span
+                        ref={getPulseCellRef(
+                            row.original.ticker,
+                            "previousClose",
+                        )}
                         className={styles.mutedValue}
-                        data-cell-pulse={
-                            isCellPulsing(row.original.ticker, "previousClose")
-                                ? "true"
-                                : undefined
-                        }
                     >
                         {formatOptionalPrice(row.original.previousClose)}
                     </span>
@@ -670,12 +813,8 @@ function Watchlist({ id, onRemove }: Props) {
                 minSize: 88,
                 cell: ({ row }) => (
                     <span
+                        ref={getPulseCellRef(row.original.ticker, "open")}
                         className={styles.mutedValue}
-                        data-cell-pulse={
-                            isCellPulsing(row.original.ticker, "open")
-                                ? "true"
-                                : undefined
-                        }
                     >
                         {formatOptionalPrice(row.original.open)}
                     </span>
@@ -700,12 +839,8 @@ function Watchlist({ id, onRemove }: Props) {
                 minSize: 88,
                 cell: ({ row }) => (
                     <span
+                        ref={getPulseCellRef(row.original.ticker, "dayLow")}
                         className={styles.mutedValue}
-                        data-cell-pulse={
-                            isCellPulsing(row.original.ticker, "dayLow")
-                                ? "true"
-                                : undefined
-                        }
                     >
                         {formatOptionalPrice(row.original.dayLow)}
                     </span>
@@ -730,12 +865,8 @@ function Watchlist({ id, onRemove }: Props) {
                 minSize: 88,
                 cell: ({ row }) => (
                     <span
+                        ref={getPulseCellRef(row.original.ticker, "dayHigh")}
                         className={styles.mutedValue}
-                        data-cell-pulse={
-                            isCellPulsing(row.original.ticker, "dayHigh")
-                                ? "true"
-                                : undefined
-                        }
                     >
                         {formatOptionalPrice(row.original.dayHigh)}
                     </span>
@@ -760,12 +891,8 @@ function Watchlist({ id, onRemove }: Props) {
                 minSize: 96,
                 cell: ({ row }) => (
                     <span
+                        ref={getPulseCellRef(row.original.ticker, "volume")}
                         className={styles.mutedValue}
-                        data-cell-pulse={
-                            isCellPulsing(row.original.ticker, "volume")
-                                ? "true"
-                                : undefined
-                        }
                     >
                         {formatOptionalWhole(row.original.volume)}
                     </span>
@@ -790,12 +917,11 @@ function Watchlist({ id, onRemove }: Props) {
                 minSize: 110,
                 cell: ({ row }) => (
                     <span
+                        ref={getPulseCellRef(
+                            row.original.ticker,
+                            "volumeValue",
+                        )}
                         className={styles.mutedValue}
-                        data-cell-pulse={
-                            isCellPulsing(row.original.ticker, "volumeValue")
-                                ? "true"
-                                : undefined
-                        }
                     >
                         {formatOptionalWhole(row.original.volumeValue)}
                     </span>
@@ -820,12 +946,8 @@ function Watchlist({ id, onRemove }: Props) {
                 minSize: 84,
                 cell: ({ row }) => (
                     <span
+                        ref={getPulseCellRef(row.original.ticker, "bid")}
                         className={styles.mutedValue}
-                        data-cell-pulse={
-                            isCellPulsing(row.original.ticker, "bid")
-                                ? "true"
-                                : undefined
-                        }
                     >
                         {formatOptionalPrice(row.original.bid)}
                     </span>
@@ -850,12 +972,8 @@ function Watchlist({ id, onRemove }: Props) {
                 minSize: 84,
                 cell: ({ row }) => (
                     <span
+                        ref={getPulseCellRef(row.original.ticker, "ask")}
                         className={styles.mutedValue}
-                        data-cell-pulse={
-                            isCellPulsing(row.original.ticker, "ask")
-                                ? "true"
-                                : undefined
-                        }
                     >
                         {formatOptionalPrice(row.original.ask)}
                     </span>
@@ -888,7 +1006,7 @@ function Watchlist({ id, onRemove }: Props) {
                 ),
             },
         ],
-        [handleRemoveSymbol, isCellPulsing],
+        [getPulseCellRef, handleRemoveSymbol],
     );
 
     const selectedList = useMemo(
@@ -1074,21 +1192,26 @@ function Watchlist({ id, onRemove }: Props) {
         if (requestedQuoteGroups.length === 0) return;
         if (listSymbols.length === 0) return;
 
+        const quoteSymbols = listSymbols;
+        const quoteGroups = requestedQuoteGroups;
+
         let cancelled = false;
         const controller = new AbortController();
 
         const loadQuotes = async () => {
             try {
                 const payload = await fetchQuotes(
-                    listSymbols,
-                    requestedQuoteGroups,
+                    quoteSymbols,
+                    quoteGroups,
                     controller.signal,
                 );
                 if (cancelled || controller.signal.aborted) return;
 
                 const nextMap: Record<string, QuoteSnapshot> = {};
                 for (const quote of payload.quotes) {
-                    nextMap[quote.symbol] = quote;
+                    const symbol = quote.symbol.trim().toUpperCase();
+                    if (!activeSymbolsRef.current.has(symbol)) continue;
+                    nextMap[symbol] = quote;
                 }
 
                 setQuotesByTicker(nextMap);
@@ -1108,14 +1231,7 @@ function Watchlist({ id, onRemove }: Props) {
             controller.abort();
             window.clearInterval(timer);
         };
-    }, [
-        activeListId,
-        isPageVisible,
-        listSymbols,
-        listSymbolsKey,
-        requestedQuoteGroups,
-        requestedQuoteGroupsKey,
-    ]);
+    }, [activeListId, isPageVisible, listSymbolsKey, requestedQuoteGroupsKey]);
 
     const handleVisibleColumnsChange = useCallback(
         (nextVisibleIds: string[]) => {
@@ -1145,6 +1261,45 @@ function Watchlist({ id, onRemove }: Props) {
         [columnOptions, setColumnOptionsIfChanged],
     );
 
+    const listPopoverPositioning = useMemo(
+        () => ({
+            placement: "bottom-start" as const,
+            strategy: "fixed" as const,
+            gutter: 6,
+            shift: 8,
+            flip: true,
+            hideWhenDetached: true,
+            getAnchorElement: () => listTriggerRef.current,
+        }),
+        [],
+    );
+
+    const addSymbolPopoverPositioning = useMemo(
+        () => ({
+            placement: "top-start" as const,
+            strategy: "fixed" as const,
+            gutter: 8,
+            shift: 8,
+            flip: true,
+            hideWhenDetached: true,
+            getAnchorElement: () => addSymbolTriggerRef.current,
+        }),
+        [],
+    );
+
+    const addGroupPopoverPositioning = useMemo(
+        () => ({
+            placement: "top-start" as const,
+            strategy: "fixed" as const,
+            gutter: 8,
+            shift: 8,
+            flip: true,
+            hideWhenDetached: true,
+            getAnchorElement: () => addGroupTriggerRef.current,
+        }),
+        [],
+    );
+
     return (
         <div className={styles.root}>
             <div className={`${styles.handle} widget-handle`}>
@@ -1166,11 +1321,12 @@ function Watchlist({ id, onRemove }: Props) {
                         onEscapeKeyDown={() => {
                             setListPopoverOpen(false);
                         }}
-                        positioning={{ placement: "bottom-start" }}
+                        positioning={listPopoverPositioning}
                         lazyMount
                     >
                         <ArkPopover.Trigger asChild>
                             <button
+                                ref={listTriggerRef}
                                 type="button"
                                 className={styles.listTitleButton}
                             >
@@ -1296,7 +1452,6 @@ function Watchlist({ id, onRemove }: Props) {
                                     stickyColumnId="symbol"
                                     lockedColumnIds={LISTS_LOCKED_COLUMN_IDS}
                                     rowStateId={activeListId || undefined}
-                                    height="100%"
                                     emptyMessage="No symbols in this list yet."
                                     onControllerReady={handleControllerReady}
                                 />
@@ -1331,11 +1486,12 @@ function Watchlist({ id, onRemove }: Props) {
                             setNewSymbol("");
                         }
                     }}
-                    positioning={{ placement: "top-start" }}
+                    positioning={addSymbolPopoverPositioning}
                     lazyMount
                 >
                     <ArkPopover.Trigger asChild>
                         <button
+                            ref={addSymbolTriggerRef}
                             type="button"
                             className={styles.bottomActionButton}
                         >
@@ -1386,11 +1542,12 @@ function Watchlist({ id, onRemove }: Props) {
                             setNewGroupLabel("");
                         }
                     }}
-                    positioning={{ placement: "top-start" }}
+                    positioning={addGroupPopoverPositioning}
                     lazyMount
                 >
                     <ArkPopover.Trigger asChild>
                         <button
+                            ref={addGroupTriggerRef}
                             type="button"
                             className={styles.bottomActionButton}
                         >
