@@ -72,18 +72,7 @@ type ListTableRow = ListItem & {
 const LISTS_LOCKED_COLUMN_IDS = ["symbol", "actions"];
 const SNAPSHOT_REFRESH_MS = 15_000;
 const PRICE_FLUSH_INTERVAL_MS = 1000;
-const PULSABLE_COLUMN_IDS = [
-    "price",
-    "changePercent",
-    "previousClose",
-    "open",
-    "dayLow",
-    "dayHigh",
-    "volume",
-    "volumeValue",
-    "bid",
-    "ask",
-] as const;
+const PULSABLE_COLUMN_IDS = ["price", "changePercent"] as const;
 
 type PulsableColumnId = (typeof PULSABLE_COLUMN_IDS)[number];
 
@@ -104,16 +93,18 @@ const PERCENT_FORMATTER = new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 2,
 });
 
+const PRICE_FORMATTER = new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
+
 const INTEGER_FORMATTER = new Intl.NumberFormat("en-US", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
 });
 
 function formatPrice(value: number): string {
-    return value.toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    });
+    return PRICE_FORMATTER.format(value);
 }
 
 function formatPercent(value: number): string {
@@ -166,21 +157,99 @@ function createCellPulseKey(
     return `${ticker}|${columnId}`;
 }
 
-function getPulsableCellValues(
-    row: ListTableRow,
+function detectWidgetInteraction(root: HTMLElement | null): boolean {
+    if (!root) return false;
+
+    const gridItem = root.closest(".react-grid-item");
+    const resizable = root.closest(".react-resizable");
+
+    const gridInteracting =
+        gridItem instanceof HTMLElement &&
+        (gridItem.classList.contains("react-grid-item-resizing") ||
+            gridItem.classList.contains("react-grid-item-dragging") ||
+            gridItem.classList.contains("react-draggable-dragging"));
+
+    const resizing =
+        resizable instanceof HTMLElement &&
+        resizable.classList.contains("resizing");
+
+    return gridInteracting || resizing;
+}
+
+function toPulseSignatureValue(value: number | null): number | null {
+    if (value === null) return null;
+    return Math.round(value * 100);
+}
+
+function getPulseSignatures(
+    ticker: string,
+    priceByTicker: Record<string, number>,
+    quotesByTicker: Record<string, QuoteSnapshot>,
 ): Record<PulsableColumnId, number | null> {
+    const livePrice = toFiniteNumber(priceByTicker[ticker]);
+    const quote = quotesByTicker[ticker];
+    const quotePrice = toFiniteNumber(quote?.current_price);
+    const resolvedPrice = livePrice ?? quotePrice;
+
+    const previousClose = toFiniteNumber(quote?.previous_close);
+    const derivedChangePercent =
+        resolvedPrice !== null && previousClose !== null && previousClose !== 0
+            ? ((resolvedPrice - previousClose) / previousClose) * 100
+            : null;
+
+    const changePercent =
+        derivedChangePercent ?? toFiniteNumber(quote?.change_percent);
+
     return {
-        price: row.price,
-        changePercent: row.changePercent,
-        previousClose: row.previousClose,
-        open: row.open,
-        dayLow: row.dayLow,
-        dayHigh: row.dayHigh,
-        volume: row.volume,
-        volumeValue: row.volumeValue,
-        bid: row.bid,
-        ask: row.ask,
+        price: toPulseSignatureValue(resolvedPrice),
+        changePercent: toPulseSignatureValue(changePercent),
     };
+}
+
+function areQuoteSnapshotsEqual(
+    left: QuoteSnapshot | undefined,
+    right: QuoteSnapshot | undefined,
+): boolean {
+    if (left === right) return true;
+    if (!left || !right) return false;
+
+    return (
+        left.symbol === right.symbol &&
+        left.current_price === right.current_price &&
+        left.previous_close === right.previous_close &&
+        left.open === right.open &&
+        left.day_low === right.day_low &&
+        left.day_high === right.day_high &&
+        left.change === right.change &&
+        left.change_percent === right.change_percent &&
+        left.volume === right.volume &&
+        left.volume_value === right.volume_value &&
+        left.bid === right.bid &&
+        left.ask === right.ask
+    );
+}
+
+function areQuoteMapsEqual(
+    left: Record<string, QuoteSnapshot>,
+    right: Record<string, QuoteSnapshot>,
+): boolean {
+    if (left === right) return true;
+
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    if (leftKeys.length !== rightKeys.length) return false;
+
+    for (const key of rightKeys) {
+        if (!areQuoteSnapshotsEqual(left[key], right[key])) return false;
+    }
+
+    return true;
+}
+
+function toRowSignature(
+    values: Array<number | null | boolean | string>,
+): string {
+    return values.map((value) => String(value)).join("\u001f");
 }
 
 function areColumnOptionsEqual(
@@ -209,6 +278,7 @@ function areColumnOptionsEqual(
 }
 
 function Watchlist({ id, onRemove }: Props) {
+    const rootRef = useRef<HTMLDivElement | null>(null);
     const listTriggerRef = useRef<HTMLButtonElement | null>(null);
     const addSymbolTriggerRef = useRef<HTMLButtonElement | null>(null);
     const addGroupTriggerRef = useRef<HTMLButtonElement | null>(null);
@@ -233,12 +303,18 @@ function Watchlist({ id, onRemove }: Props) {
         Record<string, (element: HTMLSpanElement | null) => void>
     >({});
     const pendingPulseByKeyRef = useRef<Record<string, true>>({});
+    const pendingPulseElementsRef = useRef<Set<HTMLElement>>(new Set());
     const pulseDispatchRafRef = useRef<number | null>(null);
+    const pulseApplyRafRef = useRef<number | null>(null);
     const priceFlushTimerRef = useRef<number | null>(null);
     const pendingPriceByTickerRef = useRef<Record<string, number>>({});
     const activeSymbolsRef = useRef<Set<string>>(new Set());
+    const priceByTickerStateRef = useRef<Record<string, number>>({});
+    const quotesByTickerStateRef = useRef<Record<string, QuoteSnapshot>>({});
+    const rowCacheByTickerRef = useRef<
+        Record<string, { signature: string; row: ListTableRow }>
+    >({});
     const unmountedRef = useRef(false);
-    const cellSignatureByKeyRef = useRef<Record<string, number | null>>({});
     const [listPopoverOpen, setListPopoverOpen] = useState(false);
     const [newListName, setNewListName] = useState("");
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -249,6 +325,54 @@ function Watchlist({ id, onRemove }: Props) {
     const [isPageVisible, setIsPageVisible] = useState(
         () => document.visibilityState === "visible",
     );
+    const [isWidgetInteracting, setIsWidgetInteracting] = useState(false);
+    const isWidgetInteractingRef = useRef(false);
+
+    useEffect(() => {
+        isWidgetInteractingRef.current = isWidgetInteracting;
+    }, [isWidgetInteracting]);
+
+    useEffect(() => {
+        const root = rootRef.current;
+        if (!root) return;
+
+        const updateInteraction = () => {
+            setIsWidgetInteracting(detectWidgetInteraction(root));
+        };
+
+        const observedElements = new Set<HTMLElement>();
+        const observer = new MutationObserver(() => {
+            updateInteraction();
+        });
+
+        const gridItem = root.closest(".react-grid-item");
+        if (gridItem instanceof HTMLElement) {
+            observedElements.add(gridItem);
+        }
+
+        const resizable = root.closest(".react-resizable");
+        if (resizable instanceof HTMLElement) {
+            observedElements.add(resizable);
+        }
+
+        if (observedElements.size === 0) {
+            updateInteraction();
+            return;
+        }
+
+        for (const element of observedElements) {
+            observer.observe(element, {
+                attributes: true,
+                attributeFilter: ["class"],
+            });
+        }
+
+        updateInteraction();
+
+        return () => {
+            observer.disconnect();
+        };
+    }, []);
 
     const refreshLists = useCallback(async (preferredListId?: string) => {
         const nextLists = await fetchLists();
@@ -363,6 +487,14 @@ function Watchlist({ id, onRemove }: Props) {
     }, [id, items]);
 
     useEffect(() => {
+        priceByTickerStateRef.current = priceByTicker;
+    }, [priceByTicker]);
+
+    useEffect(() => {
+        quotesByTickerStateRef.current = quotesByTicker;
+    }, [quotesByTicker]);
+
+    useEffect(() => {
         const nextSymbols = new Set<string>();
         for (const item of items) {
             const symbol = item.ticker.trim().toUpperCase();
@@ -379,59 +511,26 @@ function Watchlist({ id, onRemove }: Props) {
 
         setPriceByTicker((prev) => pruneTickerMap(prev, nextSymbols) ?? prev);
         setQuotesByTicker((prev) => pruneTickerMap(prev, nextSymbols) ?? prev);
-    }, [items]);
 
-    const flushPendingPrices = useCallback(() => {
-        priceFlushTimerRef.current = null;
-        if (unmountedRef.current) return;
-
-        const pendingEntries = Object.entries(pendingPriceByTickerRef.current);
-        if (pendingEntries.length === 0) return;
-        pendingPriceByTickerRef.current = {};
-
-        const activeSymbols = activeSymbolsRef.current;
-
-        setPriceByTicker((prev) => {
-            const pruned = pruneTickerMap(prev, activeSymbols);
-            const current = pruned ?? prev;
-            let next = pruned;
-
-            for (const [symbol, value] of pendingEntries) {
-                if (!activeSymbols.has(symbol)) continue;
-                if (current[symbol] === value) continue;
-
-                if (next == null) {
-                    next = { ...current };
-                }
-                next[symbol] = value;
+        const activePulseKeys = new Set<string>();
+        for (const symbol of nextSymbols) {
+            for (const columnId of PULSABLE_COLUMN_IDS) {
+                activePulseKeys.add(createCellPulseKey(symbol, columnId));
             }
+        }
 
-            return next ?? prev;
-        });
-    }, []);
+        for (const key of Object.keys(pulseCellElementByKeyRef.current)) {
+            if (activePulseKeys.has(key)) continue;
+            delete pulseCellElementByKeyRef.current[key];
+            delete pulseCellRefCallbackByKeyRef.current[key];
+            delete pendingPulseByKeyRef.current[key];
+        }
 
-    const schedulePriceFlush = useCallback(() => {
-        if (priceFlushTimerRef.current != null) return;
-
-        priceFlushTimerRef.current = window.setTimeout(
-            flushPendingPrices,
-            PRICE_FLUSH_INTERVAL_MS,
-        );
-    }, [flushPendingPrices]);
-
-    useEffect(() => {
-        const unsubscribe = livePricesClient.onTick((tick) => {
-            if (!Number.isFinite(tick.price)) return;
-            if (!activeSymbolsRef.current.has(tick.symbol)) return;
-
-            pendingPriceByTickerRef.current[tick.symbol] = tick.price;
-            schedulePriceFlush();
-        });
-
-        return () => {
-            unsubscribe();
-        };
-    }, [schedulePriceFlush]);
+        for (const ticker of Object.keys(rowCacheByTickerRef.current)) {
+            if (nextSymbols.has(ticker)) continue;
+            delete rowCacheByTickerRef.current[ticker];
+        }
+    }, [items]);
 
     const clearPulseClasses = useCallback((element: HTMLElement) => {
         element.classList.remove(styles.cellPulse);
@@ -447,21 +546,41 @@ function Watchlist({ id, onRemove }: Props) {
     const dispatchQueuedPulses = useCallback(() => {
         pulseDispatchRafRef.current = null;
         if (unmountedRef.current) return;
+        if (isWidgetInteractingRef.current) return;
 
         const queued = Object.keys(pendingPulseByKeyRef.current);
         if (queued.length === 0) return;
         pendingPulseByKeyRef.current = {};
+
+        let hasElements = false;
 
         for (const key of queued) {
             const element = pulseCellElementByKeyRef.current[key];
             if (!element) continue;
 
             clearPulseClasses(element);
-            // Force a reflow so pulse animation reliably restarts.
-            void element.offsetWidth;
-
-            element.classList.add(styles.cellPulse);
+            pendingPulseElementsRef.current.add(element);
+            hasElements = true;
         }
+
+        if (!hasElements) return;
+
+        if (pulseApplyRafRef.current != null) {
+            window.cancelAnimationFrame(pulseApplyRafRef.current);
+            pulseApplyRafRef.current = null;
+        }
+
+        pulseApplyRafRef.current = window.requestAnimationFrame(() => {
+            pulseApplyRafRef.current = null;
+            if (unmountedRef.current) return;
+
+            const elements = Array.from(pendingPulseElementsRef.current);
+            pendingPulseElementsRef.current.clear();
+
+            for (const element of elements) {
+                element.classList.add(styles.cellPulse);
+            }
+        });
     }, [clearPulseClasses]);
 
     const queueCellPulse = useCallback(
@@ -474,6 +593,112 @@ function Watchlist({ id, onRemove }: Props) {
         },
         [dispatchQueuedPulses],
     );
+
+    const flushPendingPrices = useCallback(() => {
+        priceFlushTimerRef.current = null;
+        if (unmountedRef.current) return;
+        if (isWidgetInteractingRef.current) return;
+
+        const pendingEntries = Object.entries(pendingPriceByTickerRef.current);
+        if (pendingEntries.length === 0) return;
+        pendingPriceByTickerRef.current = {};
+
+        const activeSymbols = activeSymbolsRef.current;
+        const previousPrices = priceByTickerStateRef.current;
+        const previousQuotes = quotesByTickerStateRef.current;
+        const pruned = pruneTickerMap(previousPrices, activeSymbols);
+        const current = pruned ?? previousPrices;
+        let next = current;
+        const changedSymbols: string[] = [];
+
+        for (const [symbol, value] of pendingEntries) {
+            if (!activeSymbols.has(symbol)) continue;
+            if (current[symbol] === value) continue;
+
+            if (next === current) {
+                next = { ...current };
+            }
+            next[symbol] = value;
+            changedSymbols.push(symbol);
+        }
+
+        if (next !== previousPrices) {
+            priceByTickerStateRef.current = next;
+            setPriceByTicker(next);
+        }
+
+        if (!isPageVisible || changedSymbols.length === 0) return;
+
+        for (const symbol of changedSymbols) {
+            const previousSignatures = getPulseSignatures(
+                symbol,
+                previousPrices,
+                previousQuotes,
+            );
+            const nextSignatures = getPulseSignatures(
+                symbol,
+                next,
+                previousQuotes,
+            );
+
+            if (previousSignatures.price !== nextSignatures.price) {
+                queueCellPulse(createCellPulseKey(symbol, "price"));
+            }
+            if (
+                previousSignatures.changePercent !==
+                nextSignatures.changePercent
+            ) {
+                queueCellPulse(createCellPulseKey(symbol, "changePercent"));
+            }
+        }
+    }, [isPageVisible, queueCellPulse]);
+
+    const schedulePriceFlush = useCallback(() => {
+        if (isWidgetInteractingRef.current) return;
+        if (priceFlushTimerRef.current != null) return;
+
+        priceFlushTimerRef.current = window.setTimeout(
+            flushPendingPrices,
+            PRICE_FLUSH_INTERVAL_MS,
+        );
+    }, [flushPendingPrices]);
+
+    useEffect(() => {
+        const unsubscribe = livePricesClient.onTick((tick) => {
+            if (isWidgetInteractingRef.current) return;
+            if (!Number.isFinite(tick.price)) return;
+            if (!activeSymbolsRef.current.has(tick.symbol)) return;
+
+            pendingPriceByTickerRef.current[tick.symbol] = tick.price;
+            schedulePriceFlush();
+        });
+
+        return () => {
+            unsubscribe();
+        };
+    }, [schedulePriceFlush]);
+
+    useEffect(() => {
+        if (!isWidgetInteracting) return;
+
+        if (priceFlushTimerRef.current != null) {
+            window.clearTimeout(priceFlushTimerRef.current);
+            priceFlushTimerRef.current = null;
+        }
+
+        pendingPriceByTickerRef.current = {};
+
+        if (pulseDispatchRafRef.current != null) {
+            window.cancelAnimationFrame(pulseDispatchRafRef.current);
+            pulseDispatchRafRef.current = null;
+        }
+        if (pulseApplyRafRef.current != null) {
+            window.cancelAnimationFrame(pulseApplyRafRef.current);
+            pulseApplyRafRef.current = null;
+        }
+        pendingPulseByKeyRef.current = {};
+        pendingPulseElementsRef.current.clear();
+    }, [isWidgetInteracting]);
 
     const getPulseCellRef = useCallback(
         (ticker: string, columnId: PulsableColumnId) => {
@@ -524,11 +749,19 @@ function Watchlist({ id, onRemove }: Props) {
                 priceFlushTimerRef.current = null;
             }
             pendingPriceByTickerRef.current = {};
+            priceByTickerStateRef.current = {};
+            quotesByTickerStateRef.current = {};
+            rowCacheByTickerRef.current = {};
 
             if (pulseDispatchRafRef.current != null) {
                 window.cancelAnimationFrame(pulseDispatchRafRef.current);
                 pulseDispatchRafRef.current = null;
             }
+            if (pulseApplyRafRef.current != null) {
+                window.cancelAnimationFrame(pulseApplyRafRef.current);
+                pulseApplyRafRef.current = null;
+            }
+            pendingPulseElementsRef.current.clear();
             pendingPulseByKeyRef.current = {};
             for (const element of Object.values(
                 pulseCellElementByKeyRef.current,
@@ -544,99 +777,135 @@ function Watchlist({ id, onRemove }: Props) {
         };
     }, [handlePulseAnimationEnd]);
 
-    const rows = useMemo<ListTableRow[]>(
-        () =>
-            items.map((item) => {
-                const ticker = item.ticker;
-                const livePrice = toFiniteNumber(priceByTicker[ticker]);
-                const quote = quotesByTicker[ticker];
-                const quotePrice = toFiniteNumber(quote?.current_price);
-                const resolvedPrice = livePrice ?? quotePrice;
+    const rows = useMemo<ListTableRow[]>(() => {
+        const cache = rowCacheByTickerRef.current;
+        const activeTickers = new Set<string>();
+        const visibleSet = new Set<string>();
 
-                const previousClose = toFiniteNumber(quote?.previous_close);
-                const open = toFiniteNumber(quote?.open);
-                const dayLow = toFiniteNumber(quote?.day_low);
-                const dayHigh = toFiniteNumber(quote?.day_high);
-                const bid = toFiniteNumber(quote?.bid);
-                const ask = toFiniteNumber(quote?.ask);
-                const volume = toFiniteNumber(quote?.volume);
+        for (const option of columnOptions) {
+            if (!option.visible) continue;
+            visibleSet.add(option.id);
+        }
 
-                const derivedChangePercent =
-                    resolvedPrice !== null &&
-                    previousClose !== null &&
-                    previousClose !== 0
-                        ? ((resolvedPrice - previousClose) / previousClose) *
-                          100
-                        : null;
+        const resolvePreviousClose = visibleSet.has("previousClose");
+        const resolveOpen = visibleSet.has("open");
+        const resolveDayLow = visibleSet.has("dayLow");
+        const resolveDayHigh = visibleSet.has("dayHigh");
+        const resolveBid = visibleSet.has("bid");
+        const resolveAsk = visibleSet.has("ask");
+        const resolveVolume =
+            visibleSet.has("volume") || visibleSet.has("volumeValue");
+        const resolveVolumeValue = visibleSet.has("volumeValue");
 
-                const changePercent =
-                    derivedChangePercent ??
-                    toFiniteNumber(quote?.change_percent);
+        const nextRows = items.map((item) => {
+            const ticker = item.ticker;
+            activeTickers.add(ticker);
 
-                const volumeValue =
-                    toFiniteNumber(quote?.volume_value) ??
-                    (resolvedPrice !== null && volume !== null
-                        ? resolvedPrice * volume
-                        : null);
+            const cached = cache[ticker]?.row;
 
-                return {
-                    ...item,
-                    price: resolvedPrice,
-                    previousClose,
-                    open,
-                    dayLow,
-                    dayHigh,
-                    changePercent,
-                    volume,
-                    volumeValue,
-                    bid,
-                    ask,
-                    isPriceLoading: resolvedPrice === null,
-                };
-            }),
-        [items, priceByTicker, quotesByTicker],
-    );
+            const livePrice = toFiniteNumber(priceByTicker[ticker]);
+            const quote = quotesByTicker[ticker];
+            const quotePrice = toFiniteNumber(quote?.current_price);
+            const resolvedPrice = livePrice ?? quotePrice;
 
-    useEffect(() => {
-        const nextSignatures: Record<string, number | null> = {};
-        const activeKeys = new Set<string>();
-        const changedCellKeys: string[] = [];
-        const previousSignatures = cellSignatureByKeyRef.current;
+            const previousCloseForChange = toFiniteNumber(
+                quote?.previous_close,
+            );
+            const previousClose = resolvePreviousClose
+                ? previousCloseForChange
+                : (cached?.previousClose ?? null);
+            const open = resolveOpen
+                ? toFiniteNumber(quote?.open)
+                : (cached?.open ?? null);
+            const dayLow = resolveDayLow
+                ? toFiniteNumber(quote?.day_low)
+                : (cached?.dayLow ?? null);
+            const dayHigh = resolveDayHigh
+                ? toFiniteNumber(quote?.day_high)
+                : (cached?.dayHigh ?? null);
+            const bid = resolveBid
+                ? toFiniteNumber(quote?.bid)
+                : (cached?.bid ?? null);
+            const ask = resolveAsk
+                ? toFiniteNumber(quote?.ask)
+                : (cached?.ask ?? null);
 
-        for (const row of rows) {
-            const cellValues = getPulsableCellValues(row);
+            const resolvedVolume = resolveVolume
+                ? toFiniteNumber(quote?.volume)
+                : (cached?.volume ?? null);
+            const volume = visibleSet.has("volume")
+                ? resolvedVolume
+                : (cached?.volume ?? null);
 
-            for (const columnId of PULSABLE_COLUMN_IDS) {
-                const key = createCellPulseKey(row.ticker, columnId);
-                const signature = cellValues[columnId];
-                nextSignatures[key] = signature;
-                activeKeys.add(key);
+            const derivedChangePercent =
+                resolvedPrice !== null &&
+                previousCloseForChange !== null &&
+                previousCloseForChange !== 0
+                    ? ((resolvedPrice - previousCloseForChange) /
+                          previousCloseForChange) *
+                      100
+                    : null;
 
-                const previousSignature = previousSignatures[key];
-                if (
-                    previousSignature !== undefined &&
-                    previousSignature !== signature
-                ) {
-                    changedCellKeys.push(key);
-                }
+            const changePercent =
+                derivedChangePercent ?? toFiniteNumber(quote?.change_percent);
+
+            const volumeValue = resolveVolumeValue
+                ? (toFiniteNumber(quote?.volume_value) ??
+                  (resolvedPrice !== null && resolvedVolume !== null
+                      ? resolvedPrice * resolvedVolume
+                      : null))
+                : (cached?.volumeValue ?? null);
+
+            const isPriceLoading = resolvedPrice === null;
+            const signature = toRowSignature([
+                resolvedPrice,
+                changePercent,
+                isPriceLoading,
+                resolvePreviousClose ? previousClose : "hidden",
+                resolveOpen ? open : "hidden",
+                resolveDayLow ? dayLow : "hidden",
+                resolveDayHigh ? dayHigh : "hidden",
+                visibleSet.has("volume") ? volume : "hidden",
+                resolveVolumeValue ? volumeValue : "hidden",
+                resolveBid ? bid : "hidden",
+                resolveAsk ? ask : "hidden",
+            ]);
+
+            const cachedEntry = cache[ticker];
+            if (cachedEntry && cachedEntry.signature === signature) {
+                return cachedEntry.row;
             }
+
+            const nextRow: ListTableRow = {
+                ...item,
+                price: resolvedPrice,
+                previousClose,
+                open,
+                dayLow,
+                dayHigh,
+                changePercent,
+                volume,
+                volumeValue,
+                bid,
+                ask,
+                isPriceLoading,
+            };
+
+            cache[ticker] = {
+                signature,
+                row: nextRow,
+            };
+
+            return nextRow;
+        });
+
+        for (const ticker of Object.keys(cache)) {
+            if (activeTickers.has(ticker)) continue;
+            delete cache[ticker];
         }
 
-        cellSignatureByKeyRef.current = nextSignatures;
-
-        for (const key of Object.keys(pulseCellElementByKeyRef.current)) {
-            if (activeKeys.has(key)) continue;
-            delete pulseCellElementByKeyRef.current[key];
-            delete pulseCellRefCallbackByKeyRef.current[key];
-            delete pendingPulseByKeyRef.current[key];
-        }
-
-        if (changedCellKeys.length === 0) return;
-
-        for (const key of changedCellKeys) {
-            queueCellPulse(key);
-        }
-    }, [rows, queueCellPulse]);
+        return nextRows;
+    }, [items, priceByTicker, quotesByTicker, columnOptions]);
 
     const handleRemoveSymbol = useCallback(
         async (ticker: string) => {
@@ -659,6 +928,7 @@ function Watchlist({ id, onRemove }: Props) {
                     delete next[ticker];
                     return next;
                 });
+                delete rowCacheByTickerRef.current[ticker];
             } catch {
                 setError("Could not remove symbol from list.");
             }
@@ -783,13 +1053,7 @@ function Watchlist({ id, onRemove }: Props) {
                 size: 120,
                 minSize: 96,
                 cell: ({ row }) => (
-                    <span
-                        ref={getPulseCellRef(
-                            row.original.ticker,
-                            "previousClose",
-                        )}
-                        className={styles.mutedValue}
-                    >
+                    <span className={styles.mutedValue}>
                         {formatOptionalPrice(row.original.previousClose)}
                     </span>
                 ),
@@ -812,10 +1076,7 @@ function Watchlist({ id, onRemove }: Props) {
                 size: 100,
                 minSize: 88,
                 cell: ({ row }) => (
-                    <span
-                        ref={getPulseCellRef(row.original.ticker, "open")}
-                        className={styles.mutedValue}
-                    >
+                    <span className={styles.mutedValue}>
                         {formatOptionalPrice(row.original.open)}
                     </span>
                 ),
@@ -838,10 +1099,7 @@ function Watchlist({ id, onRemove }: Props) {
                 size: 100,
                 minSize: 88,
                 cell: ({ row }) => (
-                    <span
-                        ref={getPulseCellRef(row.original.ticker, "dayLow")}
-                        className={styles.mutedValue}
-                    >
+                    <span className={styles.mutedValue}>
                         {formatOptionalPrice(row.original.dayLow)}
                     </span>
                 ),
@@ -864,10 +1122,7 @@ function Watchlist({ id, onRemove }: Props) {
                 size: 100,
                 minSize: 88,
                 cell: ({ row }) => (
-                    <span
-                        ref={getPulseCellRef(row.original.ticker, "dayHigh")}
-                        className={styles.mutedValue}
-                    >
+                    <span className={styles.mutedValue}>
                         {formatOptionalPrice(row.original.dayHigh)}
                     </span>
                 ),
@@ -890,10 +1145,7 @@ function Watchlist({ id, onRemove }: Props) {
                 size: 120,
                 minSize: 96,
                 cell: ({ row }) => (
-                    <span
-                        ref={getPulseCellRef(row.original.ticker, "volume")}
-                        className={styles.mutedValue}
-                    >
+                    <span className={styles.mutedValue}>
                         {formatOptionalWhole(row.original.volume)}
                     </span>
                 ),
@@ -916,13 +1168,7 @@ function Watchlist({ id, onRemove }: Props) {
                 size: 132,
                 minSize: 110,
                 cell: ({ row }) => (
-                    <span
-                        ref={getPulseCellRef(
-                            row.original.ticker,
-                            "volumeValue",
-                        )}
-                        className={styles.mutedValue}
-                    >
+                    <span className={styles.mutedValue}>
                         {formatOptionalWhole(row.original.volumeValue)}
                     </span>
                 ),
@@ -945,10 +1191,7 @@ function Watchlist({ id, onRemove }: Props) {
                 size: 96,
                 minSize: 84,
                 cell: ({ row }) => (
-                    <span
-                        ref={getPulseCellRef(row.original.ticker, "bid")}
-                        className={styles.mutedValue}
-                    >
+                    <span className={styles.mutedValue}>
                         {formatOptionalPrice(row.original.bid)}
                     </span>
                 ),
@@ -971,10 +1214,7 @@ function Watchlist({ id, onRemove }: Props) {
                 size: 96,
                 minSize: 84,
                 cell: ({ row }) => (
-                    <span
-                        ref={getPulseCellRef(row.original.ticker, "ask")}
-                        className={styles.mutedValue}
-                    >
+                    <span className={styles.mutedValue}>
                         {formatOptionalPrice(row.original.ask)}
                     </span>
                 ),
@@ -1189,6 +1429,7 @@ function Watchlist({ id, onRemove }: Props) {
     useEffect(() => {
         if (!activeListId) return;
         if (!isPageVisible) return;
+        if (isWidgetInteracting) return;
         if (requestedQuoteGroups.length === 0) return;
         if (listSymbols.length === 0) return;
 
@@ -1206,6 +1447,7 @@ function Watchlist({ id, onRemove }: Props) {
                     controller.signal,
                 );
                 if (cancelled || controller.signal.aborted) return;
+                if (isWidgetInteractingRef.current) return;
 
                 const nextMap: Record<string, QuoteSnapshot> = {};
                 for (const quote of payload.quotes) {
@@ -1214,7 +1456,44 @@ function Watchlist({ id, onRemove }: Props) {
                     nextMap[symbol] = quote;
                 }
 
+                const previousQuotes = quotesByTickerStateRef.current;
+                const currentPrices = priceByTickerStateRef.current;
+                if (areQuoteMapsEqual(previousQuotes, nextMap)) return;
+
+                const pulseKeys: string[] = [];
+
+                for (const symbol of activeSymbolsRef.current) {
+                    const previousSignatures = getPulseSignatures(
+                        symbol,
+                        currentPrices,
+                        previousQuotes,
+                    );
+                    const nextSignatures = getPulseSignatures(
+                        symbol,
+                        currentPrices,
+                        nextMap,
+                    );
+
+                    if (previousSignatures.price !== nextSignatures.price) {
+                        pulseKeys.push(createCellPulseKey(symbol, "price"));
+                    }
+                    if (
+                        previousSignatures.changePercent !==
+                        nextSignatures.changePercent
+                    ) {
+                        pulseKeys.push(
+                            createCellPulseKey(symbol, "changePercent"),
+                        );
+                    }
+                }
+
+                quotesByTickerStateRef.current = nextMap;
                 setQuotesByTicker(nextMap);
+
+                if (!isPageVisible || pulseKeys.length === 0) return;
+                for (const key of pulseKeys) {
+                    queueCellPulse(key);
+                }
             } catch {
                 if (controller.signal.aborted) return;
             }
@@ -1231,7 +1510,14 @@ function Watchlist({ id, onRemove }: Props) {
             controller.abort();
             window.clearInterval(timer);
         };
-    }, [activeListId, isPageVisible, listSymbolsKey, requestedQuoteGroupsKey]);
+    }, [
+        activeListId,
+        isPageVisible,
+        isWidgetInteracting,
+        listSymbolsKey,
+        requestedQuoteGroupsKey,
+        queueCellPulse,
+    ]);
 
     const handleVisibleColumnsChange = useCallback(
         (nextVisibleIds: string[]) => {
@@ -1301,7 +1587,7 @@ function Watchlist({ id, onRemove }: Props) {
     );
 
     return (
-        <div className={styles.root}>
+        <div ref={rootRef} className={styles.root}>
             <div className={`${styles.handle} widget-handle`}>
                 <div className={styles.widgetTitle}>
                     <ArkPopover.Root

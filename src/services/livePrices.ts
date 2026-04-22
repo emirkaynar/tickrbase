@@ -30,6 +30,8 @@ type PingMessage = {
     requestId: string;
 };
 
+const REPLACE_SEND_DEBOUNCE_MS = 120;
+
 function toWsUrl(apiBase: string): string {
     if (apiBase.startsWith("https://")) {
         return apiBase.replace("https://", "wss://") + "/ws/prices";
@@ -44,6 +46,21 @@ function normalize(symbol: string): string {
     return symbol.trim().toUpperCase();
 }
 
+function areStringSetsEqual(left: Set<string>, right: Set<string>): boolean {
+    if (left === right) return true;
+    if (left.size !== right.size) return false;
+
+    for (const value of left) {
+        if (!right.has(value)) return false;
+    }
+
+    return true;
+}
+
+function buildReplaceKey(symbols: string[], debug: boolean): string {
+    return `${debug ? "1" : "0"}|${symbols.join("\u001f")}`;
+}
+
 class LivePricesClient {
     private ws: WebSocket | null = null;
     private status: LiveStatus = "idle";
@@ -51,9 +68,11 @@ class LivePricesClient {
     private reconnectTimer: number | null = null;
     private reconnectDelayMs = 1000;
     private readonly maxReconnectDelayMs = 30_000;
+    private replaceSendTimer: number | null = null;
     private requestSeq = 0;
     private desiredSymbols = new Set<string>();
     private manualSymbols = new Set<string>();
+    private lastSentReplaceKey = "";
     private symbolsByWidget = new Map<string, Set<string>>();
     private debug = false;
     private readonly tickListeners = new Set<TickListener>();
@@ -75,6 +94,10 @@ class LivePricesClient {
             window.clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
         }
+        if (this.replaceSendTimer !== null) {
+            window.clearTimeout(this.replaceSendTimer);
+            this.replaceSendTimer = null;
+        }
         if (this.ws) {
             this.setStatus("closed");
             this.ws.close();
@@ -83,11 +106,21 @@ class LivePricesClient {
     }
 
     setDesiredSymbols(symbols: string[], options?: { debug?: boolean }): void {
-        this.debug = Boolean(options?.debug);
-        this.manualSymbols = new Set(
+        const nextDebug = Boolean(options?.debug);
+        const nextManualSymbols = new Set(
             symbols.map(normalize).filter((s) => s.length > 0),
         );
-        this.rebuildDesiredSymbols();
+
+        const debugChanged = this.debug !== nextDebug;
+        const manualChanged = !areStringSetsEqual(
+            this.manualSymbols,
+            nextManualSymbols,
+        );
+        if (!debugChanged && !manualChanged) return;
+
+        this.debug = nextDebug;
+        this.manualSymbols = nextManualSymbols;
+        this.rebuildDesiredSymbols(debugChanged);
     }
 
     updateSymbol(widgetId: string, symbol: string): void {
@@ -98,28 +131,45 @@ class LivePricesClient {
         const normalized = symbols
             .map(normalize)
             .filter((symbol) => symbol.length > 0);
+
         if (normalized.length === 0) {
+            if (!this.symbolsByWidget.has(widgetId)) return;
             this.symbolsByWidget.delete(widgetId);
         } else {
-            this.symbolsByWidget.set(widgetId, new Set(normalized));
+            const nextSymbols = new Set(normalized);
+            const previousSymbols = this.symbolsByWidget.get(widgetId);
+            if (
+                previousSymbols != null &&
+                areStringSetsEqual(previousSymbols, nextSymbols)
+            ) {
+                return;
+            }
+
+            this.symbolsByWidget.set(widgetId, nextSymbols);
         }
         this.rebuildDesiredSymbols();
     }
 
     removeWidget(widgetId: string): void {
+        if (!this.symbolsByWidget.has(widgetId)) return;
         this.symbolsByWidget.delete(widgetId);
         this.rebuildDesiredSymbols();
     }
 
-    private rebuildDesiredSymbols(): void {
+    private rebuildDesiredSymbols(forceSend = false): void {
         const next = new Set<string>(this.manualSymbols);
         for (const symbols of this.symbolsByWidget.values()) {
             for (const symbol of symbols) {
                 next.add(symbol);
             }
         }
+
+        if (!forceSend && areStringSetsEqual(this.desiredSymbols, next)) {
+            return;
+        }
+
         this.desiredSymbols = next;
-        this.sendReplace();
+        this.scheduleReplace();
     }
 
     onTick(listener: TickListener): () => void {
@@ -151,7 +201,8 @@ class LivePricesClient {
         ws.onopen = () => {
             this.reconnectDelayMs = 1000;
             this.setStatus("open");
-            this.sendReplace();
+            this.lastSentReplaceKey = "";
+            this.scheduleReplace({ immediate: true, force: true });
         };
 
         ws.onmessage = (event) => {
@@ -217,13 +268,45 @@ class LivePricesClient {
         }, delay);
     }
 
-    private sendReplace(): void {
+    private scheduleReplace(options?: {
+        immediate?: boolean;
+        force?: boolean;
+    }): void {
+        const immediate = options?.immediate === true;
+
+        if (immediate) {
+            if (this.replaceSendTimer !== null) {
+                window.clearTimeout(this.replaceSendTimer);
+                this.replaceSendTimer = null;
+            }
+
+            this.sendReplaceIfNeeded(options?.force === true);
+            return;
+        }
+
+        if (this.replaceSendTimer !== null) return;
+
+        this.replaceSendTimer = window.setTimeout(() => {
+            this.replaceSendTimer = null;
+            this.sendReplaceIfNeeded(false);
+        }, REPLACE_SEND_DEBOUNCE_MS);
+    }
+
+    private sendReplaceIfNeeded(force: boolean): void {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+
+        const symbols = Array.from(this.desiredSymbols).sort();
+        const replaceKey = buildReplaceKey(symbols, this.debug);
+        if (!force && replaceKey === this.lastSentReplaceKey) return;
+
         this.send({
             type: "replace",
             requestId: this.nextRequestId("replace"),
-            symbols: Array.from(this.desiredSymbols).sort(),
+            symbols,
             debug: this.debug,
         });
+
+        this.lastSentReplaceKey = replaceKey;
     }
 
     private send(message: ReplaceMessage | PingMessage): void {

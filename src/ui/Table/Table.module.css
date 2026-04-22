@@ -165,14 +165,29 @@
     background: var(--color-bg-elevated);
 }
 
+.virtualPadRow {
+    pointer-events: none;
+}
+
+.virtualPadCell {
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
 .bodyRow {
     position: relative;
     width: 100%;
-    will-change: transform, box-shadow;
     transition:
         background var(--transition-fast),
         transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
         box-shadow var(--transition-fast);
+}
+
+.bodyRow[data-drag-state="dragging"],
+.bodyRow[data-drag-state="over"],
+.bodyRow[data-drag-state="settled"] {
+    will-change: transform, box-shadow;
 }
 
 .bodyRow[data-draggable="true"] {
@@ -223,10 +238,6 @@
     gap: var(--space-1);
     min-height: 32px;
     padding: var(--space-1-5);
-}
-
-.cellContent:has([data-cell-pulse="true"]) {
-    animation: cellPulse 500ms ease-out;
 }
 
 .cellValue {
@@ -316,11 +327,16 @@
 
 .spacerRow {
     background: var(--color-bg-elevated);
-    will-change: transform, box-shadow;
     transition:
         background var(--transition-fast),
         transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
         box-shadow var(--transition-fast);
+}
+
+.spacerRow[data-drag-state="dragging"],
+.spacerRow[data-drag-state="over"],
+.spacerRow[data-drag-state="settled"] {
+    will-change: transform, box-shadow;
 }
 
 .spacerCell {

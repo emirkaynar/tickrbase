@@ -1,5 +1,12 @@
 import type { ComponentChildren, JSX } from "preact";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { memo } from "preact/compat";
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+} from "preact/hooks";
 import {
     flexRender,
     getCoreRowModel,
@@ -25,6 +32,9 @@ const COLUMN_DRAG_HOLD_DELAY_MS = 100;
 const COLUMN_DRAG_HOLD_TOLERANCE_PX = 6;
 const DEFAULT_LOCKED_COLUMN_IDS: string[] = [];
 const DEFAULT_INITIAL_SPACERS: TableSpacerRow[] = [];
+const VIRTUAL_ROW_HEIGHT_PX = 33;
+const VIRTUAL_OVERSCAN_ROWS = 8;
+const VIRTUAL_MIN_ROWS = 40;
 
 function normalizeSpacerId(id: string): string {
     return id.startsWith(SPACER_PREFIX) ? id : `${SPACER_PREFIX}${id}`;
@@ -212,6 +222,29 @@ function toCssSize(value: number | string | undefined): string | undefined {
     return typeof value === "number" ? `${value}px` : value;
 }
 
+function findScrollParent(element: HTMLElement | null): HTMLElement | null {
+    let current = element?.parentElement ?? null;
+
+    while (current) {
+        const styles = window.getComputedStyle(current);
+        const overflowY = styles.overflowY;
+        const overflow = styles.overflow;
+        const isScrollable =
+            overflowY === "auto" ||
+            overflowY === "scroll" ||
+            overflow === "auto" ||
+            overflow === "scroll";
+
+        if (isScrollable) {
+            return current;
+        }
+
+        current = current.parentElement;
+    }
+
+    return null;
+}
+
 function getDefaultColumnWidth(
     size?: number,
     minSize?: number,
@@ -325,30 +358,33 @@ function DraggableHeader({
 }
 
 type DraggableDataRowProps<TData extends object> = {
+    rowId: string;
     row: Row<TData>;
+    layoutVersion: string;
     stickyColumnId: string;
     draggable: boolean;
     isDragSource: boolean;
     isDropTarget: boolean;
     isSettled: boolean;
-    onDragStart: (event: DragEvent) => void;
-    onDragOver: (event: DragEvent) => void;
-    onDrop: (event: DragEvent) => void;
-    onDragEnd: () => void;
+    onRowDragStart: (rowId: string, event: DragEvent) => void;
+    onRowDragOver: (rowId: string, event: DragEvent) => void;
+    onRowDrop: (event: DragEvent) => void;
+    onRowDragEnd: () => void;
 };
 
 type DraggableSpacerRowProps = {
+    rowId: string;
     spacer: TableSpacerRow;
     colSpan: number;
     draggable: boolean;
     isDragSource: boolean;
     isDropTarget: boolean;
     isSettled: boolean;
-    onDragStart: (event: DragEvent) => void;
-    onDragOver: (event: DragEvent) => void;
-    onDrop: (event: DragEvent) => void;
-    onDragEnd: () => void;
-    onRemove: () => void;
+    onRowDragStart: (rowId: string, event: DragEvent) => void;
+    onRowDragOver: (rowId: string, event: DragEvent) => void;
+    onRowDrop: (event: DragEvent) => void;
+    onRowDragEnd: () => void;
+    onRemoveSpacer: (rowId: string) => void;
 };
 
 type DisplayRow<TData extends object> =
@@ -364,24 +400,42 @@ function getAlignmentClassName(
 }
 
 function DraggableDataRow<TData extends object>({
+    rowId,
     row,
+    layoutVersion,
     stickyColumnId,
     draggable,
     isDragSource,
     isDropTarget,
-    onDragStart,
-    onDragOver,
-    onDrop,
-    onDragEnd,
+    onRowDragStart,
+    onRowDragOver,
+    onRowDrop,
+    onRowDragEnd,
     isSettled,
 }: DraggableDataRowProps<TData>) {
+    void layoutVersion;
+
+    const handleDragStart = useCallback(
+        (event: DragEvent) => {
+            onRowDragStart(rowId, event);
+        },
+        [onRowDragStart, rowId],
+    );
+
+    const handleDragOver = useCallback(
+        (event: DragEvent) => {
+            onRowDragOver(rowId, event);
+        },
+        [onRowDragOver, rowId],
+    );
+
     return (
         <tr
             draggable={draggable}
-            onDragStart={draggable ? (onDragStart as never) : undefined}
-            onDragOver={draggable ? (onDragOver as never) : undefined}
-            onDrop={draggable ? (onDrop as never) : undefined}
-            onDragEnd={draggable ? (onDragEnd as never) : undefined}
+            onDragStart={draggable ? (handleDragStart as never) : undefined}
+            onDragOver={draggable ? (handleDragOver as never) : undefined}
+            onDrop={draggable ? (onRowDrop as never) : undefined}
+            onDragEnd={draggable ? (onRowDragEnd as never) : undefined}
             data-draggable={draggable ? "true" : undefined}
             data-drag-state={
                 isDragSource
@@ -434,26 +488,70 @@ function DraggableDataRow<TData extends object>({
     );
 }
 
+function areDataRowPropsEqual<TData extends object>(
+    prev: DraggableDataRowProps<TData>,
+    next: DraggableDataRowProps<TData>,
+): boolean {
+    return (
+        prev.rowId === next.rowId &&
+        prev.row.original === next.row.original &&
+        prev.layoutVersion === next.layoutVersion &&
+        prev.stickyColumnId === next.stickyColumnId &&
+        prev.draggable === next.draggable &&
+        prev.isDragSource === next.isDragSource &&
+        prev.isDropTarget === next.isDropTarget &&
+        prev.isSettled === next.isSettled &&
+        prev.onRowDragStart === next.onRowDragStart &&
+        prev.onRowDragOver === next.onRowDragOver &&
+        prev.onRowDrop === next.onRowDrop &&
+        prev.onRowDragEnd === next.onRowDragEnd
+    );
+}
+
+const MemoDraggableDataRow = memo(
+    DraggableDataRow as (props: DraggableDataRowProps<object>) => JSX.Element,
+    areDataRowPropsEqual,
+) as typeof DraggableDataRow;
+
 function DraggableSpacerRow({
+    rowId,
     spacer,
     colSpan,
     draggable,
     isDragSource,
     isDropTarget,
     isSettled,
-    onDragStart,
-    onDragOver,
-    onDrop,
-    onDragEnd,
-    onRemove,
+    onRowDragStart,
+    onRowDragOver,
+    onRowDrop,
+    onRowDragEnd,
+    onRemoveSpacer,
 }: DraggableSpacerRowProps) {
+    const handleDragStart = useCallback(
+        (event: DragEvent) => {
+            onRowDragStart(rowId, event);
+        },
+        [onRowDragStart, rowId],
+    );
+
+    const handleDragOver = useCallback(
+        (event: DragEvent) => {
+            onRowDragOver(rowId, event);
+        },
+        [onRowDragOver, rowId],
+    );
+
+    const handleRemove = useCallback(() => {
+        onRemoveSpacer(rowId);
+    }, [onRemoveSpacer, rowId]);
+
     return (
         <tr
             draggable={draggable}
-            onDragStart={draggable ? (onDragStart as never) : undefined}
-            onDragOver={draggable ? (onDragOver as never) : undefined}
-            onDrop={draggable ? (onDrop as never) : undefined}
-            onDragEnd={draggable ? (onDragEnd as never) : undefined}
+            onDragStart={draggable ? (handleDragStart as never) : undefined}
+            onDragOver={draggable ? (handleDragOver as never) : undefined}
+            onDrop={draggable ? (onRowDrop as never) : undefined}
+            onDragEnd={draggable ? (onRowDragEnd as never) : undefined}
             data-draggable={draggable ? "true" : undefined}
             data-drag-state={
                 isDragSource
@@ -484,7 +582,7 @@ function DraggableSpacerRow({
                         }}
                         onClick={(event) => {
                             event.stopPropagation();
-                            onRemove();
+                            handleRemove();
                         }}
                     >
                         Remove
@@ -494,6 +592,28 @@ function DraggableSpacerRow({
         </tr>
     );
 }
+
+function areSpacerRowPropsEqual(
+    prev: DraggableSpacerRowProps,
+    next: DraggableSpacerRowProps,
+): boolean {
+    return (
+        prev.rowId === next.rowId &&
+        prev.spacer === next.spacer &&
+        prev.colSpan === next.colSpan &&
+        prev.draggable === next.draggable &&
+        prev.isDragSource === next.isDragSource &&
+        prev.isDropTarget === next.isDropTarget &&
+        prev.isSettled === next.isSettled &&
+        prev.onRowDragStart === next.onRowDragStart &&
+        prev.onRowDragOver === next.onRowDragOver &&
+        prev.onRowDrop === next.onRowDrop &&
+        prev.onRowDragEnd === next.onRowDragEnd &&
+        prev.onRemoveSpacer === next.onRemoveSpacer
+    );
+}
+
+const MemoDraggableSpacerRow = memo(DraggableSpacerRow, areSpacerRowPropsEqual);
 
 export function Table<TData extends object>({
     rows,
@@ -516,12 +636,18 @@ export function Table<TData extends object>({
     rowStateId,
     onControllerReady,
 }: TableProps<TData>) {
+    const rootRef = useRef<HTMLDivElement | null>(null);
     const [draggingRowId, setDraggingRowId] = useState("");
     const [dragOverRowId, setDragOverRowId] = useState("");
     const [settledRowId, setSettledRowId] = useState("");
     const [draggingColumnId, setDraggingColumnId] = useState("");
     const [dragOverColumnId, setDragOverColumnId] = useState("");
+    const [scrollTop, setScrollTop] = useState(0);
+    const [viewportHeight, setViewportHeight] = useState(0);
     const draggingRowIdRef = useRef("");
+    const dragOverRowIdRef = useRef("");
+    const canReorderRowsRef = useRef(false);
+    const allRowIdsRef = useRef<string[]>([]);
     const settledRowTimerRef = useRef<number | null>(null);
     const lastSavedPreferencesKeyRef = useRef("");
     const lastSavedRowStateKeyRef = useRef("");
@@ -1092,6 +1218,12 @@ export function Table<TData extends object>({
     const visibleLeafColumns = table.getVisibleLeafColumns();
     const renderedColumnCount = Math.max(visibleLeafColumns.length + 1, 1);
     const tableRows = table.getRowModel().rows;
+    const rowLayoutVersion = useMemo(() => {
+        const parts = visibleLeafColumns.map(
+            (column) => `${column.id}:${column.getSize()}`,
+        );
+        return `${stickyColumnId}|${parts.join("|")}`;
+    }, [visibleLeafColumns, stickyColumnId]);
     const tableRowsById = useMemo(() => {
         const map = new Map<string, Row<TData>>();
         for (const row of tableRows) {
@@ -1111,6 +1243,11 @@ export function Table<TData extends object>({
     const canReorderRows =
         enableRowReorder &&
         (!_disableRowReorderWhenSorted || !hasActiveSorting);
+
+    dragOverRowIdRef.current = dragOverRowId;
+    canReorderRowsRef.current = canReorderRows;
+    allRowIdsRef.current = allRowIds;
+
     const orderedDisplayRows = useMemo<DisplayRow<TData>[]>(() => {
         const next: DisplayRow<TData>[] = [];
 
@@ -1130,6 +1267,89 @@ export function Table<TData extends object>({
         return next;
     }, [orderedRowIds, tableRowsById, spacerById]);
 
+    useEffect(() => {
+        const rootElement = rootRef.current;
+        if (!rootElement) return;
+
+        const scrollParent = findScrollParent(rootElement);
+        if (!scrollParent) return;
+
+        let rafId = 0;
+
+        const syncMetrics = () => {
+            rafId = 0;
+            setScrollTop(scrollParent.scrollTop);
+            setViewportHeight(scrollParent.clientHeight);
+        };
+
+        const queueSync = () => {
+            if (rafId !== 0) return;
+            rafId = window.requestAnimationFrame(syncMetrics);
+        };
+
+        queueSync();
+        scrollParent.addEventListener("scroll", queueSync, { passive: true });
+        window.addEventListener("resize", queueSync);
+
+        const resizeObserver = new ResizeObserver(() => {
+            queueSync();
+        });
+        resizeObserver.observe(scrollParent);
+
+        return () => {
+            scrollParent.removeEventListener("scroll", queueSync);
+            window.removeEventListener("resize", queueSync);
+            resizeObserver.disconnect();
+            if (rafId !== 0) {
+                window.cancelAnimationFrame(rafId);
+            }
+        };
+    }, []);
+
+    const sortedDisplayRows = useMemo<DisplayRow<TData>[]>(
+        () => tableRows.map((row) => ({ kind: "data", id: row.id, row })),
+        [tableRows],
+    );
+
+    const displayRows = hasActiveSorting
+        ? sortedDisplayRows
+        : orderedDisplayRows;
+
+    const virtualized =
+        !draggingRowId &&
+        displayRows.length >= VIRTUAL_MIN_ROWS &&
+        viewportHeight > 0;
+
+    const safeScrollTop = Math.max(scrollTop, 0);
+    const virtualStartIndex = virtualized
+        ? Math.max(
+              Math.floor(safeScrollTop / VIRTUAL_ROW_HEIGHT_PX) -
+                  VIRTUAL_OVERSCAN_ROWS,
+              0,
+          )
+        : 0;
+
+    const virtualVisibleCount = virtualized
+        ? Math.ceil(viewportHeight / VIRTUAL_ROW_HEIGHT_PX) +
+          VIRTUAL_OVERSCAN_ROWS * 2
+        : displayRows.length;
+
+    const virtualEndIndex = virtualized
+        ? Math.min(virtualStartIndex + virtualVisibleCount, displayRows.length)
+        : displayRows.length;
+
+    const topVirtualPadding = virtualized
+        ? virtualStartIndex * VIRTUAL_ROW_HEIGHT_PX
+        : 0;
+    const bottomVirtualPadding = virtualized
+        ? Math.max(displayRows.length - virtualEndIndex, 0) *
+          VIRTUAL_ROW_HEIGHT_PX
+        : 0;
+
+    const renderedDisplayRows = virtualized
+        ? displayRows.slice(virtualStartIndex, virtualEndIndex)
+        : displayRows;
+
     const markRowSettled = (rowId: string) => {
         if (!rowId) return;
 
@@ -1147,6 +1367,7 @@ export function Table<TData extends object>({
 
     const resetRowDragState = (settledId?: string) => {
         draggingRowIdRef.current = "";
+        dragOverRowIdRef.current = "";
         setDraggingRowId("");
         setDragOverRowId("");
         if (settledId) {
@@ -1154,49 +1375,61 @@ export function Table<TData extends object>({
         }
     };
 
-    const handleRowDragStart = (rowId: string, event: DragEvent) => {
-        if (!canReorderRows) return;
+    const handleRowDragStart = useCallback(
+        (rowId: string, event: DragEvent) => {
+            if (!canReorderRowsRef.current) return;
 
-        draggingRowIdRef.current = rowId;
-        setDraggingRowId(rowId);
-        setDragOverRowId(rowId);
+            draggingRowIdRef.current = rowId;
+            dragOverRowIdRef.current = rowId;
+            setDraggingRowId(rowId);
+            setDragOverRowId(rowId);
 
-        if (event.dataTransfer) {
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/plain", rowId);
-        }
-    };
+            if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData("text/plain", rowId);
+            }
+        },
+        [],
+    );
 
-    const handleRowDragOver = (targetRowId: string, event: DragEvent) => {
-        if (!canReorderRows) return;
+    const handleRowDragOver = useCallback(
+        (targetRowId: string, event: DragEvent) => {
+            if (!canReorderRowsRef.current) return;
 
-        const sourceRowId =
-            draggingRowIdRef.current ||
-            event.dataTransfer?.getData("text/plain") ||
-            "";
+            const sourceRowId =
+                draggingRowIdRef.current ||
+                event.dataTransfer?.getData("text/plain") ||
+                "";
 
-        if (!sourceRowId || sourceRowId === targetRowId) return;
+            if (!sourceRowId || sourceRowId === targetRowId) return;
 
-        event.preventDefault();
+            event.preventDefault();
 
-        if (dragOverRowId === targetRowId) return;
+            if (dragOverRowIdRef.current === targetRowId) return;
 
-        setDragOverRowId(targetRowId);
+            dragOverRowIdRef.current = targetRowId;
 
-        setRowOrder((prev) => {
-            const normalized = normalizeRowOrder(prev, allRowIds);
-            return moveById(normalized, sourceRowId, targetRowId);
-        });
-    };
+            setDragOverRowId(targetRowId);
 
-    const handleRowDrop = (event: DragEvent) => {
+            setRowOrder((prev) => {
+                const normalized = normalizeRowOrder(
+                    prev,
+                    allRowIdsRef.current,
+                );
+                return moveById(normalized, sourceRowId, targetRowId);
+            });
+        },
+        [],
+    );
+
+    const handleRowDrop = useCallback((event: DragEvent) => {
         event.preventDefault();
         resetRowDragState(draggingRowIdRef.current);
-    };
+    }, []);
 
-    const handleRowDragEnd = () => {
+    const handleRowDragEnd = useCallback(() => {
         resetRowDragState(draggingRowIdRef.current);
-    };
+    }, []);
 
     const clearColumnDragHoldTimer = () => {
         if (columnDragHoldTimerRef.current == null) return;
@@ -1494,6 +1727,7 @@ export function Table<TData extends object>({
     return (
         <>
             <div
+                ref={rootRef}
                 className={cx(
                     styles.root,
                     variant === "widget" ? styles.widget : styles.full,
@@ -1704,42 +1938,7 @@ export function Table<TData extends object>({
                     </thead>
 
                     <tbody className={styles.body}>
-                        {hasActiveSorting ? (
-                            tableRows.length === 0 ? (
-                                <tr>
-                                    <td
-                                        colSpan={renderedColumnCount}
-                                        className={styles.emptyCell}
-                                    >
-                                        {emptyMessage}
-                                    </td>
-                                </tr>
-                            ) : (
-                                tableRows.map((row) => (
-                                    <DraggableDataRow
-                                        key={row.id}
-                                        row={row}
-                                        stickyColumnId={stickyColumnId}
-                                        draggable={canReorderRows}
-                                        isDragSource={draggingRowId === row.id}
-                                        isDropTarget={
-                                            Boolean(draggingRowId) &&
-                                            dragOverRowId === row.id &&
-                                            draggingRowId !== row.id
-                                        }
-                                        isSettled={settledRowId === row.id}
-                                        onDragStart={(event) =>
-                                            handleRowDragStart(row.id, event)
-                                        }
-                                        onDragOver={(event) =>
-                                            handleRowDragOver(row.id, event)
-                                        }
-                                        onDrop={handleRowDrop}
-                                        onDragEnd={handleRowDragEnd}
-                                    />
-                                ))
-                            )
-                        ) : orderedDisplayRows.length === 0 ? (
+                        {displayRows.length === 0 ? (
                             <tr>
                                 <td
                                     colSpan={renderedColumnCount}
@@ -1749,78 +1948,95 @@ export function Table<TData extends object>({
                                 </td>
                             </tr>
                         ) : (
-                            orderedDisplayRows.map((displayRow) =>
-                                displayRow.kind === "data" ? (
-                                    <DraggableDataRow
-                                        key={displayRow.id}
-                                        row={displayRow.row}
-                                        stickyColumnId={stickyColumnId}
-                                        draggable={canReorderRows}
-                                        isDragSource={
-                                            draggingRowId === displayRow.id
-                                        }
-                                        isDropTarget={
-                                            Boolean(draggingRowId) &&
-                                            dragOverRowId === displayRow.id &&
-                                            draggingRowId !== displayRow.id
-                                        }
-                                        isSettled={
-                                            settledRowId === displayRow.id
-                                        }
-                                        onDragStart={(event) =>
-                                            handleRowDragStart(
-                                                displayRow.id,
-                                                event,
-                                            )
-                                        }
-                                        onDragOver={(event) =>
-                                            handleRowDragOver(
-                                                displayRow.id,
-                                                event,
-                                            )
-                                        }
-                                        onDrop={handleRowDrop}
-                                        onDragEnd={handleRowDragEnd}
-                                    />
-                                ) : (
-                                    <DraggableSpacerRow
-                                        key={displayRow.id}
-                                        spacer={displayRow.spacer}
-                                        colSpan={renderedColumnCount}
-                                        draggable={canReorderRows}
-                                        isDragSource={
-                                            draggingRowId === displayRow.id
-                                        }
-                                        isDropTarget={
-                                            Boolean(draggingRowId) &&
-                                            dragOverRowId === displayRow.id &&
-                                            draggingRowId !== displayRow.id
-                                        }
-                                        isSettled={
-                                            settledRowId === displayRow.id
-                                        }
-                                        onDragStart={(event) =>
-                                            handleRowDragStart(
-                                                displayRow.id,
-                                                event,
-                                            )
-                                        }
-                                        onDragOver={(event) =>
-                                            handleRowDragOver(
-                                                displayRow.id,
-                                                event,
-                                            )
-                                        }
-                                        onDrop={handleRowDrop}
-                                        onDragEnd={handleRowDragEnd}
-                                        onRemove={() =>
-                                            controller.removeSpacer(
-                                                displayRow.id,
-                                            )
-                                        }
-                                    />
-                                ),
-                            )
+                            <>
+                                {topVirtualPadding > 0 ? (
+                                    <tr
+                                        key="virtual-pad-top"
+                                        className={styles.virtualPadRow}
+                                        aria-hidden="true"
+                                    >
+                                        <td
+                                            colSpan={renderedColumnCount}
+                                            className={styles.virtualPadCell}
+                                            style={{
+                                                height: `${topVirtualPadding}px`,
+                                            }}
+                                        />
+                                    </tr>
+                                ) : null}
+
+                                {renderedDisplayRows.map((displayRow) =>
+                                    displayRow.kind === "data" ? (
+                                        <MemoDraggableDataRow
+                                            key={displayRow.id}
+                                            rowId={displayRow.id}
+                                            row={displayRow.row}
+                                            layoutVersion={rowLayoutVersion}
+                                            stickyColumnId={stickyColumnId}
+                                            draggable={canReorderRows}
+                                            isDragSource={
+                                                draggingRowId === displayRow.id
+                                            }
+                                            isDropTarget={
+                                                Boolean(draggingRowId) &&
+                                                dragOverRowId ===
+                                                    displayRow.id &&
+                                                draggingRowId !== displayRow.id
+                                            }
+                                            isSettled={
+                                                settledRowId === displayRow.id
+                                            }
+                                            onRowDragStart={handleRowDragStart}
+                                            onRowDragOver={handleRowDragOver}
+                                            onRowDrop={handleRowDrop}
+                                            onRowDragEnd={handleRowDragEnd}
+                                        />
+                                    ) : (
+                                        <MemoDraggableSpacerRow
+                                            key={displayRow.id}
+                                            rowId={displayRow.id}
+                                            spacer={displayRow.spacer}
+                                            colSpan={renderedColumnCount}
+                                            draggable={canReorderRows}
+                                            isDragSource={
+                                                draggingRowId === displayRow.id
+                                            }
+                                            isDropTarget={
+                                                Boolean(draggingRowId) &&
+                                                dragOverRowId ===
+                                                    displayRow.id &&
+                                                draggingRowId !== displayRow.id
+                                            }
+                                            isSettled={
+                                                settledRowId === displayRow.id
+                                            }
+                                            onRowDragStart={handleRowDragStart}
+                                            onRowDragOver={handleRowDragOver}
+                                            onRowDrop={handleRowDrop}
+                                            onRowDragEnd={handleRowDragEnd}
+                                            onRemoveSpacer={
+                                                controller.removeSpacer
+                                            }
+                                        />
+                                    ),
+                                )}
+
+                                {bottomVirtualPadding > 0 ? (
+                                    <tr
+                                        key="virtual-pad-bottom"
+                                        className={styles.virtualPadRow}
+                                        aria-hidden="true"
+                                    >
+                                        <td
+                                            colSpan={renderedColumnCount}
+                                            className={styles.virtualPadCell}
+                                            style={{
+                                                height: `${bottomVirtualPadding}px`,
+                                            }}
+                                        />
+                                    </tr>
+                                ) : null}
+                            </>
                         )}
                     </tbody>
                 </table>
