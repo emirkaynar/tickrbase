@@ -34,7 +34,7 @@ const DEFAULT_LOCKED_COLUMN_IDS: string[] = [];
 const DEFAULT_INITIAL_SPACERS: TableSpacerRow[] = [];
 const VIRTUAL_ROW_HEIGHT_PX = 33;
 const VIRTUAL_OVERSCAN_ROWS = 8;
-const VIRTUAL_MIN_ROWS = 40;
+const VIRTUAL_MIN_ROWS = 2;
 
 function normalizeSpacerId(id: string): string {
     return id.startsWith(SPACER_PREFIX) ? id : `${SPACER_PREFIX}${id}`;
@@ -469,7 +469,10 @@ function DraggableDataRow<TData extends object>({
                         }}
                         className={cx(styles.cell, sticky && styles.stickyCell)}
                     >
-                        <div className={cx(styles.cellContent, alignClassName)}>
+                        <div
+                            className={cx(styles.cellContent, alignClassName)}
+                            data-pulse-host="true"
+                        >
                             <span
                                 className={cx(styles.cellValue, alignClassName)}
                             >
@@ -1009,19 +1012,33 @@ export function Table<TData extends object>({
             try {
                 const persisted =
                     await db.tableRowState.get(effectiveRowStateId);
-                if (!active || !persisted) return;
+                if (!active) return;
 
-                const loadedSpacers = normalizeSpacerRows(persisted.spacers);
-                // Keep persisted ordering as-is during hydrate. Rows may not be
-                // loaded yet; normalizing too early can drop IDs permanently.
-                const loadedRowOrder = uniqueOrdered(persisted.rowOrder);
+                if (persisted) {
+                    const loadedSpacers = normalizeSpacerRows(
+                        persisted.spacers,
+                    );
+                    // Keep persisted ordering as-is during hydrate. Rows may not
+                    // be loaded yet; normalizing too early can drop IDs
+                    // permanently.
+                    const loadedRowOrder = uniqueOrdered(persisted.rowOrder);
 
-                setRowOrder(loadedRowOrder);
-                setSpacers(loadedSpacers);
-                lastSavedRowStateKeyRef.current = JSON.stringify({
-                    rowOrder: loadedRowOrder,
-                    spacers: loadedSpacers,
-                });
+                    setRowOrder(loadedRowOrder);
+                    setSpacers(loadedSpacers);
+                    lastSavedRowStateKeyRef.current = JSON.stringify({
+                        rowOrder: loadedRowOrder,
+                        spacers: loadedSpacers,
+                    });
+
+                    return;
+                }
+
+                // If this row-state scope has never been saved, clear previous
+                // scope state so spacers/order cannot leak across list switches.
+                const clearedSpacers = normalizeSpacerRows(defaultSpacers);
+                setRowOrder([]);
+                setSpacers(clearedSpacers);
+                lastSavedRowStateKeyRef.current = "";
             } catch (error) {
                 console.warn("[Table] Failed to hydrate row state", error);
             } finally {
@@ -1036,7 +1053,7 @@ export function Table<TData extends object>({
         return () => {
             active = false;
         };
-    }, [effectiveRowStateId]);
+    }, [effectiveRowStateId, defaultSpacers]);
 
     useEffect(() => {
         if (!rowStateHydrated) return;
@@ -1074,26 +1091,16 @@ export function Table<TData extends object>({
             const now = Date.now();
 
             try {
-                const updated = await db.tableRowState.update(
-                    effectiveRowStateId,
-                    {
-                        rowOrder: persistedRowOrder,
-                        spacers: persistedSpacers,
-                        updatedAt: now,
-                    },
-                );
+                const existing =
+                    await db.tableRowState.get(effectiveRowStateId);
 
-                if (!active) return;
-
-                if (updated === 0) {
-                    await db.tableRowState.put({
-                        id: effectiveRowStateId,
-                        rowOrder: persistedRowOrder,
-                        spacers: persistedSpacers,
-                        createdAt: now,
-                        updatedAt: now,
-                    });
-                }
+                await db.tableRowState.put({
+                    id: effectiveRowStateId,
+                    rowOrder: persistedRowOrder,
+                    spacers: persistedSpacers,
+                    createdAt: existing?.createdAt ?? now,
+                    updatedAt: now,
+                });
 
                 if (active) {
                     lastSavedRowStateKeyRef.current = nextRowStateKey;

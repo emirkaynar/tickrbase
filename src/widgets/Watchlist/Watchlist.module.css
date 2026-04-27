@@ -298,10 +298,30 @@
     font-variant-numeric: tabular-nums;
 }
 
-.cellPulse {
-    animation: cell-value-pulse 320ms ease-out;
-    will-change: background-color;
+.cellPulseBase {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
     --pulse-flash: color-mix(in hsl, var(--color-text-muted), transparent 84%);
+}
+
+.cellPulseBase::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: var(--pulse-flash);
+    opacity: 0;
+}
+
+.cellPulseActive::after {
+    animation: cell-value-pulse 320ms ease-out;
+}
+
+.cellPulseBase > * {
+    position: relative;
+    z-index: 1;
 }
 
 .errorState {
@@ -483,9 +503,9 @@
 
 @keyframes cell-value-pulse {
     from {
-        background-color: var(--pulse-flash);
+        opacity: 1;
     }
     to {
-        background-color: transparent;
+        opacity: 0;
     }
 }

@@ -29,5 +29,7 @@ dist-ssr
 *.sln
 *.sw?
 .agents
+.gemini
+GEMINI.md
 .venv
 skills-lock.json

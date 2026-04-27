@@ -72,7 +72,9 @@ type ListTableRow = ListItem & {
 const LISTS_LOCKED_COLUMN_IDS = ["symbol", "actions"];
 const SNAPSHOT_REFRESH_MS = 15_000;
 const PRICE_FLUSH_INTERVAL_MS = 1000;
+const MAX_PULSE_KEYS_PER_FRAME = 8;
 const PULSABLE_COLUMN_IDS = ["price", "changePercent"] as const;
+const PULSE_HOST_SELECTOR = '[data-pulse-host="true"]';
 
 type PulsableColumnId = (typeof PULSABLE_COLUMN_IDS)[number];
 
@@ -521,6 +523,17 @@ function Watchlist({ id, onRemove }: Props) {
 
         for (const key of Object.keys(pulseCellElementByKeyRef.current)) {
             if (activePulseKeys.has(key)) continue;
+
+            const element = pulseCellElementByKeyRef.current[key];
+            if (element) {
+                element.removeEventListener(
+                    "animationend",
+                    handlePulseAnimationEnd,
+                );
+                element.classList.remove(styles.cellPulseActive);
+                element.classList.remove(styles.cellPulseBase);
+            }
+
             delete pulseCellElementByKeyRef.current[key];
             delete pulseCellRefCallbackByKeyRef.current[key];
             delete pendingPulseByKeyRef.current[key];
@@ -532,8 +545,12 @@ function Watchlist({ id, onRemove }: Props) {
         }
     }, [items]);
 
+    const ensurePulseCellBaseClass = useCallback((element: HTMLElement) => {
+        element.classList.add(styles.cellPulseBase);
+    }, []);
+
     const clearPulseClasses = useCallback((element: HTMLElement) => {
-        element.classList.remove(styles.cellPulse);
+        element.classList.remove(styles.cellPulseActive);
     }, []);
 
     const handlePulseAnimationEnd = useCallback(
@@ -550,20 +567,40 @@ function Watchlist({ id, onRemove }: Props) {
 
         const queued = Object.keys(pendingPulseByKeyRef.current);
         if (queued.length === 0) return;
-        pendingPulseByKeyRef.current = {};
+
+        const batchSize = Math.min(MAX_PULSE_KEYS_PER_FRAME, queued.length);
+        const batch = queued.slice(0, batchSize);
+        const hasMoreQueued = queued.length > batchSize;
+
+        if (hasMoreQueued) {
+            const remaining: Record<string, true> = {};
+            for (let i = batchSize; i < queued.length; i += 1) {
+                remaining[queued[i]] = true;
+            }
+            pendingPulseByKeyRef.current = remaining;
+        } else {
+            pendingPulseByKeyRef.current = {};
+        }
 
         let hasElements = false;
 
-        for (const key of queued) {
+        for (const key of batch) {
             const element = pulseCellElementByKeyRef.current[key];
             if (!element) continue;
 
+            ensurePulseCellBaseClass(element);
             clearPulseClasses(element);
             pendingPulseElementsRef.current.add(element);
             hasElements = true;
         }
 
-        if (!hasElements) return;
+        if (!hasElements) {
+            if (hasMoreQueued && pulseDispatchRafRef.current == null) {
+                pulseDispatchRafRef.current =
+                    window.requestAnimationFrame(dispatchQueuedPulses);
+            }
+            return;
+        }
 
         if (pulseApplyRafRef.current != null) {
             window.cancelAnimationFrame(pulseApplyRafRef.current);
@@ -578,10 +615,15 @@ function Watchlist({ id, onRemove }: Props) {
             pendingPulseElementsRef.current.clear();
 
             for (const element of elements) {
-                element.classList.add(styles.cellPulse);
+                element.classList.add(styles.cellPulseActive);
+            }
+
+            if (hasMoreQueued && pulseDispatchRafRef.current == null) {
+                pulseDispatchRafRef.current =
+                    window.requestAnimationFrame(dispatchQueuedPulses);
             }
         });
-    }, [clearPulseClasses]);
+    }, [clearPulseClasses, ensurePulseCellBaseClass]);
 
     const queueCellPulse = useCallback(
         (key: string) => {
@@ -708,10 +750,10 @@ function Watchlist({ id, onRemove }: Props) {
 
             const callback = (element: HTMLSpanElement | null) => {
                 const previous = pulseCellElementByKeyRef.current[key];
+                const hostCandidate = element?.closest(PULSE_HOST_SELECTOR);
                 const next =
-                    element?.parentElement?.parentElement instanceof
-                    HTMLDivElement
-                        ? element.parentElement.parentElement
+                    hostCandidate instanceof HTMLDivElement
+                        ? hostCandidate
                         : null;
 
                 if (previous && previous !== next) {
@@ -719,9 +761,12 @@ function Watchlist({ id, onRemove }: Props) {
                         "animationend",
                         handlePulseAnimationEnd,
                     );
+                    previous.classList.remove(styles.cellPulseActive);
+                    previous.classList.remove(styles.cellPulseBase);
                 }
 
                 if (next) {
+                    ensurePulseCellBaseClass(next);
                     if (previous !== next) {
                         next.addEventListener(
                             "animationend",
@@ -737,7 +782,7 @@ function Watchlist({ id, onRemove }: Props) {
             pulseCellRefCallbackByKeyRef.current[key] = callback;
             return callback;
         },
-        [handlePulseAnimationEnd],
+        [ensurePulseCellBaseClass, handlePulseAnimationEnd],
     );
 
     useEffect(() => {
@@ -771,6 +816,8 @@ function Watchlist({ id, onRemove }: Props) {
                     "animationend",
                     handlePulseAnimationEnd,
                 );
+                element.classList.remove(styles.cellPulseActive);
+                element.classList.remove(styles.cellPulseBase);
             }
             pulseCellElementByKeyRef.current = {};
             pulseCellRefCallbackByKeyRef.current = {};
