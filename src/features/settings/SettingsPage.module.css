@@ -1,27 +1,72 @@
 .root {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: flex-start;
-    padding: var(--space-8);
-    box-sizing: border-box;
+    padding: 2rem;
+    max-width: 800px;
+    margin: 0 auto;
 }
 
 .header {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+    margin-bottom: 2rem;
 }
 
 .title {
-    font-size: var(--font-size-xl);
-    color: var(--color-text);
+    font-size: 1.5rem;
     font-weight: 600;
-    margin: 0;
+    margin-bottom: 0.5rem;
 }
 
 .subtitle {
-    font-size: var(--font-size-sm);
     color: var(--color-text-muted);
-    margin: 0;
+}
+
+.section {
+    margin-bottom: 2.5rem;
+}
+
+.sectionTitle {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.settingsList {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.settingItem {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2rem;
+}
+
+.settingInfo {
+    flex: 1;
+}
+
+.settingLabel {
+    font-weight: 500;
+    margin-bottom: 0.25rem;
+}
+
+.settingDescription {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    line-height: 1.4;
+}
+
+.settingControl {
+    padding-top: 0.25rem;
+}
+
+.readOnlyValue {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    font-style: italic;
 }

@@ -43,6 +43,7 @@ import {
 } from "../../services/watchlist";
 import { fetchQuotes } from "../../services/quotes";
 import { livePricesClient } from "../../services/livePrices";
+import { getSettingValue } from "../../services/settings";
 import type {
     ListItem,
     ListRecord,
@@ -287,9 +288,18 @@ function Watchlist({ id, onRemove }: Props) {
     const [lists, setLists] = useState<ListRecord[]>([]);
     const [activeListId, setActiveListId] = useState("");
     const [items, setItems] = useState<ListItem[]>([]);
+    const [disablePulse, setDisablePulse] = useState(false);
     const [priceByTicker, setPriceByTicker] = useState<Record<string, number>>(
         {},
     );
+
+    useEffect(() => {
+        const load = async () => {
+            const value = await getSettingValue<boolean>("watchlist.disablePulse");
+            setDisablePulse(value);
+        };
+        void load();
+    }, []);
     const [quotesByTicker, setQuotesByTicker] = useState<
         Record<string, QuoteSnapshot>
     >({});
@@ -627,13 +637,14 @@ function Watchlist({ id, onRemove }: Props) {
 
     const queueCellPulse = useCallback(
         (key: string) => {
+            if (disablePulse) return;
             pendingPulseByKeyRef.current[key] = true;
             if (pulseDispatchRafRef.current != null) return;
 
             pulseDispatchRafRef.current =
                 window.requestAnimationFrame(dispatchQueuedPulses);
         },
-        [dispatchQueuedPulses],
+        [dispatchQueuedPulses, disablePulse],
     );
 
     const flushPendingPrices = useCallback(() => {
@@ -669,7 +680,7 @@ function Watchlist({ id, onRemove }: Props) {
             setPriceByTicker(next);
         }
 
-        if (!isPageVisible || changedSymbols.length === 0) return;
+        if (disablePulse || !isPageVisible || changedSymbols.length === 0) return;
 
         for (const symbol of changedSymbols) {
             const previousSignatures = getPulseSignatures(
@@ -693,7 +704,7 @@ function Watchlist({ id, onRemove }: Props) {
                 queueCellPulse(createCellPulseKey(symbol, "changePercent"));
             }
         }
-    }, [isPageVisible, queueCellPulse]);
+    }, [isPageVisible, queueCellPulse, disablePulse]);
 
     const schedulePriceFlush = useCallback(() => {
         if (isWidgetInteractingRef.current) return;
@@ -704,6 +715,26 @@ function Watchlist({ id, onRemove }: Props) {
             PRICE_FLUSH_INTERVAL_MS,
         );
     }, [flushPendingPrices]);
+
+    useEffect(() => {
+        if (!disablePulse) return;
+
+        if (pulseDispatchRafRef.current != null) {
+            window.cancelAnimationFrame(pulseDispatchRafRef.current);
+            pulseDispatchRafRef.current = null;
+        }
+        if (pulseApplyRafRef.current != null) {
+            window.cancelAnimationFrame(pulseApplyRafRef.current);
+            pulseApplyRafRef.current = null;
+        }
+        pendingPulseByKeyRef.current = {};
+        pendingPulseElementsRef.current.clear();
+
+        for (const element of Object.values(pulseCellElementByKeyRef.current)) {
+            if (!element) continue;
+            element.classList.remove(styles.cellPulseActive);
+        }
+    }, [disablePulse]);
 
     useEffect(() => {
         const unsubscribe = livePricesClient.onTick((tick) => {
@@ -1952,6 +1983,17 @@ registerWidget({
     defaultSize: { w: 7, h: 29 },
     minSize: { w: 6, h: 9 },
     component: Watchlist,
+    settings: [
+        {
+            id: "watchlist.disablePulse",
+            groupId: "watchlist",
+            groupLabel: "Lists",
+            type: "boolean",
+            label: "Disable Pulse Animations",
+            description: "Disable real-time price change pulse animations and related calculations for better performance.",
+            defaultValue: false,
+        },
+    ],
 });
 
 export { Watchlist };

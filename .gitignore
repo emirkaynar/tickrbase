@@ -33,3 +33,4 @@ dist-ssr
 GEMINI.md
 .venv
 skills-lock.json
+conductor/

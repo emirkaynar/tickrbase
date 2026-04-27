@@ -95,6 +95,12 @@ export type TablePreferencesRecord = {
     createdAt: number;
 };
 
+export type SettingRecord = {
+    id: string; // Global unique ID
+    value: boolean | number | string;
+    updatedAt: number;
+};
+
 const db = new Dexie("lima") as Dexie & {
     widgetState: EntityTable<WidgetStateRecord, "id">;
     chartState: EntityTable<ChartStateRecord, "widget_id">;
@@ -105,6 +111,7 @@ const db = new Dexie("lima") as Dexie & {
     tableRowState: EntityTable<TableRowStateRecord, "id">;
     lists: EntityTable<ListRecord, "id">;
     listItems: EntityTable<ListItemRecord, "id">;
+    settings: EntityTable<SettingRecord, "id">;
 };
 
 // v1-v7: legacy migrations retained so existing users keep their data
@@ -200,6 +207,22 @@ db.version(12).stores({
     lists: "id, nameLower, order, createdAt, updatedAt",
     listItems: "id, listId, ticker, [listId+ticker], createdAt, updatedAt",
     watchlist: null,
+});
+
+// v13: generic settings storage for global application preferences
+db.version(13).stores({
+    layout: null,
+    widgetState: "id",
+    chartState: "widget_id",
+    screens: "id, order, createdAt",
+    widgets: "id, screenId, type, createdAt",
+    uiState: "id",
+    tablePreferences: "id, scopeType, scopeId, tableId, updatedAt",
+    tableRowState: "id, updatedAt",
+    lists: "id, nameLower, order, createdAt, updatedAt",
+    listItems: "id, listId, ticker, [listId+ticker], createdAt, updatedAt",
+    watchlist: null,
+    settings: "id",
 });
 
 export { db };
