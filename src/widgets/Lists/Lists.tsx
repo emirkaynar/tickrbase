@@ -1917,16 +1917,22 @@ registerWidget({
   defaultSize: { w: 7, h: 29 },
   minSize: { w: 6, h: 9 },
   component: Watchlist,
-  settings: [
+  settingSections: [
     {
-      id: "watchlist.disablePulse",
-      categoryId: "Widgets",
+      category: "Widgets",
+      subcategoryId: "lists",
       subcategoryLabel: "Lists",
-      type: "boolean",
-      label: "Disable Pulse Animations",
-      description:
-        "Disable real-time price change pulse animations and related calculations for better performance.",
-      defaultValue: false,
+      subcategoryIcon: "List",
+      settings: [
+        {
+          id: "watchlist.disablePulse",
+          type: "boolean",
+          label: "Disable Pulse Animations",
+          description:
+            "Disable real-time price change pulse animations and related calculations for better performance.",
+          defaultValue: false,
+        },
+      ],
     },
   ],
 });

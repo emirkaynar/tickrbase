@@ -1,17 +1,38 @@
 import { useEffect, useState } from "preact/hooks";
 import { Tabs as ArkTabs } from "@ark-ui/react/tabs";
+import { Switch as ArkSwitch } from "@ark-ui/react/switch";
 import { Editable as ArkEditable } from "@ark-ui/react/editable";
 import { ScrollArea as ArkScrollArea } from "@ark-ui/react";
+import * as LucideIcons from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import {
   getAllSettings,
   type SettingDefinition,
+  type SettingValue,
 } from "../../settings/registry";
 import { getSettingValue, setSettingValue } from "../../services/settings";
 import styles from "./SettingsPage.module.css";
 
+type LucideIconName = keyof typeof LucideIcons;
+
+type SettingsSection = {
+  key: string;
+  category: string;
+  subcategoryId: string;
+  subcategoryLabel: string;
+  subcategoryIcon?: string;
+  defs: SettingDefinition[];
+};
+
+function getLucideIcon(iconName?: string): LucideIcon | null {
+  if (!iconName) return null;
+  const icon = LucideIcons[iconName as LucideIconName];
+  return typeof icon === "function" ? (icon as LucideIcon) : null;
+}
+
 export function SettingsPage() {
   const [settings, setSettings] = useState<SettingDefinition[]>([]);
-  const [values, setValues] = useState<Record<string, any>>({});
+  const [values, setValues] = useState<Record<string, SettingValue>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,7 +40,7 @@ export function SettingsPage() {
       const allDefs = getAllSettings();
       setSettings(allDefs);
 
-      const nextValues: Record<string, any> = {};
+      const nextValues: Record<string, SettingValue> = {};
       for (const def of allDefs) {
         nextValues[def.id] = await getSettingValue(def.id);
       }
@@ -29,8 +50,7 @@ export function SettingsPage() {
     void load();
   }, []);
 
-  const handleToggle = async (id: string, currentValue: boolean) => {
-    const nextValue = !currentValue;
+  const handleBooleanChange = async (id: string, nextValue: boolean) => {
     setValues((prev) => ({ ...prev, [id]: nextValue }));
     await setSettingValue(id, nextValue);
   };
@@ -38,11 +58,18 @@ export function SettingsPage() {
   const renderSettingControl = (def: SettingDefinition) => {
     if (def.type === "boolean") {
       return (
-        <input
-          type="checkbox"
-          checked={!!values[def.id]}
-          onChange={() => handleToggle(def.id, !!values[def.id])}
-        />
+        <ArkSwitch.Root
+          className={styles.switchRoot}
+          checked={values[def.id] === true}
+          onCheckedChange={(details) => {
+            void handleBooleanChange(def.id, details.checked);
+          }}
+        >
+          <ArkSwitch.HiddenInput />
+          <ArkSwitch.Control className={styles.switchControl}>
+            <ArkSwitch.Thumb className={styles.switchThumb} />
+          </ArkSwitch.Control>
+        </ArkSwitch.Root>
       );
     }
     if (def.type === "string") {
@@ -50,7 +77,7 @@ export function SettingsPage() {
         <ArkEditable.Root
           className={styles.editableRoot}
           placeholder="Enter a description..."
-          value={String(values[def.id]) || ""}
+          value={values[def.id] == null ? "" : String(values[def.id])}
           onValueChange={(details) => {
             setValues((prev) => ({
               ...prev,
@@ -75,10 +102,11 @@ export function SettingsPage() {
       );
     }
     if (def.type === "integer") {
+      const integerValue = values[def.id];
       return (
         <input
           type="number"
-          value={values[def.id] || ""}
+          value={typeof integerValue === "number" ? integerValue : ""}
           onChange={(e) => {
             const nextValue = parseInt(e.currentTarget.value, 10);
             setValues((prev) => ({
@@ -108,25 +136,32 @@ export function SettingsPage() {
 
   const groupedSettings = settings.reduce(
     (acc, def) => {
-      const categoryId = def.categoryId;
-      const subcategoryLabel = def.subcategoryLabel;
+      const categoryId = def.category;
+      const sectionKey = `${categoryId}:${def.subcategoryId}`;
 
       if (!acc[categoryId]) {
         acc[categoryId] = {};
       }
-      if (!acc[categoryId][subcategoryLabel]) {
-        acc[categoryId][subcategoryLabel] = [];
+      if (!acc[categoryId][sectionKey]) {
+        acc[categoryId][sectionKey] = {
+          key: sectionKey,
+          category: categoryId,
+          subcategoryId: def.subcategoryId,
+          subcategoryLabel: def.subcategoryLabel,
+          subcategoryIcon: def.subcategoryIcon,
+          defs: [],
+        };
       }
 
-      acc[categoryId][subcategoryLabel].push(def);
+      acc[categoryId][sectionKey].defs.push(def);
       return acc;
     },
-    {} as Record<string, Record<string, SettingDefinition[]>>,
+    {} as Record<string, Record<string, SettingsSection>>,
   );
 
   const categoryIds = Object.keys(groupedSettings);
   const firstCategoryId = categoryIds[0];
-  const defaultSubcategoryLabel = firstCategoryId
+  const defaultSectionKey = firstCategoryId
     ? Object.keys(groupedSettings[firstCategoryId])[0]
     : undefined;
 
@@ -135,9 +170,9 @@ export function SettingsPage() {
       <div class={styles.header}>
         <h1>Settings</h1>
       </div>
-      {categoryIds.length > 0 && defaultSubcategoryLabel ? (
+      {categoryIds.length > 0 && defaultSectionKey ? (
         <ArkTabs.Root
-          defaultValue={defaultSubcategoryLabel}
+          defaultValue={defaultSectionKey}
           lazyMount
           unmountOnExit
           className={styles.tabsRoot}
@@ -148,23 +183,25 @@ export function SettingsPage() {
               <ArkScrollArea.Content className={styles.scrollContent}>
                 <ArkTabs.List className={styles.tabsList}>
                   {categoryIds.map((categoryId) => {
-                    const subcategoryLabels = Object.keys(
-                      groupedSettings[categoryId],
-                    );
+                    const sections = Object.values(groupedSettings[categoryId]);
 
                     return (
                       <div key={categoryId} className={styles.groupBlock}>
                         <div className={styles.groupTitle}>{categoryId}</div>
                         <div className={styles.groupTabs}>
-                          {subcategoryLabels.map((subcategoryLabel) => (
-                            <ArkTabs.Trigger
-                              key={subcategoryLabel}
-                              value={subcategoryLabel}
-                              className={styles.tabTrigger}
-                            >
-                              {subcategoryLabel}
-                            </ArkTabs.Trigger>
-                          ))}
+                          {sections.map((section) => {
+                            const Icon = getLucideIcon(section.subcategoryIcon);
+                            return (
+                              <ArkTabs.Trigger
+                                key={section.key}
+                                value={section.key}
+                                className={styles.tabTrigger}
+                              >
+                                {Icon ? <Icon size={18} /> : null}
+                                {section.subcategoryLabel}
+                              </ArkTabs.Trigger>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -184,42 +221,40 @@ export function SettingsPage() {
             <ArkScrollArea.Viewport className={styles.scrollViewport}>
               <ArkScrollArea.Content className={styles.scrollContent}>
                 {categoryIds.map((categoryId) =>
-                  Object.entries(groupedSettings[categoryId]).map(
-                    ([subcategoryLabel, defs]) => (
-                      <ArkTabs.Content
-                        key={`${categoryId}:${subcategoryLabel}`}
-                        value={subcategoryLabel}
-                        className={styles.tabContent}
-                      >
-                        <div className={styles.settingsList}>
-                          {defs.map((def) => (
-                            <div
-                              key={def.id}
-                              className={getSettingItemClass(def.type)}
-                            >
-                              <div className={getSettingInfoClass(def.type)}>
-                                <div className={getSettingLabelClass(def.type)}>
-                                  {def.label}
+                  Object.values(groupedSettings[categoryId]).map((section) => (
+                    <ArkTabs.Content
+                      key={section.key}
+                      value={section.key}
+                      className={styles.tabContent}
+                    >
+                      <div className={styles.settingsList}>
+                        {section.defs.map((def) => (
+                          <div
+                            key={def.id}
+                            className={getSettingItemClass(def.type)}
+                          >
+                            <div className={getSettingInfoClass(def.type)}>
+                              <div className={getSettingLabelClass(def.type)}>
+                                {def.label}
+                              </div>
+                              {def.description && (
+                                <div
+                                  className={getSettingDescriptionClass(
+                                    def.type,
+                                  )}
+                                >
+                                  {def.description}
                                 </div>
-                                {def.description && (
-                                  <div
-                                    className={getSettingDescriptionClass(
-                                      def.type,
-                                    )}
-                                  >
-                                    {def.description}
-                                  </div>
-                                )}
-                              </div>
-                              <div className={styles.settingControl}>
-                                {renderSettingControl(def)}
-                              </div>
+                              )}
                             </div>
-                          ))}
-                        </div>
-                      </ArkTabs.Content>
-                    ),
-                  ),
+                            <div className={styles.settingControl}>
+                              {renderSettingControl(def)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </ArkTabs.Content>
+                  ))
                 )}
               </ArkScrollArea.Content>
             </ArkScrollArea.Viewport>

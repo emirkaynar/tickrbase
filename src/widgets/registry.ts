@@ -1,5 +1,9 @@
 import type { ComponentType } from "preact";
-import { registerSetting, type SettingDefinition } from "../settings/registry";
+import {
+    normalizeSettingSections,
+    registerSetting,
+    type SettingSectionDefinition,
+} from "../settings/registry";
 
 export type WidgetType =
     | "basic-chart"
@@ -20,7 +24,7 @@ export type WidgetDefinition = {
     defaultSize: WidgetSize;
     minSize: WidgetSize;
     component: ComponentType<WidgetComponentProps>;
-    settings?: SettingDefinition[];
+    settingSections?: SettingSectionDefinition[];
 };
 
 export type WidgetInstance = {
@@ -42,8 +46,8 @@ const widgetMap = new Map<WidgetType, WidgetDefinition>();
 export function registerWidget(def: WidgetDefinition): void {
     widgetMap.set(def.type, def);
 
-    if (def.settings) {
-        for (const setting of def.settings) {
+    if (def.settingSections) {
+        for (const setting of normalizeSettingSections(def.settingSections)) {
             registerSetting(setting);
         }
     }
