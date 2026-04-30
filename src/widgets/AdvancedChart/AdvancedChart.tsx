@@ -309,6 +309,17 @@ registerWidget({
     defaultSize: { w: 12, h: 12 },
     minSize: { w: 7, h: 8 },
     component: AdvancedChart,
+    settings: [
+        {
+            id: "advancedChart.defaultSymbol",
+            categoryId: "Widgets",
+            subcategoryLabel: "Advanced Chart",
+            type: "string",
+            label: "Default Symbol",
+            description: "The default symbol to show when no symbol is set.",
+            defaultValue: DEFAULT_SYMBOL,
+        },
+    ],
 });
 
 export { AdvancedChart };

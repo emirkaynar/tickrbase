@@ -104,6 +104,29 @@ registerWidget({
     defaultSize: { w: 7, h: 29 },
     minSize: { w: 6, h: 9 },
     component: EconomicCalendar,
+    settings: [
+        {
+            id: "economicCalendar.defaultCountryFilter",
+            categoryId: "Widgets",
+            subcategoryLabel: "Economic Calendar",
+            type: "string",
+            label: "Default Country #todo",
+            description:
+                "Comma-separated list of country codes to show in the calendar by default. See TradingView documentation for valid codes.",
+            defaultValue:
+                "ar,au,br,ca,cn,fr,de,in,id,it,jp,kr,mx,ru,sa,za,tr,gb,us,eu",
+        },
+        {
+            id: "economicCalendar.defaultImportanceFilter",
+            categoryId: "Widgets",
+            subcategoryLabel: "Economic Calendar",
+            type: "boolean",
+            label: "Default Importance #todo",
+            description:
+                "Show only economic events with the selected importance level by default.",
+            defaultValue: false,
+        }
+    ],
 });
 
 export { EconomicCalendar };

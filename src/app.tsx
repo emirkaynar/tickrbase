@@ -4,7 +4,7 @@ import { useEffect, useState } from "preact/hooks";
 import "./widgets/BasicChart/BasicChart";
 import "./widgets/AdvancedChart/AdvancedChart";
 import "./widgets/EconomicCalendar/EconomicCalendar";
-import "./widgets/Watchlist/Watchlist";
+import "./widgets/Lists/Lists";
 
 import { useRouter } from "./router";
 import { useLayout } from "./grid/useLayout";

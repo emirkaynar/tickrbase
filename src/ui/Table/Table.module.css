@@ -399,6 +399,9 @@
 
 .emptyCell {
     padding: var(--space-8) var(--space-4);
+    width: fit-content;
+    position: absolute;
+    display: flex;
     text-align: center;
     color: var(--color-text-muted);
     background: var(--color-bg-elevated);

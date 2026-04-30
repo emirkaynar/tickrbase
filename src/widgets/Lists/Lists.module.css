@@ -316,7 +316,7 @@
 }
 
 .cellPulseActive::after {
-    animation: cell-value-pulse 320ms ease-out;
+    animation: cell-value-pulse 800ms ease-out;
 }
 
 .cellPulseBase > * {

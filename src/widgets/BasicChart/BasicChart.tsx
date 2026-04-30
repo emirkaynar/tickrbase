@@ -182,6 +182,38 @@ registerWidget({
     defaultSize: { w: 11, h: 12 },
     minSize: { w: 7, h: 8 },
     component: BasicChart,
+    settings: [
+        {
+            id: "basicChart.defaultInterval",
+            categoryId: "Widgets",
+            subcategoryLabel: "Basic Chart",
+            type: "string",
+            label: "Default Interval #todo",
+            description:
+                "Default time interval for new charts. Can be overridden per chart using the interval selector in the widget header.",
+            defaultValue: "1d",
+        },
+        {
+            id: "defaultChartSymbol",
+            categoryId: "Widgets",
+            subcategoryLabel: "Basic Chart",
+            type: "string",
+            label: "Default Symbol #todo",
+            description:
+                "Default ticker symbol for new charts. Can be overridden per chart using the ticker selector in the widget header.",
+            defaultValue: "XU100.IS",
+        },
+        {
+            id: "crosshairMode",
+            categoryId: "Widgets",
+            subcategoryLabel: "Basic Chart",
+            type: "integer",
+            label: "Crosshair Mode #todo",
+            description:
+                "Determines how the crosshair behaves on the chart. 0 = normal, 1 = magnet (snaps to nearest data point), 2 = free (does not snap).",
+            defaultValue: 1,
+        }
+    ],
 });
 
 export { BasicChart };
