@@ -39,7 +39,7 @@
     min-width: 22px;
     padding: 0;
     justify-content: center;
-    background: var(--color-bg-elevated);
+    background: transparent;
 }
 
 .iconTrigger:hover,

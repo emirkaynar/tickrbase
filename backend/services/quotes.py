@@ -1,99 +1,83 @@
 from __future__ import annotations
 
+import json
 import time
+import redis.asyncio as aioredis
 
-from ..core.cache import TTLCache
-from ..core.provider import DataProvider
+from ..core.config import QUOTES_TTL_SECONDS
+from ..providers.base import DataProvider
+from ..providers.yahoo import normalize_ticker
 from .prices import iso_timestamp
-
-
-def _normalize_symbol(symbol: str) -> str:
-    return symbol.strip().upper()
 
 
 def normalize_symbols(symbols: list[str]) -> list[str]:
     seen: set[str] = set()
-    ordered: list[str] = []
-
-    for raw in symbols:
-        normalized = _normalize_symbol(raw)
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        ordered.append(normalized)
-
-    return ordered
+    results: list[str] = []
+    for s in symbols:
+        norm = normalize_ticker(s)
+        if norm and norm not in seen:
+            seen.add(norm)
+            results.append(norm)
+    return results
 
 
-def _group_key(groups: set[str]) -> str:
-    return ",".join(sorted(groups))
-
-
-def _cache_key(symbol: str, groups: set[str]) -> str:
-    return f"{symbol}|{_group_key(groups)}"
-
-
-def get_quotes(
+async def get_quotes(
     provider: DataProvider,
-    cache: TTLCache[dict[str, object]],
+    redis: aioredis.Redis,
     symbols: list[str],
-    groups: set[str],
-) -> tuple[list[dict[str, object]], bool, int]:
-    normalized_symbols = normalize_symbols(symbols)
+    fields: set[str],
+) -> tuple[list[dict], bool, int]:
     now = int(time.time())
+    results: list[dict] = []
+    any_stale = False
+    max_fetched_at = 0
+    field_key = ",".join(sorted(fields))
 
-    quotes: list[dict[str, object]] = []
-    stale_any = False
-    latest_fetched_at = 0
+    missing_symbols: list[str] = []
 
-    for symbol in normalized_symbols:
-        key = _cache_key(symbol, groups)
-        cached = cache.get(key)
-
-        if cached and not cached.stale:
-            payload = dict(cached.value)
-            fetched_at = cached.fetched_at
-            stale = False
-        else:
+    for sym in symbols:
+        cache_key = f"quote:{sym}:{field_key}"
+        cached_str = await redis.get(cache_key)
+        if cached_str:
             try:
-                payload, fetched_at = provider.get_quote_snapshot(symbol, groups)
-                cache.set(key, payload, fetched_at)
-                stale = False
-            except Exception:
-                if cached:
-                    payload = dict(cached.value)
-                    fetched_at = cached.fetched_at
-                    stale = True
-                else:
-                    payload = {
-                        "symbol": symbol,
-                        "current_price": None,
-                        "previous_close": None,
-                        "open": None,
-                        "day_low": None,
-                        "day_high": None,
-                        "change": None,
-                        "change_percent": None,
-                        "volume": None,
-                        "volume_value": None,
-                        "bid": None,
-                        "ask": None,
-                    }
-                    fetched_at = now
-                    stale = True
+                item = json.loads(cached_str)
+                fetched_at = int(item["fetched_at"])
+                payload = item["data"]
+                stale = (now - fetched_at) > QUOTES_TTL_SECONDS
+                payload["stale"] = stale
+                payload["last_updated"] = iso_timestamp(fetched_at)
+                results.append(payload)
+                if stale:
+                    any_stale = True
+                max_fetched_at = max(max_fetched_at, fetched_at)
+                continue
+            except (json.JSONDecodeError, KeyError, ValueError):
+                pass
+        missing_symbols.append(sym)
 
-        stale_any = stale_any or stale
-        latest_fetched_at = max(latest_fetched_at, fetched_at)
+    for sym in missing_symbols:
+        try:
+            payload, fetched_at = provider.get_quote_snapshot(sym, groups=fields)
+            payload["stale"] = False
+            payload["last_updated"] = iso_timestamp(fetched_at)
+            results.append(payload)
+            max_fetched_at = max(max_fetched_at, fetched_at)
 
-        quotes.append(
-            {
-                **payload,
-                "stale": stale,
-                "last_updated": iso_timestamp(fetched_at),
-            }
-        )
+            cache_key = f"quote:{sym}:{field_key}"
+            await redis.set(
+                cache_key,
+                json.dumps({"data": payload, "fetched_at": fetched_at}),
+                ex=QUOTES_TTL_SECONDS * 2,
+            )
+        except Exception:
+            results.append(
+                {
+                    "symbol": sym,
+                    "current_price": None,
+                    "stale": True,
+                    "last_updated": iso_timestamp(now),
+                }
+            )
+            any_stale = True
 
-    if latest_fetched_at == 0:
-        latest_fetched_at = now
-
-    return quotes, stale_any, latest_fetched_at
+    return results, any_stale, max_fetched_at or now

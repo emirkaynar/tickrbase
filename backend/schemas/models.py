@@ -1,8 +1,29 @@
 from __future__ import annotations
 
-from typing import Literal
+from datetime import datetime
+from pydantic import BaseModel, EmailStr
 
-from pydantic import BaseModel
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class UserMeResponse(BaseModel):
+    id: int
+    email: str
+    tier: str
+    created_at: datetime
+
+
+class MessageResponse(BaseModel):
+    ok: bool = True
+    message: str | None = None
 
 
 class Candle(BaseModel):
@@ -43,22 +64,6 @@ class PortfolioCreate(BaseModel):
     ticker: str
     quantity: float
     avg_price: float
-
-
-class AlertCreate(BaseModel):
-    ticker: str
-    condition: Literal["above", "below"]
-    threshold: float
-
-
-class AlertRecord(BaseModel):
-    id: int
-    ticker: str
-    condition: Literal["above", "below"]
-    threshold: float
-    active: bool
-    created_at: str
-    last_triggered_at: str | None = None
 
 
 class SymbolItem(BaseModel):

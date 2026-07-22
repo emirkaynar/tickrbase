@@ -9,11 +9,13 @@ import "./widgets/Lists/Lists";
 import { useRouter } from "./router";
 import { useLayout } from "./grid/useLayout";
 import { useTheme } from "./hooks/useTheme";
+import { useAuth } from "./hooks/useAuth";
 import { AppLayout } from "./layout/AppLayout";
 import { TopBar } from "./layout/TopBar/TopBar";
 import { DashboardPage } from "./features/dashboard/DashboardPage";
 import { PortfolioPage } from "./features/portfolio/PortfolioPage";
 import { SettingsPage } from "./features/settings/SettingsPage";
+import { AuthModal } from "./features/auth/AuthModal";
 import { CommandPalette, toast, ToastViewport } from "./ui";
 import type { CommandPalettePage } from "./ui";
 import { livePricesClient, type LiveStatus } from "./services/livePrices";
@@ -22,6 +24,7 @@ export function App() {
     const { route, navigate } = useRouter();
     const { theme, toggleTheme } = useTheme();
     const layout = useLayout();
+    const auth = useAuth();
 
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [palettePage, setPalettePage] = useState<CommandPalettePage>("root");
@@ -35,13 +38,15 @@ export function App() {
     }
 
     useEffect(() => {
-        livePricesClient.connect();
-        const unsubscribe = livePricesClient.onStatus(setLiveStatus);
-        return () => {
-            unsubscribe();
-            livePricesClient.disconnect();
-        };
-    }, []);
+        if (auth.user) {
+            livePricesClient.connect();
+            const unsubscribe = livePricesClient.onStatus(setLiveStatus);
+            return () => {
+                unsubscribe();
+                livePricesClient.disconnect();
+            };
+        }
+    }, [auth.user]);
 
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
@@ -120,11 +125,22 @@ export function App() {
             onNavigate={navigate}
             theme={theme}
             onToggleTheme={toggleTheme}
+            user={auth.user}
+            onLogout={auth.logout}
         />
     );
 
     return (
         <>
+            {!auth.user && !auth.loading && (
+                <AuthModal
+                    onLogin={auth.login}
+                    onRegister={auth.register}
+                    loading={auth.loading}
+                    error={auth.error}
+                />
+            )}
+
             <AppLayout topBar={topBar} contentKey={route}>
                 {route === "dashboard" && (
                     <DashboardPage

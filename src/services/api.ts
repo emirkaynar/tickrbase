@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE = "http://localhost:8000";
+const DEFAULT_API_BASE = "http://localhost:8001";
 
 export const API_BASE =
     (import.meta.env["VITE_API_BASE"] as string | undefined)?.toString() ??
@@ -38,6 +38,8 @@ async function withRetry<T>(
         } catch (err) {
             if (err instanceof DOMException && err.name === "AbortError")
                 throw err;
+            if (err instanceof ApiError && (err.status === 401 || err.status === 403))
+                throw err; // Do not retry on auth failures
             lastError = err;
             if (attempt < retries) {
                 await new Promise((r) =>
@@ -49,21 +51,29 @@ async function withRetry<T>(
     throw lastError;
 }
 
+export type UserMe = {
+    id: number;
+    email: string;
+    tier: string;
+    created_at: string;
+};
+
 export const api = {
     get<T>(path: string, signal?: AbortSignal): Promise<T> {
         return withRetry(() =>
-            fetch(`${API_BASE}${path}`, { signal }).then((r) =>
+            fetch(`${API_BASE}${path}`, { signal, credentials: "include" }).then((r) =>
                 parseResponse<T>(r),
             ),
         );
     },
 
-    post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+    post<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
         return withRetry(() =>
             fetch(`${API_BASE}${path}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
+                body: body !== undefined ? JSON.stringify(body) : undefined,
+                credentials: "include",
                 signal,
             }).then((r) => parseResponse<T>(r)),
         );
@@ -71,9 +81,11 @@ export const api = {
 
     delete<T>(path: string, signal?: AbortSignal): Promise<T> {
         return withRetry(() =>
-            fetch(`${API_BASE}${path}`, { method: "DELETE", signal }).then(
-                (r) => parseResponse<T>(r),
-            ),
+            fetch(`${API_BASE}${path}`, {
+                method: "DELETE",
+                credentials: "include",
+                signal,
+            }).then((r) => parseResponse<T>(r)),
         );
     },
 };

@@ -1,9 +1,10 @@
 import { useEffect, useState } from "preact/hooks";
-import { MoonIcon, PlusIcon, SunIcon, PencilIcon, Settings } from "lucide-react";
+import { MoonIcon, PlusIcon, SunIcon, PencilIcon, Settings, LogOut, User as UserIcon } from "lucide-react";
 import { Button, Tabs, Tooltip } from "../../ui";
 import type { TabItem } from "../../ui";
 import type { Theme } from "../../hooks/useTheme";
 import type { Route } from "../../router";
+import type { UserMe } from "../../services/api";
 import styles from "./TopBar.module.css";
 
 type Screen = { id: string; name: string };
@@ -18,6 +19,8 @@ type Props = {
     onNavigate: (r: Route) => void;
     theme: Theme;
     onToggleTheme: () => void;
+    user: UserMe | null;
+    onLogout: () => void;
 };
 
 function toIstanbul(date: Date, opts: Intl.DateTimeFormatOptions): string {
@@ -62,6 +65,8 @@ export function TopBar({
     onNavigate,
     theme,
     onToggleTheme,
+    user,
+    onLogout,
 }: Props) {
     const clock = useClock();
 
@@ -143,6 +148,20 @@ export function TopBar({
                         </a>
                     ))}
                 </nav>
+
+                {/* User indicator & Logout */}
+                {user && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <span style={{ fontSize: "12px", color: "var(--color-text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
+                            <UserIcon size={13} /> {user.email}
+                        </span>
+                        <Tooltip content="Log out">
+                            <Button variant="ghost" size="sm" onClick={onLogout} title="Log out">
+                                <LogOut size={14} />
+                            </Button>
+                        </Tooltip>
+                    </div>
+                )}
 
                 {/* Theme toggle */}
                 <Tooltip content="Toggle theme">

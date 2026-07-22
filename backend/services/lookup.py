@@ -1,44 +1,61 @@
 from __future__ import annotations
 
+import json
 import time
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.config import LOOKUP_MAX_RESULTS, LOOKUP_MIN_QUERY_LENGTH, LOOKUP_TTL_SECONDS
-from ..core.db import get_lookup, set_lookup
-from ..core.provider import DataProvider
-
-
-def _normalize_query(query: str) -> str:
-    normalized = query.strip()
-    if len(normalized) < LOOKUP_MIN_QUERY_LENGTH:
-        raise ValueError(
-            f"Lookup query must be at least {LOOKUP_MIN_QUERY_LENGTH} characters"
-        )
-    return normalized
+from ..core.config import (
+    LOOKUP_MAX_RESULTS,
+    LOOKUP_MIN_QUERY_LENGTH,
+    LOOKUP_TTL_SECONDS,
+)
+from ..core.models_db import LookupCache
+from ..providers.base import DataProvider
 
 
-def search_lookup(
+async def search_lookup(
+    db: AsyncSession,
     provider: DataProvider,
     query: str,
-    count: int = LOOKUP_MAX_RESULTS,
 ) -> tuple[str, list[dict], bool, int]:
-    normalized_query = _normalize_query(query)
-    cache_key = normalized_query.lower()
-    now_ts = int(time.time())
-    limit = max(1, min(count, LOOKUP_MAX_RESULTS))
+    cleaned = query.strip()
+    if len(cleaned) < LOOKUP_MIN_QUERY_LENGTH:
+        raise ValueError(
+            f"Query must be at least {LOOKUP_MIN_QUERY_LENGTH} characters"
+        )
 
-    cached = get_lookup(cache_key)
-    if cached:
-        items, fetched_at = cached
-        stale = now_ts - fetched_at > LOOKUP_TTL_SECONDS
-        if not stale:
-            return normalized_query, items[:limit], False, fetched_at
+    now = int(time.time())
+    result = await db.execute(
+        select(LookupCache).where(LookupCache.query == cleaned.lower())
+    )
+    row = result.scalar_one_or_none()
+
+    if row is not None:
+        try:
+            items = json.loads(row.payload)
+            fetched_at = int(row.fetched_at)
+            stale = (now - fetched_at) > LOOKUP_TTL_SECONDS
+            if not stale:
+                return cleaned, items, False, fetched_at
+        except (json.JSONDecodeError, ValueError):
+            pass
 
     try:
-        items = provider.lookup(normalized_query, limit)
-        set_lookup(cache_key, items, now_ts)
-        return normalized_query, items, False, now_ts
+        items = provider.lookup(cleaned, count=LOOKUP_MAX_RESULTS)
     except Exception:
-        if cached:
-            items, fetched_at = cached
-            return normalized_query, items[:limit], True, fetched_at
+        if row is not None:
+            return cleaned, json.loads(row.payload), True, int(row.fetched_at)
         raise
+
+    stmt = insert(LookupCache).values(
+        query=cleaned.lower(), payload=json.dumps(items), fetched_at=now
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["query"],
+        set_={"payload": json.dumps(items), "fetched_at": now},
+    )
+    await db.execute(stmt)
+
+    return cleaned, items, False, now

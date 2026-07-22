@@ -1,39 +1,52 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .api.routes import build_router
-from .core.cache import TTLCache
-from .core.config import CORS_ORIGINS, PRICE_TTL_SECONDS, QUOTES_TTL_SECONDS
-from .core.db import init_db
-from .core.yahoo import YahooFinanceProvider
+from .api.auth import router as auth_router
+from .api.market import router as market_router
+from .api.portfolio import router as portfolio_router
+from .api.ws import router as ws_router
+from .core.config import CORS_ORIGINS
+from .core.database import Base, engine
+from .core.redis import close_redis, get_redis_client
 from .scheduler import create_scheduler
 from .services.streaming import LivePriceStreamHub
 
-
-provider = YahooFinanceProvider()
-price_cache = TTLCache[float](PRICE_TTL_SECONDS)
-quotes_cache = TTLCache[dict[str, object]](QUOTES_TTL_SECONDS)
 stream_hub = LivePriceStreamHub()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    init_db()
+    # Initialize DB schema automatically
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    # Initialize Redis connection
+    _redis = get_redis_client()
+
+    # Start live price stream hub & scheduler
     await stream_hub.start()
-    scheduler = create_scheduler(provider, price_cache)
+    scheduler = create_scheduler()
     scheduler.start()
+
     yield
-    await stream_hub.broadcast_shutdown("Server is shutting down")
+
+    # Cleanup
+    await stream_hub.broadcast_shutdown("Server shutting down")
     await stream_hub.stop()
     scheduler.shutdown(wait=False)
+    await close_redis()
+    await engine.dispose()
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(
+    title="Lima SaaS API",
+    version="2.0.0",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,4 +75,7 @@ async def unhandled_exception_handler(_request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"error": True, "message": str(exc)})
 
 
-app.include_router(build_router(provider, price_cache, quotes_cache, stream_hub))
+app.include_router(auth_router)
+app.include_router(market_router)
+app.include_router(portfolio_router)
+app.include_router(ws_router)

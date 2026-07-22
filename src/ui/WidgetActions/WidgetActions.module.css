@@ -5,7 +5,7 @@
     align-items: center;
     justify-content: center;
     border: none;
-    background: var(--color-bg-elevated) !important;
+    background: transparent;
     color: var(--color-text-muted);
     border-radius: var(--radius-sm);
     cursor: pointer;

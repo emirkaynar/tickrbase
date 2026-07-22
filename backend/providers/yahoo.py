@@ -3,9 +3,9 @@ from __future__ import annotations
 import math
 from datetime import datetime, timezone
 
-from .config import BIST_SUFFIX
-from .models import Candle
-from .provider import DataProvider
+from ..core.config import BIST_SUFFIX
+from ..schemas.models import Candle
+from .base import DataProvider
 
 
 def normalize_ticker(ticker: str) -> str:
@@ -83,8 +83,8 @@ class YahooFinanceProvider(DataProvider):
 
         candles: list[Candle] = []
         for ts, row in hist.iterrows():
-            dt = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts # type: ignore
-            time_sec = _to_unix_seconds(dt) # type: ignore
+            dt = ts.to_pydatetime() if hasattr(ts, "to_pydatetime") else ts  # type: ignore
+            time_sec = _to_unix_seconds(dt)  # type: ignore
             open_v = _coerce_float(row.get("Open"))
             high_v = _coerce_float(row.get("High"))
             low_v = _coerce_float(row.get("Low"))
@@ -254,7 +254,6 @@ class YahooFinanceProvider(DataProvider):
         if frame is None or frame.empty:
             return []
 
-        # Reset index to make symbol a column
         frame = frame.reset_index()
         rows: list[dict] = []
         records = frame.to_dict(orient="records") if hasattr(frame, "to_dict") else []

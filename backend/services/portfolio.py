@@ -1,28 +1,38 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import redis.asyncio as aioredis
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..core.db import execute, fetchall, fetchone
-from ..core.provider import DataProvider
-from ..core.cache import TTLCache
-from ..core.yahoo import normalize_ticker
+from ..core.models_db import Portfolio
+from ..providers.base import DataProvider
+from ..providers.yahoo import normalize_ticker
 from .prices import get_price
 
 
-def _iso_now() -> str:
-    return datetime.now(tz=timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def list_positions(
-    provider: DataProvider, cache: TTLCache[float]
+async def list_positions(
+    db: AsyncSession,
+    provider: DataProvider,
+    redis: aioredis.Redis,
+    user_id: int,
 ) -> list[dict]:
-    rows = fetchall("SELECT ticker, quantity, avg_price FROM portfolio")
+    stmt = select(Portfolio.ticker, Portfolio.quantity, Portfolio.avg_price).where(
+        Portfolio.user_id == user_id
+    )
+    result = await db.execute(stmt)
+    rows = result.all()
+
     results: list[dict] = []
     for row in rows:
-        ticker = row["ticker"]
-        qty = float(row["quantity"])
-        avg = float(row["avg_price"])
-        price, _, _ = get_price(provider, cache, ticker)
+        ticker = row.ticker
+        qty = float(row.quantity)
+        avg = float(row.avg_price)
+        try:
+            price, _, _ = await get_price(provider, redis, ticker)
+        except Exception:
+            price = avg
+
         pnl = (price - avg) * qty
         pnl_pct = ((price - avg) / avg * 100.0) if avg != 0 else 0.0
         results.append(
@@ -38,18 +48,33 @@ def list_positions(
     return results
 
 
-def upsert_position(ticker: str, quantity: float, avg_price: float) -> None:
+async def upsert_position(
+    db: AsyncSession,
+    user_id: int,
+    ticker: str,
+    quantity: float,
+    avg_price: float,
+) -> None:
     normalized = normalize_ticker(ticker)
-    execute(
-        """
-        INSERT INTO portfolio (ticker, quantity, avg_price, created_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(ticker) DO UPDATE SET quantity = excluded.quantity, avg_price = excluded.avg_price
-        """,
-        (normalized, quantity, avg_price, _iso_now()),
+    stmt = insert(Portfolio).values(
+        user_id=user_id,
+        ticker=normalized,
+        quantity=quantity,
+        avg_price=avg_price,
     )
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_user_ticker",
+        set_={
+            "quantity": quantity,
+            "avg_price": avg_price,
+        },
+    )
+    await db.execute(stmt)
 
 
-def delete_position(ticker: str) -> None:
+async def delete_position(db: AsyncSession, user_id: int, ticker: str) -> None:
     normalized = normalize_ticker(ticker)
-    execute("DELETE FROM portfolio WHERE ticker = ?", (normalized,))
+    stmt = delete(Portfolio).where(
+        Portfolio.user_id == user_id, Portfolio.ticker == normalized
+    )
+    await db.execute(stmt)

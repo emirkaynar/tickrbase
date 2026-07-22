@@ -39,7 +39,7 @@ function toWsUrl(apiBase: string): string {
     if (apiBase.startsWith("http://")) {
         return apiBase.replace("http://", "ws://") + "/ws/prices";
     }
-    return "ws://127.0.0.1:8000/ws/prices";
+    return "ws://127.0.0.1:8001/ws/prices";
 }
 
 function normalize(symbol: string): string {

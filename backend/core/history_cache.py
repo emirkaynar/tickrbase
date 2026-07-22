@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..providers.base import DataProvider
+from ..providers.yahoo import normalize_ticker
+from ..schemas.models import Candle
 from .config import (
     DEFAULT_PERIOD,
     HISTORY_TTL_SECONDS,
     INTERVAL_SECONDS,
     YAHOO_MAX_RANGE,
 )
-from .db import execute, executemany, fetchall, fetchone
-from .models import Candle
-from .provider import DataProvider
-from .yahoo import normalize_ticker
+from .models_db import OHLC, HistoryMeta
 
 
 def _now_ts() -> int:
@@ -55,94 +58,95 @@ def _period_start(period: str, now_ts: int) -> int:
     return 0
 
 
-def _get_last_refresh(ticker: str, interval: str) -> int | None:
-    row = fetchone(
-        "SELECT last_refresh FROM history_meta WHERE ticker = ? AND interval = ?",
-        (ticker, interval),
+async def _get_last_refresh(db: AsyncSession, ticker: str, interval: str) -> int | None:
+    stmt = select(HistoryMeta.last_refresh).where(
+        HistoryMeta.ticker == ticker, HistoryMeta.interval == interval
     )
-    if not row:
-        return None
-    return int(row["last_refresh"])
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
 
 
-def _set_last_refresh(ticker: str, interval: str, timestamp: int) -> None:
-    execute(
-        "INSERT OR REPLACE INTO history_meta (ticker, interval, last_refresh) VALUES (?, ?, ?)",
-        (ticker, interval, timestamp),
+async def _set_last_refresh(db: AsyncSession, ticker: str, interval: str, timestamp: int) -> None:
+    stmt = insert(HistoryMeta).values(
+        ticker=ticker, interval=interval, last_refresh=timestamp
     )
-
-
-def _get_latest_time(ticker: str, interval: str) -> int | None:
-    row = fetchone(
-        "SELECT MAX(time) AS max_time FROM ohlc WHERE ticker = ? AND interval = ?",
-        (ticker, interval),
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["ticker", "interval"],
+        set_={"last_refresh": timestamp},
     )
-    if not row or row["max_time"] is None:
-        return None
-    return int(row["max_time"])
+    await db.execute(stmt)
 
 
-def _read_history(ticker: str, interval: str, start_time: int, since: int | None = None) -> list[Candle]:
+async def _get_latest_time(db: AsyncSession, ticker: str, interval: str) -> int | None:
+    stmt = select(func.max(OHLC.time)).where(
+        OHLC.ticker == ticker, OHLC.interval == interval
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def _read_history(
+    db: AsyncSession, ticker: str, interval: str, start_time: int, since: int | None = None
+) -> list[Candle]:
+    stmt = select(OHLC.time, OHLC.open, OHLC.high, OHLC.low, OHLC.close, OHLC.volume).where(
+        OHLC.ticker == ticker, OHLC.interval == interval
+    )
     if since is not None:
-        rows = fetchall(
-            """
-            SELECT time, open, high, low, close, volume
-            FROM ohlc
-            WHERE ticker = ? AND interval = ? AND time > ?
-            ORDER BY time ASC
-            """,
-            (ticker, interval, since),
-        )
+        stmt = stmt.where(OHLC.time > since)
     else:
-        rows = fetchall(
-            """
-            SELECT time, open, high, low, close, volume
-            FROM ohlc
-            WHERE ticker = ? AND interval = ? AND time >= ?
-            ORDER BY time ASC
-            """,
-            (ticker, interval, start_time),
-        )
+        stmt = stmt.where(OHLC.time >= start_time)
+
+    stmt = stmt.order_by(OHLC.time.asc())
+    result = await db.execute(stmt)
+    rows = result.all()
+
     return [
         Candle(
-            time=int(r["time"]),
-            open=float(r["open"]),
-            high=float(r["high"]),
-            low=float(r["low"]),
-            close=float(r["close"]),
-            volume=None if r["volume"] is None else float(r["volume"]),
+            time=int(r.time),
+            open=float(r.open),
+            high=float(r.high),
+            low=float(r.low),
+            close=float(r.close),
+            volume=None if r.volume is None else float(r.volume),
         )
         for r in rows
     ]
 
 
-def _upsert_history(ticker: str, interval: str, candles: list[Candle]) -> None:
+async def _upsert_history(db: AsyncSession, ticker: str, interval: str, candles: list[Candle]) -> None:
     if not candles:
         return
-    params = [
-        (
-            ticker,
-            interval,
-            c.time,
-            c.open,
-            c.high,
-            c.low,
-            c.close,
-            c.volume,
-        )
+
+    values = [
+        {
+            "ticker": ticker,
+            "interval": interval,
+            "time": c.time,
+            "open": c.open,
+            "high": c.high,
+            "low": c.low,
+            "close": c.close,
+            "volume": c.volume,
+        }
         for c in candles
     ]
-    executemany(
-        """
-        INSERT OR REPLACE INTO ohlc
-            (ticker, interval, time, open, high, low, close, volume)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        params,
+
+    stmt = insert(OHLC).values(values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["ticker", "interval", "time"],
+        set_={
+            "open": stmt.excluded.open,
+            "high": stmt.excluded.high,
+            "low": stmt.excluded.low,
+            "close": stmt.excluded.close,
+            "volume": stmt.excluded.volume,
+        },
     )
+    await db.execute(stmt)
 
 
-def get_history(
+async def get_history(
+    db: AsyncSession,
     provider: DataProvider,
     ticker: str,
     interval: str,
@@ -156,8 +160,9 @@ def get_history(
     if interval not in YAHOO_MAX_RANGE:
         raise ValueError("Unsupported interval")
 
-    last_refresh = _get_last_refresh(normalized, interval)
-    has_cache = _get_latest_time(normalized, interval) is not None
+    last_refresh = await _get_last_refresh(db, normalized, interval)
+    latest_time = await _get_latest_time(db, normalized, interval)
+    has_cache = latest_time is not None
     stale = False
 
     if not has_cache:
@@ -166,20 +171,18 @@ def get_history(
         )
         if not candles:
             raise ValueError("No history data returned")
-        _upsert_history(normalized, interval, candles)
-        _set_last_refresh(normalized, interval, now_ts)
+        await _upsert_history(db, normalized, interval, candles)
+        await _set_last_refresh(db, normalized, interval, now_ts)
         last_refresh = now_ts
     else:
         if last_refresh is None or now_ts - last_refresh > HISTORY_TTL_SECONDS:
             stale = True
-            latest_time = _get_latest_time(normalized, interval)
             start = None
             if latest_time is not None:
                 pad = INTERVAL_SECONDS.get(interval, 60) * 2
                 start = max(latest_time - pad, 0)
                 max_range_period = YAHOO_MAX_RANGE.get(interval)
                 if max_range_period and max_range_period != "max":
-                    # Keep start within provider-supported lookback for this interval.
                     start = max(start, _period_start(max_range_period, now_ts))
             try:
                 delta = provider.get_history(
@@ -189,8 +192,8 @@ def get_history(
                     end=now_ts,
                 )
                 if delta:
-                    _upsert_history(normalized, interval, delta)
-                _set_last_refresh(normalized, interval, now_ts)
+                    await _upsert_history(db, normalized, interval, delta)
+                await _set_last_refresh(db, normalized, interval, now_ts)
                 last_refresh = now_ts
                 stale = False
             except Exception:
@@ -198,9 +201,10 @@ def get_history(
                     raise
 
     if since is not None:
-        candles = _read_history(normalized, interval, 0, since=since)
+        candles = await _read_history(db, normalized, interval, 0, since=since)
     else:
         start_time = _period_start(period, now_ts)
-        candles = _read_history(normalized, interval, start_time)
+        candles = await _read_history(db, normalized, interval, start_time)
+
     last_updated = last_refresh or now_ts
     return candles, stale, last_updated

@@ -189,14 +189,14 @@ registerSettingSections([
     category: "integrations",
     subcategoryId: "lima-bridge",
     subcategoryLabel: "LIMA Bridge",
-    subcategoryIcon: "Cable",
+    subcategoryIcon: "GitCompare",
     settings: [
       {
         id: "integrations.limaBridge.url",
         type: "string",
         label: "Server URL #todo",
         description: "Configure the URL for connecting to your LIMA Bridge server.",
-        defaultValue: "http://localhost:8000",
+        defaultValue: "http://localhost:8001",
       },
     ],
   },
@@ -204,7 +204,7 @@ registerSettingSections([
     category: "integrations",
     subcategoryId: "tradingview",
     subcategoryLabel: "TradingView",
-    subcategoryIcon: "TrendingUp",
+    subcategoryIcon: "GitCompare",
     settings: [
       {
         id: "inregrations.tradingView.embedUrl",

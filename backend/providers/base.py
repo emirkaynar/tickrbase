@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
-from .models import Candle
+if TYPE_CHECKING:
+    from ..schemas.models import Candle
 
 
 class DataProvider(ABC):
     @abstractmethod
     def get_price(self, ticker: str) -> tuple[float, int]:
-        raise NotImplementedError
+        """Fetch current price for a symbol. Returns (price, timestamp_seconds)."""
+        pass
 
     @abstractmethod
     def get_history(
@@ -19,11 +22,13 @@ class DataProvider(ABC):
         start: int | None = None,
         end: int | None = None,
     ) -> list[Candle]:
-        raise NotImplementedError
+        """Fetch historical candles for a symbol."""
+        pass
 
     @abstractmethod
     def get_company_info(self, ticker: str) -> dict:
-        raise NotImplementedError
+        """Fetch general info about a symbol."""
+        pass
 
     @abstractmethod
     def get_quote_snapshot(
@@ -31,8 +36,10 @@ class DataProvider(ABC):
         ticker: str,
         groups: set[str] | None = None,
     ) -> tuple[dict, int]:
-        raise NotImplementedError
+        """Fetch structured quote payload for a symbol."""
+        pass
 
     @abstractmethod
     def lookup(self, query: str, count: int) -> list[dict]:
-        raise NotImplementedError
+        """Search symbol universe."""
+        pass
