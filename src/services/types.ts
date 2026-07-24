@@ -151,6 +151,14 @@ export type WatchlistResponse = ListItemsResponse;
 
 export type OkResponse = { ok: boolean };
 
+export type ChartType =
+    | "candlestick"
+    | "line"
+    | "area"
+    | "bar"
+    | "baseline"
+    | "heikin_ashi";
+
 /* ── Chart interval ──────────────────────────────────────────────────────── */
 export type Interval =
     | "1m"

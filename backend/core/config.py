@@ -13,11 +13,11 @@ if env_dev.exists():
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://lima:limapass@localhost:5432/lima",
+    "postgresql+asyncpg://tickrbase:tickrbasepass@localhost:5432/tickrbase",
 )
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev_secret_key_change_in_production_987654321_lima")
+JWT_SECRET = os.getenv("JWT_SECRET", "dev_secret_key_change_in_production_987654321_tickrbase")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 

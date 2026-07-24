@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 
 export type Theme = "light" | "dark";
 
-const STORAGE_KEY = "lima:theme";
+const STORAGE_KEY = "tickrbase:theme";
 
 function resolveInitialTheme(): Theme {
     try {

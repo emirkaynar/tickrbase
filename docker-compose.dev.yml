@@ -1,24 +1,24 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: lima-postgres-dev
+    container_name: tickrbase-postgres-dev
     environment:
-      POSTGRES_USER: lima
-      POSTGRES_PASSWORD: limapass
-      POSTGRES_DB: lima
+      POSTGRES_USER: tickrbase
+      POSTGRES_PASSWORD: tickrbasepass
+      POSTGRES_DB: tickrbase
     ports:
       - "5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lima -d lima"]
+      test: ["CMD-SHELL", "pg_isready -U tickrbase -d tickrbase"]
       interval: 5s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: lima-redis-dev
+    container_name: tickrbase-redis-dev
     ports:
       - "6379:6379"
     volumes:

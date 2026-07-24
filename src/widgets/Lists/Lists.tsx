@@ -43,6 +43,7 @@ import {
 import { fetchQuotes } from "../../services/quotes";
 import { livePricesClient } from "../../services/livePrices";
 import { getSettingValue } from "../../services/settings";
+import { getWidgetStateFromCache } from "../../grid/useLayout";
 import type {
   ListItem,
   ListRecord,
@@ -405,7 +406,8 @@ function Watchlist({ id, onRemove }: Props) {
 
     const load = async () => {
       try {
-        const saved = await api.get<any>(`/user/widgets/${id}/state`);
+        const cached = getWidgetStateFromCache(id);
+        const saved = cached !== undefined ? cached : await api.get<any>(`/user/widgets/${id}/state`);
         const savedActiveListId = saved?.symbol ?? "";
         lastSavedActiveListIdRef.current = savedActiveListId;
 

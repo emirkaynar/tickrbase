@@ -5,6 +5,8 @@ import { api } from "../../services/api";
 import { getChartColors } from "../../styles/tokens";
 import styles from "./AdvancedChart.module.css";
 
+import { getWidgetStateFromCache } from "../../grid/useLayout";
+
 type Props = { id: string; onRemove: () => void };
 type ThemeMode = "dark" | "light";
 type TvInterval = "D";
@@ -111,6 +113,16 @@ function AdvancedChart({ id, onRemove }: Props) {
         setHydrated(false);
         setLoading(true);
         persistedSymbolRef.current = null;
+
+        const cached = getWidgetStateFromCache(id);
+        if (cached) {
+            const savedSymbol = cached?.symbol?.trim();
+            const nextSymbol = savedSymbol || DEFAULT_SYMBOL;
+            persistedSymbolRef.current = nextSymbol;
+            setSymbol(nextSymbol);
+            setHydrated(true);
+            return;
+        }
 
         void api.get<any>(`/user/widgets/${id}/state`)
             .then((saved) => {

@@ -77,12 +77,16 @@
 .trigger[data-state="open"] {
     background: var(--color-bg-surface);
     color: var(--color-text);
+
+    .indicator {
+        color: var(--color-text-muted);
+    }
 }
 
 .indicator {
     display: flex;
     align-items: center;
-    color: var(--color-text-muted);
+    color: var(--color-text-subtle);
 }
 
 .content {

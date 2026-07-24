@@ -23,8 +23,8 @@ import { livePricesClient, type LiveStatus } from "./services/livePrices";
 export function App() {
     const { route, navigate } = useRouter();
     const { theme, toggleTheme } = useTheme();
-    const layout = useLayout();
     const auth = useAuth();
+    const layout = useLayout(!!auth.user);
 
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [palettePage, setPalettePage] = useState<CommandPalettePage>("root");

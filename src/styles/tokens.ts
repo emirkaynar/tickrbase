@@ -82,6 +82,8 @@ export function getChartColors() {
         bull: colorToken("--color-bull"),
         bear: colorToken("--color-bear"),
         warning: colorToken("--color-warning"),
+        primary: colorToken("--color-primary"),
+        accent: colorToken("--color-accent"),
     };
 }
 

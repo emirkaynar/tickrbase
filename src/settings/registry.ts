@@ -182,15 +182,15 @@ registerSettingSections([
   },
   {
     category: "integrations",
-    subcategoryId: "lima-bridge",
-    subcategoryLabel: "LIMA Bridge",
+    subcategoryId: "tickrbase-bridge",
+    subcategoryLabel: "TICKRBASE Bridge",
     subcategoryIcon: "GitCompare",
     settings: [
       {
-        id: "integrations.limaBridge.url",
+        id: "integrations.tickrbaseBridge.url",
         type: "string",
         label: "Server URL #todo",
-        description: "Configure the URL for connecting to your LIMA Bridge server.",
+        description: "Configure the URL for connecting to your TICKRBASE Bridge server.",
         defaultValue: "http://localhost:8001",
       },
     ],

@@ -744,7 +744,7 @@ export function CommandPalette({
                                                                     <Badge
                                                                         variant={
                                                                             cmd.badge ===
-                                                                            "LIMA Bridge"
+                                                                            "Yahoo Finance"
                                                                                 ? "accent"
                                                                                 : cmd.badge ===
                                                                                     "TradingView"

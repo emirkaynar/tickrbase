@@ -41,7 +41,7 @@ export const widgetProvider: CommandProvider = {
             {
                 id: "widget-symbol-overview",
                 label: "Symbol Overview",
-                badge: "LIMA Bridge",
+                badge: "Yahoo Finance",
                 hint: "Overview of a specific stock symbol",
                 keywords: ["symbol", "overview", "stock"],
                 enabled: false,
@@ -51,8 +51,8 @@ export const widgetProvider: CommandProvider = {
             {
                 id: "widget-basic-chart",
                 label: "Basic Chart",
-                badge: "LIMA Bridge",
-                hint: "Basic stock chart powered by Yahoo Finance",
+                badge: "Yahoo Finance",
+                hint: "Basic stock chart",
                 keywords: ["stock", "chart", "widget", "candlestick"],
                 enabled: true,
                 section: "Charts",
@@ -81,7 +81,7 @@ export const widgetProvider: CommandProvider = {
             {
                 id: "widget-watchlist",
                 label: "Lists",
-                badge: "LIMA Bridge",
+                badge: "Yahoo Finance",
                 hint: "Track symbols in named lists with groups",
                 keywords: ["lists", "watchlist", "symbols", "table"],
                 enabled: true,

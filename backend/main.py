@@ -44,7 +44,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="Lima SaaS API",
+    title="tickrbase SaaS API",
     version="2.0.0",
     lifespan=lifespan,
 )

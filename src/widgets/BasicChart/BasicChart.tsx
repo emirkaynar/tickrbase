@@ -1,15 +1,17 @@
-import { useEffect, useRef, useCallback } from "preact/hooks";
+import { useEffect, useRef, useState, useCallback } from "preact/hooks";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { createChart } from "lightweight-charts";
 import { Select, TickerSelector } from "../../ui";
 import type { SelectItem } from "../../ui";
 import { Shell } from "../Shell";
 import { useChartState } from "./useChartState";
-import { createChartConfig, getCandleColors } from "./chartConfig";
+import { createChartConfig, getSeriesColors } from "./chartConfig";
+import { addChartSeries } from "./seriesFactory";
 import { registerWidget } from "../registry";
 import { INTERVALS, INTERVAL_CONFIG } from "../../services/types";
-import type { Interval } from "../../services/types";
+import type { ChartType, Interval } from "../../services/types";
 import { livePricesClient } from "../../services/livePrices";
+import { fetchQuotes, calcChangePercent } from "../../services/quotes";
 import styles from "./BasicChart.module.css";
 
 type Props = { id: string; onRemove: () => void };
@@ -19,21 +21,45 @@ const INTERVAL_ITEMS: SelectItem[] = INTERVALS.map((i) => ({
     value: i,
 }));
 
+const CHART_TYPE_ITEMS: SelectItem[] = [
+    { label: "Candles", value: "candlestick" },
+    { label: "Line", value: "line" },
+    { label: "Area", value: "area" },
+    { label: "Bar", value: "bar" },
+    { label: "Baseline", value: "baseline" },
+    { label: "Heikin-Ashi", value: "heikin_ashi" },
+];
+
+const PCT_FORMATTER = new Intl.NumberFormat("tr-TR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
+
 function BasicChart({ id, onRemove }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
     const chartRef = useRef<IChartApi | null>(null);
-    const seriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
+    const seriesRef = useRef<ISeriesApi<any> | null>(null);
     const intervalRef = useRef<Interval>("1d");
+
+    const [, setPrice] = useState<number | null>(null);
+    const [changePercent, setChangePercent] = useState<number | null>(null);
+    const prevCloseRef = useRef<number | null>(null);
 
     const {
         symbol,
         setSymbol,
         interval,
         selectInterval,
+        chartType,
+        setChartType,
+        timezone,
         status,
         errorMsg,
         warning,
         stateReady,
+        reapplyCurrentBars,
+        captureRange,
+        setPrevClose,
     } = useChartState(id, { chartRef, seriesRef, intervalRef });
 
     const isIntraday = !["1d", "1wk", "1mo"].includes(interval);
@@ -44,18 +70,65 @@ function BasicChart({ id, onRemove }: Props) {
         livePricesClient.updateSymbol(id, symbol);
     }, [id, symbol, stateReady]);
 
+    // Fetch quote snapshot for previous close & calculate changePercent
+    useEffect(() => {
+        if (!stateReady) return;
+
+        let cancelled = false;
+        setPrice(null);
+        setChangePercent(null);
+        prevCloseRef.current = null;
+        setPrevClose(null);
+
+        const ctrl = new AbortController();
+        fetchQuotes([symbol], ["session"], ctrl.signal)
+            .then((res) => {
+                if (cancelled) return;
+                const quote = res.quotes[0];
+                if (quote) {
+                    prevCloseRef.current = quote.previous_close;
+                    setPrevClose(quote.previous_close);
+                    if (quote.current_price !== null) {
+                        setPrice(quote.current_price);
+                        setChangePercent(calcChangePercent(quote.current_price, quote.previous_close));
+                    }
+                }
+            })
+            .catch(() => {});
+
+        return () => {
+            cancelled = true;
+            ctrl.abort();
+        };
+    }, [symbol, stateReady]);
+
+    // Live price tick updates for ticker selector trigger
+    useEffect(() => {
+        if (!stateReady) return;
+
+        const unsubscribe = livePricesClient.onTick((tick) => {
+            if (tick.symbol !== symbol) return;
+            setPrice(tick.price);
+            if (prevCloseRef.current !== null) {
+                setChangePercent(calcChangePercent(tick.price, prevCloseRef.current));
+            }
+        });
+
+        return unsubscribe;
+    }, [symbol, stateReady]);
+
     // Create chart once container is ready
     useEffect(() => {
         const container = containerRef.current;
         if (!container) return;
 
         const chart = createChart(container, {
-            ...createChartConfig(isIntraday),
+            ...createChartConfig(isIntraday, timezone),
             width: container.clientWidth,
             height: container.clientHeight,
         });
 
-        const series = chart.addCandlestickSeries(getCandleColors());
+        const series = addChartSeries(chart, chartType);
         chartRef.current = chart;
         seriesRef.current = series;
 
@@ -68,12 +141,12 @@ function BasicChart({ id, onRemove }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
-    // Update chart config when intraday flag changes (interval switch)
+    // Update chart config when intraday flag or timezone changes
     useEffect(() => {
         if (!chartRef.current) return;
-        chartRef.current.applyOptions(createChartConfig(isIntraday));
+        chartRef.current.applyOptions(createChartConfig(isIntraday, timezone));
         chartRef.current.applyOptions({ autoSize: false });
-    }, [isIntraday]);
+    }, [isIntraday, timezone]);
 
     // ResizeObserver — syncs chart canvas to its DOM container
     useEffect(() => {
@@ -90,7 +163,7 @@ function BasicChart({ id, onRemove }: Props) {
                     container.clientWidth,
                     container.clientHeight,
                 );
-                chartRef.current.timeScale().fitContent();
+                chartRef.current.timeScale();
             });
         });
 
@@ -105,15 +178,29 @@ function BasicChart({ id, onRemove }: Props) {
     useEffect(() => {
         const observer = new MutationObserver(() => {
             if (!chartRef.current || !seriesRef.current) return;
-            chartRef.current.applyOptions(createChartConfig(isIntraday));
-            seriesRef.current.applyOptions(getCandleColors());
+            chartRef.current.applyOptions(
+                createChartConfig(isIntraday, timezone),
+            );
+            seriesRef.current.applyOptions(getSeriesColors(chartType));
         });
         observer.observe(document.documentElement, {
             attributes: true,
             attributeFilter: ["data-theme"],
         });
         return () => observer.disconnect();
-    }, [isIntraday]);
+    }, [isIntraday, timezone, chartType]);
+
+    // Re-create series if chartType changes and re-apply existing data
+    useEffect(() => {
+        const chart = chartRef.current;
+        if (!chart) return;
+        captureRange();
+        if (seriesRef.current) {
+            chart.removeSeries(seriesRef.current);
+        }
+        seriesRef.current = addChartSeries(chart, chartType);
+        reapplyCurrentBars();
+    }, [chartType, captureRange, reapplyCurrentBars]);
 
     const handleSymbolSelect = useCallback(
         (value: string) => {
@@ -133,16 +220,55 @@ function BasicChart({ id, onRemove }: Props) {
         [selectInterval],
     );
 
+    const handleChartTypeSelect = useCallback(
+        (value: string) => {
+            if (
+                [
+                    "candlestick",
+                    "line",
+                    "area",
+                    "bar",
+                    "baseline",
+                    "heikin_ashi",
+                ].includes(value)
+            ) {
+                setChartType(value as ChartType);
+            }
+        },
+        [setChartType],
+    );
+
+    const tickerTrigger = (
+        <button type="button" class={styles.tickerTrigger}>
+            <span class={styles.triggerSymbol}>{symbol}</span>
+            {changePercent !== null && (
+                <span
+                    class={
+                        changePercent > 0
+                            ? styles.changePositive
+                            : changePercent < 0
+                              ? styles.changeNegative
+                              : styles.changeNeutral
+                    }
+                >
+                    {changePercent > 0 ? "▲ " : changePercent < 0 ? "▼ " : ""}
+                    {PCT_FORMATTER.format(Math.abs(changePercent))}%
+                </span>
+            )}
+        </button>
+    );
+
     return (
         <Shell
             id={id}
             className={styles.root}
             headerLeft={
-                <div class={styles.widgetInputs}>
+                <>
                     <TickerSelector
                         value={symbol}
                         placeholder="Ticker..."
                         onChange={handleSymbolSelect}
+                        trigger={tickerTrigger}
                     />
                     <Select
                         items={INTERVAL_ITEMS}
@@ -150,7 +276,15 @@ function BasicChart({ id, onRemove }: Props) {
                         onChange={handleIntervalSelect}
                         variant="widget"
                     />
-                </div>
+                </>
+            }
+            headerRight={
+                <Select
+                    items={CHART_TYPE_ITEMS}
+                    value={chartType}
+                    onChange={handleChartTypeSelect}
+                    variant="widget"
+                />
             }
             loading={!stateReady || status === "loading"}
             error={status === "error" ? errorMsg : null}

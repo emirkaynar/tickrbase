@@ -42,3 +42,11 @@ export function fetchQuotes(
 
     return api.get<QuotesResponse>(`/quotes?${params.toString()}`, signal);
 }
+
+export function calcChangePercent(
+    price: number | null,
+    prevClose: number | null,
+): number | null {
+    if (price === null || prevClose === null || prevClose === 0) return null;
+    return ((price - prevClose) / prevClose) * 100;
+}

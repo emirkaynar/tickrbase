@@ -36,7 +36,7 @@ export function AuthModal({ onLogin, onRegister, loading, error: externalError }
         <div class={styles.overlay}>
             <div class={styles.modal}>
                 <div class={styles.header}>
-                    <div class={styles.logo}>lima</div>
+                    <div class={styles.logo}>tickrbase</div>
                     <div class={styles.subtitle}>
                         {mode === "login"
                             ? "Sign in to access your investment dashboard"

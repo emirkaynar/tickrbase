@@ -34,7 +34,7 @@ router = APIRouter(tags=["Market Data"])
 
 @router.get("/health")
 async def health_check():
-    return {"status": "ok", "service": "lima-backend-v2"}
+    return {"status": "ok", "service": "tickrbase-backend-v2"}
 
 
 @router.get("/price/{ticker}", response_model=PriceResponse)
