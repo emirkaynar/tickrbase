@@ -1,157 +1,176 @@
-.root {
-    position: relative;
+.triggerWrapper {
+    display: inline-flex;
+    align-items: center;
 }
 
-.control {
-    position: relative;
-}
-
-.input {
-    box-sizing: border-box;
-    width: 7rem;
-    min-width: 90px;
-    height: 22px;
-    padding: 0 var(--space-1-5) 0 var(--space-1-5);
-    font-size: var(--font-size-base);
-    font-family: var(--font-mono);
-    font-weight: var(--font-weight-semibold);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    background: transparent;
+.defaultTrigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    height: 24px;
+    padding: 0 var(--space-2);
     border: none;
     border-radius: var(--radius-sm);
+    background: transparent;
     color: var(--color-text);
-    outline: none;
-    transition:
-        border-color var(--transition-fast),
-        box-shadow var(--transition-fast),
-        background var(--transition-fast);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
 }
 
-.input::placeholder {
-    color: var(--color-text-subtle);
-    text-transform: none;
-    letter-spacing: normal;
-}
-
-.input:hover, .input:focus {
+.defaultTrigger:hover {
     background: var(--color-bg-surface);
 }
 
-.indicators {
-    position: absolute;
-    top: 50%;
-    right: var(--space-1);
-    transform: translateY(-50%);
-    display: flex;
-    align-items: center;
-    pointer-events: none;
+.triggerSymbol {
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
-.trigger {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
+.triggerIcon {
+    width: 12px;
+    height: 12px;
     color: var(--color-text-muted);
-    cursor: pointer;
-    padding: 0;
-    pointer-events: auto;
-    transition: color var(--transition-fast);
-
-    & svg {
-        width: 12px;
-        height: 12px;
-    }
 }
 
-.trigger:hover {
-    color: var(--color-text);
-}
-
-.content {
+.popoverContent {
+    width: 300px;
+    max-height: 380px;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: var(--space-1);
-    min-width: max(var(--reference-width, 160px), 260px);
-    max-height: min(var(--available-height, 300px), 300px);
-    overflow-y: auto;
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-md);
     outline: none;
     z-index: var(--z-dropdown);
-    overscroll-behavior: contain;
+    overflow: hidden;
     animation: scale-in var(--transition-fast) forwards;
 }
 
-.content[data-state="closed"] {
+.popoverContent[data-state="closed"] {
     display: none;
 }
 
-.status,
-.empty {
+.searchHeader {
     display: flex;
     align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-1-5) var(--space-2);
-    font-size: var(--font-size-sm);
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-bg-surface);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.searchIcon {
+    width: 14px;
+    height: 14px;
     color: var(--color-text-subtle);
-    user-select: none;
+    flex-shrink: 0;
+}
+
+.searchInput {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    background: transparent;
+    color: var(--color-text);
+    font-size: var(--font-size-sm);
+    outline: none;
+}
+
+.searchInput::placeholder {
+    color: var(--color-text-subtle);
 }
 
 .spinner {
-    width: 12px;
-    height: 12px;
+    width: 14px;
+    height: 14px;
+    color: var(--color-primary);
     animation: spin 1s linear infinite;
+    flex-shrink: 0;
 }
 
-.item {
+.listContainer {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-1);
+    overscroll-behavior: contain;
+}
+
+.sectionHeader {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--space-1-5);
-    padding: var(--space-1) var(--space-2);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    outline: none;
-    user-select: none;
-
-    & svg {
-        width: 12px;
-        height: 12px;
-    }
+    gap: var(--space-1);
+    padding: var(--space-1-5) var(--space-2) var(--space-1) var(--space-2);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-subtle);
 }
 
-.item[data-highlighted] {
+.itemGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.itemRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1-5) var(--space-2);
+    border: none;
+    background: transparent;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    text-align: left;
+    transition: background var(--transition-fast);
+    width: 100%;
+}
+
+.itemRow[data-highlighted],
+.itemRow:hover {
     background: var(--color-bg-surface);
 }
 
-.item[data-disabled] {
-    opacity: 0.4;
+.itemRow[data-state="checked"] {
+    background: color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
-.item[data-state="checked"] .itemTitle {
+.avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border-subtle);
     color: var(--color-primary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
 .itemText {
     display: flex;
     flex-direction: column;
-    gap: 1px;
     min-width: 0;
+    flex: 1;
 }
 
 .itemTitle {
     font-size: var(--font-size-sm);
     font-family: var(--font-mono);
-    font-weight: var(--font-weight-semibold);
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-weight: var(--font-weight-bold);
     color: var(--color-text);
+    line-height: 1.2;
 }
 
 .itemSubtitle {
@@ -160,16 +179,23 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.2;
 }
 
-.itemIndicator {
-    display: flex;
-    align-items: center;
+.itemCheck {
     color: var(--color-primary);
+    flex-shrink: 0;
 }
 
-.itemIndicator[data-state="unchecked"] {
+.itemCheck[data-state="unchecked"] {
     display: none;
+}
+
+.statusMsg {
+    padding: var(--space-4) var(--space-3);
+    font-size: var(--font-size-sm);
+    color: var(--color-text-subtle);
+    text-align: center;
 }
 
 @keyframes spin {

@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 from .api.auth import router as auth_router
 from .api.market import router as market_router
 from .api.portfolio import router as portfolio_router
+from .api.user_data import router as user_data_router
 from .api.ws import router as ws_router
 from .core.config import CORS_ORIGINS
 from .core.database import Base, engine
@@ -78,4 +79,5 @@ async def unhandled_exception_handler(_request: Request, exc: Exception):
 app.include_router(auth_router)
 app.include_router(market_router)
 app.include_router(portfolio_router)
+app.include_router(user_data_router)
 app.include_router(ws_router)

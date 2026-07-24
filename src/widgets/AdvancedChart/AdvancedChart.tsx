@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { registerWidget } from "../registry";
-import { Skeleton, WidgetDragButton, WidgetRemoveButton } from "../../ui";
-import { db } from "../../db";
+import { Shell } from "../Shell";
+import { api } from "../../services/api";
 import { getChartColors } from "../../styles/tokens";
 import styles from "./AdvancedChart.module.css";
 
@@ -94,7 +94,7 @@ function AdvancedChart({ id, onRemove }: Props) {
     const [interval] = useState<TvInterval>(DEFAULT_INTERVAL);
     const [themeMode, setThemeMode] = useState<ThemeMode>(getThemeMode);
     const [error, setError] = useState("");
-    const [retrySeed, setRetrySeed] = useState(0);
+    const [retrySeed] = useState(0);
     const [loading, setLoading] = useState(true);
     const [hydrated, setHydrated] = useState(false);
     const hostRef = useRef<HTMLDivElement>(null);
@@ -112,8 +112,7 @@ function AdvancedChart({ id, onRemove }: Props) {
         setLoading(true);
         persistedSymbolRef.current = null;
 
-        void db.widgetState
-            .get(id)
+        void api.get<any>(`/user/widgets/${id}/state`)
             .then((saved) => {
                 if (cancelled) return;
                 const savedSymbol = saved?.symbol?.trim();
@@ -121,6 +120,9 @@ function AdvancedChart({ id, onRemove }: Props) {
 
                 persistedSymbolRef.current = nextSymbol;
                 setSymbol(nextSymbol);
+            })
+            .catch(() => {
+                if (!cancelled) setSymbol(DEFAULT_SYMBOL);
             })
             .finally(() => {
                 if (!cancelled) setHydrated(true);
@@ -135,7 +137,7 @@ function AdvancedChart({ id, onRemove }: Props) {
         if (!hydrated) return;
         if (persistedSymbolRef.current === symbol) return;
         persistedSymbolRef.current = symbol;
-        void db.widgetState.put({ id, symbol });
+        void api.put(`/user/widgets/${id}/state`, { symbol });
     }, [id, symbol, hydrated]);
 
     useEffect(() => {
@@ -155,7 +157,6 @@ function AdvancedChart({ id, onRemove }: Props) {
             const payload = parseTradingViewMessage(event.data);
 
             if (ENABLE_IFRAME_PROBE) {
-                // Dev probe to inspect symbol/event payloads from TradingView iframe.
                 console.info("[AdvancedChart iframe probe]", {
                     widgetId: id,
                     origin: event.origin,
@@ -172,7 +173,7 @@ function AdvancedChart({ id, onRemove }: Props) {
 
             persistedSymbolRef.current = shortName;
             setSymbol(shortName);
-            void db.widgetState.put({ id, symbol: shortName });
+            void api.put(`/user/widgets/${id}/state`, { symbol: shortName });
         };
 
         window.addEventListener("message", onMessage);
@@ -262,52 +263,30 @@ function AdvancedChart({ id, onRemove }: Props) {
     }, [interval, themeMode, retrySeed, hydrated]);
 
     return (
-        <div class={styles.root}>
+        <Shell
+            id={id}
+            className={styles.root}
+            headerLeft={<div class={styles.heading}>Advanced Chart</div>}
+            loading={loading}
+            error={error}
+            onRemove={onRemove}
+        >
             <div class={styles.chartArea}>
-                <div class={styles.dragOverlay}>
-                    <div class={styles.passThroughLane} />
-                    <div class={styles.actions}>
-                        <WidgetDragButton class={styles.dragBtn} />
-                        <WidgetRemoveButton
-                            class={styles.removeBtn}
-                            onClick={onRemove}
-                        />
-                    </div>
-                </div>
-
                 <div
                     class={`tradingview-widget-container ${styles.widgetHost}`}
                     data-widget-id={id}
                     ref={hostRef}
                 />
-
-                {loading && <Skeleton variant="rect" />}
-
-                {error && (
-                    <div class={styles.errorOverlay}>
-                        <div class={styles.errorText}>{error}</div>
-                        <button
-                            type="button"
-                            class={styles.retryBtn}
-                            onClick={() => {
-                                setLoading(true);
-                                setRetrySeed((x) => x + 1);
-                            }}
-                        >
-                            Retry
-                        </button>
-                    </div>
-                )}
             </div>
-        </div>
+        </Shell>
     );
 }
 
 registerWidget({
     type: "advanced-chart",
     label: "Advanced Chart",
-    defaultSize: { w: 12, h: 12 },
-    minSize: { w: 7, h: 8 },
+    defaultSize: { w: 8, h: 9 },
+    minSize: { w: 6, h: 6 },
     component: AdvancedChart,
     settingSections: [
         {

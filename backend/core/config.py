@@ -77,3 +77,13 @@ YAHOO_MAX_RANGE = {
     "1wk": "10y",
     "1mo": "max",
 }
+
+TRADINGVIEW_SCANNER_URL = "https://scanner.tradingview.com/turkey/scan"
+
+FALLBACK_SYMBOLS = [
+    {"label": "ASELS", "value": "ASELS.IS"},
+    {"label": "THYAO", "value": "THYAO.IS"},
+    {"label": "BESTE", "value": "BESTE.IS"},
+    {"label": "XU100", "value": "XU100.IS"},
+    {"label": "XU030", "value": "XU030.IS"},
+]

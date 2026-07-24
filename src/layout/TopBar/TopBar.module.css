@@ -37,8 +37,7 @@
 .brand {
     font-size: var(--font-size-base);
     font-weight: var(--font-weight-bold);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    letter-spacing: 0.05em;
     color: var(--color-accent);
     user-select: none;
     padding-right: var(--space-2);

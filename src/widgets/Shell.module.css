@@ -1,0 +1,106 @@
+.root {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    position: relative;
+    user-select: none;
+}
+
+.handle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-1) var(--space-2);
+    background: var(--color-bg-elevated);
+    border-bottom: 1px solid var(--color-border);
+    gap: var(--space-1);
+    min-height: 24px;
+    box-sizing: border-box;
+}
+
+.headerLeft {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+}
+
+.dragGrip {
+    flex: 1;
+    height: 100%;
+    cursor: grab;
+    min-width: 12px;
+}
+
+.dragGrip:active {
+    cursor: grabbing;
+}
+
+.headerRight {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.removeBtn {
+    transition: opacity var(--transition-fast);
+}
+
+.body {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.skeletonOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    background: var(--color-bg-elevated);
+    pointer-events: none;
+    transition: opacity var(--transition-fast);
+}
+
+.errorOverlay {
+    position: absolute;
+    inset: 0;
+    z-index: 11;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg-elevated);
+    color: var(--color-danger);
+    padding: var(--space-4);
+    text-align: center;
+    gap: var(--space-2);
+}
+
+.errorText {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+:global(.react-draggable-dragging) .root {
+    border-color: var(--color-primary) !important;
+    transition: border-color var(--transition-fast);
+}
+
+:global(.react-resizable.resizing) .root {
+    border-color: var(--color-primary) !important;
+    transition: border-color var(--transition-fast);
+}
+
+:global(.react-grid-item.react-grid-item-resizing) .handle,
+:global(.react-grid-item.react-draggable-dragging) .handle {
+    box-shadow: inset 0 10px 10px -10px var(--color-primary) !important;
+}

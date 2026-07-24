@@ -10,21 +10,6 @@
     transition: border-color var(--transition-fast);
 }
 
-:global(.react-draggable-dragging) .root {
-    border-color: var(--color-primary) !important;
-    transition: border-color var(--transition-fast);
-}
-
-:global(.react-resizable.resizing) .root {
-    border-color: var(--color-primary) !important;
-    transition: border-color var(--transition-fast);
-}
-
-:global(.react-grid-item.react-grid-item-resizing) .handle,
-:global(.react-grid-item.react-draggable-dragging) .handle {
-    box-shadow: inset 0 10px 10px -10px var(--color-primary) !important;
-}
-
 .root:has(.removeBtn:active) {
     border-color: var(--color-danger) !important;
     box-shadow: inset 0 0 2px var(--color-danger) !important;
@@ -336,9 +321,17 @@
     background: var(--color-bg-elevated);
 }
 
+.bodyWrapper {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 .scrollRoot {
     width: 100%;
-    flex: 1 1 auto;
+    flex: 1;
     min-height: 0;
     box-sizing: border-box;
 }
@@ -364,6 +357,7 @@
     row-gap: var(--space-1);
     flex-wrap: wrap;
     flex-shrink: 0;
+    margin-top: auto;
 }
 
 .bottomActionButton {

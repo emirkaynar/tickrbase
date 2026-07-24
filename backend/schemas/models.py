@@ -118,3 +118,68 @@ class QuotesResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: bool = True
     message: str
+
+
+# Layout Schemas
+class WidgetSchema(BaseModel):
+    id: str
+    screenId: str
+    type: str
+    x: int
+    y: int
+    w: int
+    h: int
+    minW: int = 1
+    minH: int = 1
+    createdAt: int
+
+
+class ScreenSchema(BaseModel):
+    id: str
+    name: str
+    order: int = 0
+    createdAt: int
+
+
+class LayoutPayload(BaseModel):
+    screens: list[ScreenSchema]
+    activeScreenId: str
+    widgets: list[WidgetSchema]
+
+
+class WidgetStatePayload(BaseModel):
+    symbol: str | None = None
+    interval: str | None = None
+    state: dict | None = None
+
+
+# Watchlist Schemas
+class WatchlistSchema(BaseModel):
+    id: str
+    name: str
+    order: int = 0
+    items: list[str] = []
+    rowState: dict | None = None
+    createdAt: int
+    updatedAt: int
+
+
+class WatchlistSavePayload(BaseModel):
+    name: str
+    order: int = 0
+    items: list[str] = []
+    rowState: dict | None = None
+
+
+# Settings Schemas
+class SettingsPayload(BaseModel):
+    settings: dict[str, object]
+
+
+# Table Preferences Schemas
+class TablePrefPayload(BaseModel):
+    scopeType: str
+    scopeId: str
+    tableId: str
+    prefs: dict[str, object]
+

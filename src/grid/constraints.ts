@@ -7,32 +7,37 @@ export type GridConstraints = {
     rowHeight: number;
 };
 
+export const GRID_COLS = 24;
+export const GRID_TARGET_ROWS = 24;
+export const GRID_MARGIN: [number, number] = [6, 6];
+
 /**
- * Calculate grid constraints based on container height
- * Accounts for topbar (36px) and margins
+ * Calculate grid constraints based on container height.
+ * Dynamically computes rowHeight so target rows fill available height with zero bottom gap.
  */
 export function calculateGridConstraints(
     containerHeight: number,
 ): GridConstraints {
     const TOPBAR_HEIGHT = 36;
-    const MARGIN = 6;
-    const ROW_HEIGHT = 24;
+    const marginY = GRID_MARGIN[1];
 
     const availableHeight = Math.max(
         containerHeight - TOPBAR_HEIGHT,
-        ROW_HEIGHT,
+        200,
     );
 
-    // RGL row stack uses rowHeight + vertical margin per row.
-    const maxRows = Math.floor(
-        (availableHeight + MARGIN) / (ROW_HEIGHT + MARGIN),
+    // Calculate dynamic rowHeight so GRID_TARGET_ROWS fill availableHeight down to the bottom pixel
+    const totalMarginsY = marginY * (GRID_TARGET_ROWS + 1);
+    const rowHeight = Math.max(
+        (availableHeight - totalMarginsY) / GRID_TARGET_ROWS,
+        10,
     );
 
     return {
-        maxRows,
-        maxCols: 30,
+        maxRows: GRID_TARGET_ROWS,
+        maxCols: GRID_COLS,
         availableHeight,
-        rowHeight: ROW_HEIGHT,
+        rowHeight,
     };
 }
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { Skeleton, WidgetRemoveButton } from "../../ui";
 import { getSettingValue } from "../../services/settings";
 import { registerWidget } from "../registry";
+import { Shell } from "../Shell";
 import styles from "./EconomicCalendar.module.css";
 
 type Props = { id: string; onRemove: () => void };
@@ -20,7 +20,7 @@ function getThemeMode(): ThemeMode {
   return current === "light" ? "light" : "dark";
 }
 
-function EconomicCalendar({ onRemove }: Props) {
+function EconomicCalendar({ id, onRemove }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(getThemeMode);
   const [defaultCountryFilter, setDefaultCountryFilter] = useState(
@@ -103,32 +103,28 @@ function EconomicCalendar({ onRemove }: Props) {
   }, [themeMode, defaultCountryFilter, defaultImportanceOnly]);
 
   return (
-    <div class={styles.root}>
-      <div class={`${styles.handle} widget-handle`}>
-        <div class={`${styles.dragGrip} sc-drag-grip`}>
-          <div class={styles.heading}>Economic Calendar</div>
-        </div>
-        <div class={styles.controls}>
-          <WidgetRemoveButton class={styles.removeBtn} onClick={onRemove} />
-        </div>
-      </div>
-
+    <Shell
+      id={id}
+      className={styles.root}
+      headerLeft={<div class={styles.heading}>Economic Calendar</div>}
+      loading={loading}
+      onRemove={onRemove}
+    >
       <div class={styles.content}>
         <div
           class={`tradingview-widget-container ${styles.widgetHost}`}
           ref={hostRef}
         />
-        {loading && <Skeleton variant="rect" />}
       </div>
-    </div>
+    </Shell>
   );
 }
 
 registerWidget({
   type: "economic-calendar",
   label: "Economic Calendar",
-  defaultSize: { w: 7, h: 29 },
-  minSize: { w: 6, h: 9 },
+  defaultSize: { w: 5, h: 24 },
+  minSize: { w: 4, h: 6 },
   component: EconomicCalendar,
   settingSections: [
     {

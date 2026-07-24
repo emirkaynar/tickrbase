@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useState, useEffect } from "preact/hooks";
 import {
     GridLayout as RGL,
     getCompactor,
@@ -8,6 +8,7 @@ import type { Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { getWidgetDefinition, type WidgetInstance } from "../widgets/registry";
+import { calculateGridConstraints, GRID_COLS, GRID_MARGIN } from "./constraints";
 import styles from "./GridLayout.module.css";
 
 type Props = {
@@ -26,10 +27,20 @@ export function GridLayout({
     const { width, containerRef, mounted } = useContainerWidth();
     const [showGuide, setShowGuide] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
+    const [containerHeight, setContainerHeight] = useState(() => window.innerHeight);
+
+    useEffect(() => {
+        const onResize = () => setContainerHeight(window.innerHeight);
+        window.addEventListener("resize", onResize);
+        return () => window.removeEventListener("resize", onResize);
+    }, []);
 
     if (!mounted) {
         return <div ref={containerRef as never} class={styles.shell} />;
     }
+
+    const constraints = calculateGridConstraints(containerHeight);
+    const stableWidth = Math.floor(width);
 
     return (
         <div
@@ -42,21 +53,21 @@ export function GridLayout({
                 .filter(Boolean)
                 .join(" ")}
         >
-            {showGuide && (
-                <div
-                    class={styles.guide}
-                    style={{ backgroundSize: `${width / 30}px 30px` }}
-                />
-            )}
+            <div
+                class={styles.guide}
+                style={{
+                    backgroundSize: `${stableWidth / GRID_COLS}px ${constraints.rowHeight + GRID_MARGIN[1]}px`,
+                }}
+            />
             <RGL
                 layout={layout}
                 onLayoutChange={(l) => onLayoutChange([...l])}
-                width={width}
+                width={stableWidth}
                 style={{ minHeight: `calc(100vh - var(--topbar-height))` }}
                 gridConfig={{
-                    cols: 30,
-                    rowHeight: 24,
-                    margin: [6, 6] as [number, number],
+                    cols: GRID_COLS,
+                    rowHeight: constraints.rowHeight,
+                    margin: GRID_MARGIN,
                 }}
                 dragConfig={{ handle: ".sc-drag-grip", bounded: true }}
                 compactor={getCompactor(null, false, true)}
@@ -75,7 +86,11 @@ export function GridLayout({
                     const def = getWidgetDefinition(widget.type);
                     const WidgetComponent = def.component;
                     return (
-                        <div key={widget.id} class={styles.slot}>
+                        <div
+                            key={widget.id}
+                            class={styles.slot}
+                            style={{ "--w": widget.w, "--h": widget.h } as any}
+                        >
                             <div style={{ height: "100%" }}>
                                 <WidgetComponent
                                     id={widget.id}

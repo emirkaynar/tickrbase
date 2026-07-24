@@ -78,5 +78,6 @@ export type TableProps<TData extends object> = {
     enableRowReorder?: boolean;
     disableRowReorderWhenSorted?: boolean;
     rowStateId?: string;
+    isHydrating?: boolean;
     onControllerReady?: (controller: TableController) => void;
 };

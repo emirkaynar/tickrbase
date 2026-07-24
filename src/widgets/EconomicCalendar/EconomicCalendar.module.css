@@ -11,21 +11,6 @@
     color-scheme: light dark;
 }
 
-:global(.react-draggable-dragging) .root {
-    border-color: var(--color-primary) !important;
-    transition: border-color var(--transition-fast);
-}
-
-:global(.react-resizable.resizing) .root {
-    border-color: var(--color-primary) !important;
-    transition: border-color var(--transition-fast);
-}
-
-:global(.react-grid-item.react-grid-item-resizing) .handle,
-:global(.react-grid-item.react-draggable-dragging) .handle {
-    box-shadow: inset 0 10px 10px -10px var(--color-primary) !important;
-}
-
 .root:has(.removeBtn:active) {
     border-color: var(--color-danger) !important;
     box-shadow: inset 0 0 2px var(--color-danger) !important;
@@ -50,11 +35,6 @@
     color: var(--color-text-muted);
     font-weight: var(--font-weight-semibold);
     white-space: nowrap;
-}
-
-:global(.react-grid-item.react-grid-item-resizing) .root .handle,
-:global(.react-grid-item.react-draggable-dragging) .root .handle {
-    box-shadow: inset 0 10px 10px -10px var(--color-primary) !important;
 }
 
 .dragGrip {

@@ -5,7 +5,7 @@ import type {
     UTCTimestamp,
     CandlestickData,
 } from "lightweight-charts";
-import { db } from "../../db";
+import { api } from "../../services/api";
 import { fetchHistory } from "../../services/history";
 import { livePricesClient } from "../../services/livePrices";
 import type { Bar, Interval } from "../../services/types";
@@ -123,27 +123,34 @@ export function useChartState(
     );
     const [stateReady, setStateReady] = useState(false);
 
-    // Restore persisted state from Dexie on mount
+    // Restore persisted state from backend API on mount
     useEffect(() => {
-        void db.widgetState.get(id).then((saved) => {
+        void api.get<any>(`/user/widgets/${id}/state`).then((saved) => {
             if (saved) {
-                if (INTERVALS.includes(saved.interval as Interval)) {
+                if (saved.interval && INTERVALS.includes(saved.interval as Interval)) {
                     selectInterval(saved.interval as Interval);
                 }
-                setSymbol(saved.symbol);
+                if (saved.symbol) {
+                    setSymbol(saved.symbol);
+                }
+                if (saved.state?.timeScale) {
+                    chartStateRef.current = saved.state.timeScale;
+                }
             }
             setStateReady(true);
-        });
-
-        void db.chartState.get(id).then((saved) => {
-            if (saved?.timeScale) chartStateRef.current = saved.timeScale;
+        }).catch(() => {
+            setStateReady(true);
         });
     }, [id]);
 
     // Persist symbol+interval changes
     useEffect(() => {
         if (!stateReady) return;
-        void db.widgetState.put({ id, symbol, interval });
+        void api.put(`/user/widgets/${id}/state`, {
+            symbol,
+            interval,
+            state: chartStateRef.current ? { timeScale: chartStateRef.current } : undefined,
+        });
     }, [id, symbol, interval, stateReady]);
 
     const applyBars = useCallback(
@@ -179,14 +186,15 @@ export function useChartState(
             chartStateRef.current = range
                 ? { from: range.from as number, to: range.to as number }
                 : null;
-            await db.chartState.put({
-                widget_id: id,
-                timeScale: chartStateRef.current,
+            await api.put(`/user/widgets/${id}/state`, {
+                symbol,
+                interval,
+                state: { timeScale: chartStateRef.current },
             });
         } catch {
             /* ignore */
         }
-    }, [id, chartRef]);
+    }, [id, symbol, interval, chartRef]);
 
     // Data load + polling
     useEffect(() => {

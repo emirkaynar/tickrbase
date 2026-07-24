@@ -1,6 +1,6 @@
-import { useEffect, useState, useCallback } from "preact/hooks";
+import { useEffect, useState, useCallback, useRef } from "preact/hooks";
 import type { Layout, LayoutItem } from "react-grid-layout";
-import { db } from "../db";
+import { api } from "../services/api";
 import { useDebounce } from "../hooks/useDebounce";
 import {
     createWidgetInstance,
@@ -10,7 +10,26 @@ import {
 } from "../widgets/registry";
 import { calculateGridConstraints, findFittingSize } from "./constraints";
 
-const ACTIVE_SCREEN_KEY = "active-screen" as const;
+import { prefetchSettings } from "../services/settings";
+
+export type ScreenItem = { id: string; name: string; order: number; createdAt: number };
+
+export type BackendLayoutPayload = {
+    screens: ScreenItem[];
+    activeScreenId: string;
+    widgets: WidgetInstance[];
+};
+
+const widgetStateCache = new Map<string, any>();
+
+export function getWidgetStateFromCache(widgetId: string): any {
+    if (widgetStateCache.has(widgetId)) {
+        const val = widgetStateCache.get(widgetId);
+        widgetStateCache.delete(widgetId);
+        return val;
+    }
+    return undefined;
+}
 
 const ALL_HANDLES: LayoutItem["resizeHandles"] = [
     "s",
@@ -38,88 +57,97 @@ function defaultScreenNameFrom(records: { name: string }[]): string {
     return `Screen ${max + 1}`;
 }
 
-async function ensureDefaultScreen(): Promise<{ id: string; name: string }> {
-    const screenId = `screen-${Date.now()}`;
-    const screen = {
-        id: screenId,
-        name: "Screen 1",
-        order: 0,
-        createdAt: Date.now(),
-    };
-    await db.screens.add(screen);
-    await db.uiState.put({ id: ACTIVE_SCREEN_KEY, activeScreenId: screenId });
-    return { id: screen.id, name: screen.name };
-}
-
-export function useLayout() {
-    const [screens, setScreens] = useState<{ id: string; name: string }[]>([]);
+export function useLayout(isAuthenticated: boolean = true) {
+    const [screens, setScreens] = useState<ScreenItem[]>([]);
     const [activeScreenId, setActiveScreenId] = useState("");
-    const [widgets, setWidgets] = useState<WidgetInstance[]>([]);
+    const [allWidgets, setAllWidgets] = useState<WidgetInstance[]>([]);
     const [ready, setReady] = useState(false);
 
-    const refreshWidgets = useCallback(async (screenId: string) => {
-        const records = await db.widgets
-            .where("screenId")
-            .equals(screenId)
-            .sortBy("createdAt");
-        setWidgets(records as WidgetInstance[]);
+    // Keep ref for current state to avoid stale closure during debounced save
+    const stateRef = useRef({ screens, activeScreenId, allWidgets });
+    stateRef.current = { screens, activeScreenId, allWidgets };
+
+    // Initial load from backend API
+    const loadLayout = useCallback(async () => {
+        try {
+            const data = await api.get<BackendLayoutPayload>("/user/layout");
+            setScreens(data.screens || []);
+            setActiveScreenId(data.activeScreenId || (data.screens && data.screens[0]?.id) || "");
+            const normalizedWidgets = (data.widgets || []).map((w) => {
+                const wClamped = Math.min(w.w || 6, 24);
+                const hClamped = Math.min(w.h || 24, 24);
+                return {
+                    ...w,
+                    w: wClamped,
+                    h: hClamped,
+                    x: Math.min(w.x || 0, Math.max(0, 24 - wClamped)),
+                    y: Math.min(w.y || 0, Math.max(0, 24 - hClamped)),
+                };
+            });
+            setAllWidgets(normalizedWidgets);
+            setReady(true);
+
+            // Parallel prefetch widget states and user settings
+            const widgetIds = normalizedWidgets.map((w) => w.id);
+            void Promise.all([
+                prefetchSettings(),
+                ...widgetIds.map(async (wId) => {
+                    try {
+                        const saved = await api.get<any>(`/user/widgets/${wId}/state`);
+                        if (saved) {
+                            widgetStateCache.set(wId, saved);
+                        }
+                    } catch {
+                        // ignore prefetch errors
+                    }
+                }),
+            ]);
+        } catch (err) {
+            console.error("Failed to load layout from backend:", err);
+            setReady(true);
+        }
     }, []);
 
-    // Initial load
     useEffect(() => {
-        void (async () => {
-            let screenRecords = await db.screens.orderBy("order").toArray();
-            if (screenRecords.length === 0) {
-                const created = await ensureDefaultScreen();
-                screenRecords = [
-                    {
-                        id: created.id,
-                        name: created.name,
-                        order: 0,
-                        createdAt: Date.now(),
-                    },
-                ];
-            }
+        if (!isAuthenticated) {
+            setScreens([]);
+            setActiveScreenId("");
+            setAllWidgets([]);
+            setReady(false);
+            return;
+        }
+        void loadLayout();
+    }, [isAuthenticated, loadLayout]);
 
-            const uiState = await db.uiState.get(ACTIVE_SCREEN_KEY);
-            const nextActive =
-                uiState?.activeScreenId &&
-                screenRecords.some((s) => s.id === uiState.activeScreenId)
-                    ? uiState.activeScreenId
-                    : screenRecords[0].id;
-
-            await db.uiState.put({
-                id: ACTIVE_SCREEN_KEY,
-                activeScreenId: nextActive,
+    // Save full layout to backend
+    const saveLayoutToBackend = useCallback(async (
+        nextScreens: ScreenItem[],
+        nextActiveId: string,
+        nextWidgets: WidgetInstance[]
+    ) => {
+        try {
+            await api.put("/user/layout", {
+                screens: nextScreens,
+                activeScreenId: nextActiveId,
+                widgets: nextWidgets,
             });
-            setScreens(screenRecords.map((s) => ({ id: s.id, name: s.name })));
-            setActiveScreenId(nextActive);
-            await refreshWidgets(nextActive);
-            setReady(true);
-        })();
-    }, [refreshWidgets]);
+        } catch (err) {
+            console.error("Failed to save layout to backend:", err);
+        }
+    }, []);
 
-    const persistLayout = useDebounce(
-        useCallback((items: Layout) => {
-            void Promise.all(
-                items.map((item) =>
-                    db.widgets.update(item.i, {
-                        x: item.x,
-                        y: item.y,
-                        w: item.w,
-                        h: item.h,
-                    }),
-                ),
-            );
-        }, []),
-        500,
-    );
+    const debouncedSave = useDebounce(saveLayoutToBackend, 600);
+
+    // Get widgets for active screen
+    const activeWidgets = allWidgets.filter((w) => w.screenId === activeScreenId);
 
     const onLayoutChange = useCallback(
         (items: Layout) => {
             if (!activeScreenId) return;
-            setWidgets((prev) =>
-                prev.map((widget) => {
+
+            setAllWidgets((prevWidgets) => {
+                const updatedWidgets = prevWidgets.map((widget) => {
+                    if (widget.screenId !== activeScreenId) return widget;
                     const match = items.find((item) => item.i === widget.id);
                     return match
                         ? {
@@ -130,15 +158,17 @@ export function useLayout() {
                               h: match.h,
                           }
                         : widget;
-                }),
-            );
-            persistLayout(items);
+                });
+
+                debouncedSave(stateRef.current.screens, stateRef.current.activeScreenId, updatedWidgets);
+                return updatedWidgets;
+            });
         },
-        [activeScreenId, persistLayout],
+        [activeScreenId, debouncedSave],
     );
 
     const layout = withHandles(
-        widgets.map((w) => ({
+        activeWidgets.map((w) => ({
             i: w.id,
             x: w.x,
             y: w.y,
@@ -152,44 +182,42 @@ export function useLayout() {
     const setActiveScreen = useCallback(
         async (screenId: string) => {
             if (screenId === activeScreenId) return;
-            await db.uiState.put({
-                id: ACTIVE_SCREEN_KEY,
-                activeScreenId: screenId,
-            });
             setActiveScreenId(screenId);
-            await refreshWidgets(screenId);
+            void saveLayoutToBackend(screens, screenId, allWidgets);
         },
-        [activeScreenId, refreshWidgets],
+        [activeScreenId, screens, allWidgets, saveLayoutToBackend],
     );
 
     const createScreen = useCallback(
         async (name?: string) => {
-            const current = await db.screens.orderBy("order").toArray();
-            const nextOrder = current.length;
-            const resolved = name?.trim() || defaultScreenNameFrom(current);
+            const resolved = name?.trim() || defaultScreenNameFrom(screens);
             const now = Date.now();
             const screenId = `screen-${now}`;
-            await db.screens.add({
+            const newScreen: ScreenItem = {
                 id: screenId,
                 name: resolved,
-                order: nextOrder,
+                order: screens.length,
                 createdAt: now,
-            });
-            const next = [...screens, { id: screenId, name: resolved }];
-            setScreens(next);
-            await setActiveScreen(screenId);
+            };
+
+            const nextScreens = [...screens, newScreen];
+            setScreens(nextScreens);
+            setActiveScreenId(screenId);
+            void saveLayoutToBackend(nextScreens, screenId, allWidgets);
         },
-        [screens, setActiveScreen],
+        [screens, allWidgets, saveLayoutToBackend],
     );
 
-    const renameScreen = useCallback(async (screenId: string, name: string) => {
-        const trimmed = name.trim();
-        if (!trimmed) return;
-        await db.screens.update(screenId, { name: trimmed });
-        setScreens((prev) =>
-            prev.map((s) => (s.id === screenId ? { ...s, name: trimmed } : s)),
-        );
-    }, []);
+    const renameScreen = useCallback(
+        async (screenId: string, name: string) => {
+            const trimmed = name.trim();
+            if (!trimmed) return;
+            const nextScreens = screens.map((s) => (s.id === screenId ? { ...s, name: trimmed } : s));
+            setScreens(nextScreens);
+            void saveLayoutToBackend(nextScreens, activeScreenId, allWidgets);
+        },
+        [screens, activeScreenId, allWidgets, saveLayoutToBackend],
+    );
 
     const renameActiveScreen = useCallback(
         async (name: string) => {
@@ -201,68 +229,42 @@ export function useLayout() {
 
     const deleteScreen = useCallback(
         async (screenId: string): Promise<boolean> => {
-            const current = await db.screens.orderBy("order").toArray();
-            if (current.length <= 1) return false;
+            if (screens.length <= 1) return false;
 
-            const idx = current.findIndex((s) => s.id === screenId);
+            const idx = screens.findIndex((s) => s.id === screenId);
             if (idx < 0) return false;
 
-            const survivor = current.filter((s) => s.id !== screenId);
-            await db.transaction(
-                "rw",
-                db.screens,
-                db.widgets,
-                db.uiState,
-                async () => {
-                    await db.screens.delete(screenId);
-                    await db.widgets
-                        .where("screenId")
-                        .equals(screenId)
-                        .delete();
+            const survivor = screens.filter((s) => s.id !== screenId).map((s, i) => ({ ...s, order: i }));
+            const remainingWidgets = allWidgets.filter((w) => w.screenId !== screenId);
 
-                    await Promise.all(
-                        survivor.map((s, order) =>
-                            db.screens.update(s.id, { order }),
-                        ),
-                    );
+            const nextActiveId = activeScreenId === screenId
+                ? (survivor[Math.min(idx, survivor.length - 1)] ?? survivor[0]).id
+                : activeScreenId;
 
-                    if (activeScreenId === screenId) {
-                        const fallback =
-                            survivor[Math.min(idx, survivor.length - 1)];
-                        await db.uiState.put({
-                            id: ACTIVE_SCREEN_KEY,
-                            activeScreenId: fallback.id,
-                        });
-                    }
-                },
-            );
-
-            const ordered = await db.screens.orderBy("order").toArray();
-            setScreens(ordered.map((s) => ({ id: s.id, name: s.name })));
-
-            if (activeScreenId === screenId) {
-                const fallback = ordered[Math.min(idx, ordered.length - 1)];
-                setActiveScreenId(fallback.id);
-                await refreshWidgets(fallback.id);
-            }
+            setScreens(survivor);
+            setActiveScreenId(nextActiveId);
+            setAllWidgets(remainingWidgets);
+            void saveLayoutToBackend(survivor, nextActiveId, remainingWidgets);
 
             return true;
         },
-        [activeScreenId, refreshWidgets],
+        [screens, activeScreenId, allWidgets, saveLayoutToBackend],
     );
 
-    const reorderScreens = useCallback(async (nextIds: string[]) => {
-        if (nextIds.length <= 1) return;
-        await db.transaction("rw", db.screens, async () => {
-            await Promise.all(
-                nextIds.map((id, index) =>
-                    db.screens.update(id, { order: index }),
-                ),
-            );
-        });
-        const ordered = await db.screens.orderBy("order").toArray();
-        setScreens(ordered.map((s) => ({ id: s.id, name: s.name })));
-    }, []);
+    const reorderScreens = useCallback(
+        async (nextIds: string[]) => {
+            if (nextIds.length <= 1) return;
+
+            const idMap = new Map(nextIds.map((id, index) => [id, index]));
+            const nextScreens = [...screens]
+                .map((s) => ({ ...s, order: idMap.get(s.id) ?? s.order }))
+                .sort((a, b) => a.order - b.order);
+
+            setScreens(nextScreens);
+            void saveLayoutToBackend(nextScreens, activeScreenId, allWidgets);
+        },
+        [screens, activeScreenId, allWidgets, saveLayoutToBackend],
+    );
 
     const moveScreen = useCallback(
         async (screenId: string, direction: -1 | 1) => {
@@ -288,20 +290,17 @@ export function useLayout() {
             const def = getWidgetDefinition(type);
             const constraints = calculateGridConstraints(window.innerHeight);
 
-            // Free-placement add: default first, then width/height fallback.
             const fitting = findFittingSize(
-                widgets,
+                activeWidgets,
                 def.defaultSize,
                 def.minSize,
                 constraints,
             );
 
-            // No space available
             if (!fitting) {
                 return { success: false, noSpace: true };
             }
 
-            // Create widget with calculated position and size
             const record = createWidgetInstance(activeScreenId, type, {
                 x: fitting.position.x,
                 y: fitting.position.y,
@@ -309,23 +308,28 @@ export function useLayout() {
                 h: fitting.size.h,
             });
 
-            await db.widgets.add(record);
-            setWidgets((prev) => [...prev, record]);
+            const nextWidgets = [...allWidgets, record];
+            setAllWidgets(nextWidgets);
+            void saveLayoutToBackend(screens, activeScreenId, nextWidgets);
 
             return { success: true };
         },
-        [activeScreenId, widgets],
+        [activeScreenId, activeWidgets, allWidgets, screens, saveLayoutToBackend],
     );
 
-    const removeWidget = useCallback(async (id: string) => {
-        await db.widgets.delete(id);
-        setWidgets((prev) => prev.filter((w) => w.id !== id));
-    }, []);
+    const removeWidget = useCallback(
+        async (id: string) => {
+            const nextWidgets = allWidgets.filter((w) => w.id !== id);
+            setAllWidgets(nextWidgets);
+            void saveLayoutToBackend(screens, activeScreenId, nextWidgets);
+        },
+        [allWidgets, screens, activeScreenId, saveLayoutToBackend],
+    );
 
     return {
         screens,
         activeScreenId,
-        widgets,
+        widgets: activeWidgets,
         layout,
         onLayoutChange,
         setActiveScreen,

@@ -29,10 +29,9 @@ import {
   type TableColumnDef,
   type TableColumnOption,
   type TableController,
-  WidgetRemoveButton,
   Tooltip,
 } from "../../ui";
-import { db } from "../../db";
+import { api } from "../../services/api";
 import {
   addSymbolToList,
   createList,
@@ -52,6 +51,7 @@ import type {
 } from "../../services/types";
 import { ScrollArea as ArcScrollArea } from "@ark-ui/react/scroll-area";
 import { registerWidget } from "../registry";
+import { Shell } from "../Shell";
 import styles from "./Lists.module.css";
 
 type Props = { id: string; onRemove: () => void };
@@ -287,6 +287,8 @@ function Watchlist({ id, onRemove }: Props) {
   const addGroupTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [lists, setLists] = useState<ListRecord[]>([]);
   const [activeListId, setActiveListId] = useState("");
+  const lastSavedActiveListIdRef = useRef("");
+  const [isListSwitching, setIsListSwitching] = useState(false);
   const [items, setItems] = useState<ListItem[]>([]);
   const [disablePulse, setDisablePulse] = useState(false);
   const [priceByTicker, setPriceByTicker] = useState<Record<string, number>>(
@@ -403,17 +405,15 @@ function Watchlist({ id, onRemove }: Props) {
 
     const load = async () => {
       try {
-        const saved = await db.widgetState.get(id);
+        const saved = await api.get<any>(`/user/widgets/${id}/state`);
         const savedActiveListId = saved?.symbol ?? "";
+        lastSavedActiveListIdRef.current = savedActiveListId;
 
         setError("");
         await refreshLists(savedActiveListId);
       } catch {
         if (!controller.signal.aborted) {
           setError("Could not load lists.");
-        }
-      } finally {
-        if (!controller.signal.aborted) {
           setLoading(false);
         }
       }
@@ -430,10 +430,15 @@ function Watchlist({ id, onRemove }: Props) {
   useEffect(() => {
     if (!activeListId) {
       setItems([]);
+      setIsListSwitching(false);
+      if (lists.length === 0 && !loading) {
+        setLoading(false);
+      }
       return;
     }
 
     const controller = new AbortController();
+    setIsListSwitching(true);
 
     const loadItems = async () => {
       try {
@@ -442,10 +447,18 @@ function Watchlist({ id, onRemove }: Props) {
         if (controller.signal.aborted) return;
 
         setItems(nextItems);
-        await db.widgetState.put({ id, symbol: activeListId });
+        if (lastSavedActiveListIdRef.current !== activeListId) {
+          lastSavedActiveListIdRef.current = activeListId;
+          await api.put(`/user/widgets/${id}/state`, { symbol: activeListId });
+        }
       } catch {
         if (!controller.signal.aborted) {
           setError("Could not load list items.");
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setIsListSwitching(false);
+          setLoading(false);
         }
       }
     };
@@ -455,7 +468,7 @@ function Watchlist({ id, onRemove }: Props) {
     return () => {
       controller.abort();
     };
-  }, [id, activeListId]);
+  }, [id, activeListId, lists.length, loading]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -1617,8 +1630,10 @@ function Watchlist({ id, onRemove }: Props) {
   );
 
   return (
-    <div ref={rootRef} className={styles.root}>
-      <div className={`${styles.handle} widget-handle`}>
+    <Shell
+      id={id}
+      className={styles.root}
+      headerLeft={
         <div className={styles.widgetTitle}>
           <ArkPopover.Root
             open={listPopoverOpen}
@@ -1716,7 +1731,8 @@ function Watchlist({ id, onRemove }: Props) {
             </Portal>
           </ArkPopover.Root>
         </div>
-        <div className={`${styles.dragGrip} sc-drag-grip`} />
+      }
+      headerRight={
         <div className={styles.controls}>
           <Tooltip content="Columns">
             <Select
@@ -1736,17 +1752,17 @@ function Watchlist({ id, onRemove }: Props) {
               disabled={!hasController}
             />
           </Tooltip>
-
-          <WidgetRemoveButton class={styles.removeBtn} onClick={onRemove} />
         </div>
-      </div>
-      <ArcScrollArea.Root className={styles.scrollRoot}>
-        <ArcScrollArea.Viewport className={styles.scrollViewport}>
-          <ArcScrollArea.Content className={styles.scrollContent}>
-            <div className={styles.content}>
-              {error ? (
-                <div className={styles.errorState}>{error}</div>
-              ) : (
+      }
+      loading={loading}
+      error={error}
+      onRemove={onRemove}
+    >
+      <div ref={rootRef} className={styles.bodyWrapper}>
+        <ArcScrollArea.Root className={styles.scrollRoot}>
+          <ArcScrollArea.Viewport className={styles.scrollViewport}>
+            <ArcScrollArea.Content className={styles.scrollContent}>
+              <div className={styles.content}>
                 <Table
                   className={styles.table}
                   rows={rows}
@@ -1759,28 +1775,27 @@ function Watchlist({ id, onRemove }: Props) {
                   stickyColumnId="symbol"
                   lockedColumnIds={LISTS_LOCKED_COLUMN_IDS}
                   rowStateId={activeListId || undefined}
+                  isHydrating={isListSwitching}
                   emptyMessage="No symbols in this list yet."
                   onControllerReady={handleControllerReady}
                 />
-              )}
-            </div>
-          </ArcScrollArea.Content>
-        </ArcScrollArea.Viewport>
-        <ArcScrollArea.Scrollbar
-          className={styles.scrollbar}
-          orientation="vertical"
-        >
-          <ArcScrollArea.Thumb className={styles.scrollThumb} />
-        </ArcScrollArea.Scrollbar>
-        <ArcScrollArea.Scrollbar
-          className={styles.scrollbar}
-          orientation="horizontal"
-        >
-          <ArcScrollArea.Thumb className={styles.scrollThumb} />
-        </ArcScrollArea.Scrollbar>
-        <ArcScrollArea.Corner className={styles.Corner} />
-      </ArcScrollArea.Root>
-      {loading && !error && <Skeleton />}
+              </div>
+            </ArcScrollArea.Content>
+          </ArcScrollArea.Viewport>
+          <ArcScrollArea.Scrollbar
+            className={styles.scrollbar}
+            orientation="vertical"
+          >
+            <ArcScrollArea.Thumb className={styles.scrollThumb} />
+          </ArcScrollArea.Scrollbar>
+          <ArcScrollArea.Scrollbar
+            className={styles.scrollbar}
+            orientation="horizontal"
+          >
+            <ArcScrollArea.Thumb className={styles.scrollThumb} />
+          </ArcScrollArea.Scrollbar>
+          <ArcScrollArea.Corner className={styles.Corner} />
+        </ArcScrollArea.Root>
       <div className={styles.bottomActions}>
         <ArkPopover.Root
           open={addSymbolPopoverOpen}
@@ -1893,6 +1908,7 @@ function Watchlist({ id, onRemove }: Props) {
           </Portal>
         </ArkPopover.Root>
       </div>
+      </div>
 
       <Dialog
         open={deleteDialogOpen}
@@ -1907,15 +1923,15 @@ function Watchlist({ id, onRemove }: Props) {
           </Button>
         </div>
       </Dialog>
-    </div>
+    </Shell>
   );
 }
 
 registerWidget({
   type: "watchlist",
   label: "Lists",
-  defaultSize: { w: 7, h: 29 },
-  minSize: { w: 6, h: 9 },
+  defaultSize: { w: 5, h: 24 },
+  minSize: { w: 4, h: 6 },
   component: Watchlist,
   settingSections: [
     {

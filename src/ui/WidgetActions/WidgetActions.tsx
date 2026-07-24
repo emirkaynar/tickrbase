@@ -18,16 +18,18 @@ export function WidgetRemoveButton({
 }: RemoveProps) {
     return (
         <Tooltip content="Remove widget">
-        <button
-            type="button"
-            class={[styles.button, styles.remove, className]
-                .filter(Boolean)
-                .join(" ")}
-            onClick={onClick}
-            aria-label={title}
-        >
-            <XIcon />
-        </button>
+            <button
+                type="button"
+                class={[styles.button, styles.remove, className]
+                    .filter(Boolean)
+                    .join(" ")}
+                onClick={onClick}
+                aria-label={title}
+            >
+                <span class={styles.iconSlot}>
+                    <XIcon />
+                </span>
+            </button>
         </Tooltip>
     );
 }
@@ -38,15 +40,17 @@ export function WidgetDragButton({
 }: BaseProps) {
     return (
         <Tooltip content="Move widget">
-        <button
-            type="button"
-            class={[styles.button, styles.drag, "sc-drag-grip", className]
-                .filter(Boolean)
-                .join(" ")}
-            aria-label={title}
-        >
-            <Move />
-        </button>
+            <button
+                type="button"
+                class={[styles.button, styles.drag, "sc-drag-grip", className]
+                    .filter(Boolean)
+                    .join(" ")}
+                aria-label={title}
+            >
+                <span class={styles.iconSlot}>
+                    <Move />
+                </span>
+            </button>
         </Tooltip>
     );
 }

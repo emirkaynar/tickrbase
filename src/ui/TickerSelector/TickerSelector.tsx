@@ -1,27 +1,84 @@
+import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import {
-    Combobox as ArkCombobox,
-    useListCollection,
-} from "@ark-ui/react/combobox";
+import { Combobox, useListCollection } from "@ark-ui/react/combobox";
 import { Portal } from "@ark-ui/react/portal";
-import { CheckIcon, ChevronsUpDownIcon, Loader2Icon } from "lucide-react";
+import {
+    CheckIcon,
+    Loader2Icon,
+    SearchIcon,
+    TrendingUpIcon,
+} from "lucide-react";
 import { fetchLookup } from "../../services/lookup";
 import type { LookupItem } from "../../services/types";
 import styles from "./TickerSelector.module.css";
 
-type TickerSelectorItem = LookupItem;
+export type TickerSelectorItem = LookupItem;
 
-type Props = {
+export type TickerSelectorProps = {
     value: string;
     onChange: (value: string) => void;
+    trigger?: ComponentChildren;
     placeholder?: string;
     className?: string;
-    minQueryLength?: number;
-    debounceMs?: number;
+    popularTickers?: TickerSelectorItem[];
 };
 
-const DEFAULT_MIN_QUERY_LENGTH = 2;
-const DEFAULT_DEBOUNCE_MS = 250;
+const DEFAULT_POPULAR_TICKERS: TickerSelectorItem[] = [
+    {
+        symbol: "THYAO.IS",
+        company_name: "Türk Hava Yolları",
+        exchange: "BIST",
+        instrument_type: "stock",
+    },
+    {
+        symbol: "ASELS.IS",
+        company_name: "Aselsan Elektronik",
+        exchange: "BIST",
+        instrument_type: "stock",
+    },
+    {
+        symbol: "GARAN.IS",
+        company_name: "Garanti BBVA",
+        exchange: "BIST",
+        instrument_type: "stock",
+    },
+    {
+        symbol: "EREGL.IS",
+        company_name: "Ereğli Demir Çelik",
+        exchange: "BIST",
+        instrument_type: "stock",
+    },
+    {
+        symbol: "TUPRS.IS",
+        company_name: "Tüpraş",
+        exchange: "BIST",
+        instrument_type: "stock",
+    },
+    {
+        symbol: "KCHOL.IS",
+        company_name: "Koç Holding",
+        exchange: "BIST",
+        instrument_type: "stock",
+    },
+    {
+        symbol: "AKBNK.IS",
+        company_name: "Akbank",
+        exchange: "BIST",
+        instrument_type: "stock",
+    },
+    {
+        symbol: "SISE.IS",
+        company_name: "Şişecam",
+        exchange: "BIST",
+        instrument_type: "stock",
+    },
+];
+
+function TickerAvatar({ symbol }: { symbol: string }) {
+    const clean = symbol.replace(/\.IS$/i, "");
+    const initials = clean.slice(0, 2).toUpperCase();
+    return <div className={styles.avatar}>{initials}</div>;
+}
 
 function formatSubtitle(item: TickerSelectorItem): string {
     if (item.exchange && item.company_name) {
@@ -33,106 +90,28 @@ function formatSubtitle(item: TickerSelectorItem): string {
 export function TickerSelector({
     value,
     onChange,
-    placeholder,
+    trigger,
+    placeholder = "Search ticker...",
     className,
-    minQueryLength = DEFAULT_MIN_QUERY_LENGTH,
-    debounceMs = DEFAULT_DEBOUNCE_MS,
-}: Props) {
-    const [inputValue, setInputValue] = useState(value);
+    popularTickers = DEFAULT_POPULAR_TICKERS,
+}: TickerSelectorProps) {
     const [query, setQuery] = useState("");
+    const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const [results, setResults] = useState<TickerSelectorItem[]>([]);
-    const [cachedMetadata, setCachedMetadata] =
-        useState<TickerSelectorItem | null>(null);
-    const [isOpen, setIsOpen] = useState(false);
-
-    const didSelectRef = useRef(false);
+    const [searchResults, setSearchResults] = useState<TickerSelectorItem[]>(
+        [],
+    );
     const requestTokenRef = useRef(0);
-    const metadataTokenRef = useRef(0);
 
-    const fallbackItem = useMemo<TickerSelectorItem | null>(() => {
-        if (!value) return null;
-        const exists = results.some((item) => item.symbol === value);
-        if (exists) return null;
-        if (cachedMetadata?.symbol === value) {
-            return cachedMetadata;
-        }
-        return {
-            symbol: value,
-            exchange: "",
-            company_name: "",
-            instrument_type: "saved",
-        };
-    }, [value, results, cachedMetadata]);
-
-    const items = useMemo<TickerSelectorItem[]>(() => {
-        if (!fallbackItem) return results;
-        return [fallbackItem, ...results];
-    }, [fallbackItem, results]);
-
-    const { collection, set } = useListCollection<TickerSelectorItem>({
-        initialItems: items,
-        itemToString: (item) => item.symbol,
-        itemToValue: (item) => item.symbol,
-    });
-
-    useEffect(() => {
-        set(items);
-    }, [items, set]);
-
-    useEffect(() => {
-        setInputValue(value);
-    }, [value]);
-
-    useEffect(() => {
-        if (!value) {
-            setCachedMetadata(null);
-            return;
-        }
-
-        const exists = results.some((item) => item.symbol === value);
-        if (exists) {
-            setCachedMetadata(null);
-            return;
-        }
-
-        const token = metadataTokenRef.current + 1;
-        metadataTokenRef.current = token;
-        const ctrl = new AbortController();
-
-        // Extract the base symbol (before any exchange suffix like .IS)
-        const baseSymbol = value.split(".")[0];
-        const timerId = window.setTimeout(() => {
-            fetchLookup(baseSymbol, ctrl.signal)
-                .then((nextItems) => {
-                    if (metadataTokenRef.current !== token) return;
-                    const match = nextItems.find(
-                        (item) => item.symbol === value,
-                    );
-                    if (match) {
-                        setCachedMetadata(match);
-                    }
-                })
-                .catch(() => {
-                    if (metadataTokenRef.current !== token) return;
-                    // Silently fail - just don't show metadata
-                    setCachedMetadata(null);
-                });
-        }, 300);
-
-        return () => {
-            ctrl.abort();
-            clearTimeout(timerId);
-        };
-    }, [value, results]);
+    const cleanSymbol = useMemo(() => value.replace(/\.IS$/i, ""), [value]);
 
     useEffect(() => {
         const normalized = query.trim();
-        if (normalized.length < minQueryLength) {
+        if (normalized.length < 2) {
             setLoading(false);
             setError("");
-            setResults([]);
+            setSearchResults([]);
             return;
         }
 
@@ -146,124 +125,165 @@ export function TickerSelector({
             fetchLookup(normalized, ctrl.signal)
                 .then((nextItems) => {
                     if (requestTokenRef.current !== token) return;
-                    setResults(nextItems);
+                    setSearchResults(nextItems);
                 })
                 .catch((err: unknown) => {
                     if (requestTokenRef.current !== token) return;
                     if (
                         err instanceof DOMException &&
                         err.name === "AbortError"
-                    ) {
+                    )
                         return;
-                    }
                     setError(
-                        err instanceof Error
-                            ? err.message
-                            : "Lookup request failed",
+                        err instanceof Error ? err.message : "Lookup failed",
                     );
-                    setResults([]);
+                    setSearchResults([]);
                 })
                 .finally(() => {
                     if (requestTokenRef.current !== token) return;
                     setLoading(false);
                 });
-        }, debounceMs);
+        }, 250);
 
         return () => {
             ctrl.abort();
             clearTimeout(timerId);
         };
-    }, [query, minQueryLength, debounceMs]);
+    }, [query]);
+
+    const activeItems = useMemo(() => {
+        if (query.trim().length >= 2) {
+            return searchResults;
+        }
+        return popularTickers;
+    }, [query, searchResults, popularTickers]);
+
+    const { collection, set } = useListCollection<TickerSelectorItem>({
+        initialItems: activeItems,
+        itemToString: (item) => item.symbol.replace(/\.IS$/i, ""),
+        itemToValue: (item) => item.symbol,
+    });
+
+    useEffect(() => {
+        set(activeItems);
+    }, [activeItems, set]);
 
     return (
-        <ArkCombobox.Root
+        <Combobox.Root<TickerSelectorItem>
             collection={collection}
             value={value ? [value] : []}
-            inputValue={inputValue}
-            open={isOpen}
+            open={open}
+            onOpenChange={(details) => {
+                setOpen(details.open);
+                if (!details.open) {
+                    setQuery("");
+                }
+            }}
             onValueChange={(details) => {
-                const next = details.value[0] ?? "";
-                if (!next) return;
-                onChange(next);
-                didSelectRef.current = true;
+                const selected = details.value[0];
+                if (selected) {
+                    onChange(selected);
+                    setOpen(false);
+                }
             }}
             onInputValueChange={(details) => {
-                setInputValue(details.inputValue);
-                if (details.reason === "input-change") {
-                    setQuery(details.inputValue);
-                    setIsOpen(true);
-                }
+                setQuery(details.inputValue);
             }}
-            onOpenChange={(details) => {
-                setIsOpen(details.open);
-                if (!details.open) {
-                    if (!didSelectRef.current) {
-                        setInputValue(value);
-                    }
-                    didSelectRef.current = false;
-                    setQuery("");
-                    setError("");
-                    setLoading(false);
-                }
-            }}
-            positioning={{ placement: "bottom-start" }}
-            loopFocus
+            closeOnSelect
+            selectionBehavior="replace"
+            positioning={{ placement: "bottom-start", gutter: 6 }}
             className={[styles.root, className].filter(Boolean).join(" ")}
         >
-            <ArkCombobox.Control className={styles.control}>
-                <ArkCombobox.Input
-                    className={styles.input}
-                    placeholder={placeholder}
-                    onFocus={() => setIsOpen(true)}
-                />
-                <div className={styles.indicators}>
-                    <ArkCombobox.Trigger className={styles.trigger}>
-                        <ChevronsUpDownIcon />
-                    </ArkCombobox.Trigger>
-                </div>
-            </ArkCombobox.Control>
+            <Combobox.Control className={styles.control}>
+                <Combobox.Trigger asChild>
+                    {trigger ? (
+                        trigger
+                    ) : (
+                        <button type="button" className={styles.defaultTrigger}>
+                            <span className={styles.triggerSymbol}>
+                                {cleanSymbol || "Select Ticker"}
+                            </span>
+                        </button>
+                    )}
+                </Combobox.Trigger>
+            </Combobox.Control>
+
             <Portal>
-                <ArkCombobox.Positioner>
-                    <ArkCombobox.Content className={styles.content}>
-                        {loading ? (
-                            <div className={styles.status}>
+                <Combobox.Positioner>
+                    <Combobox.Content className={styles.popoverContent}>
+                        <div className={styles.searchHeader}>
+                            <SearchIcon className={styles.searchIcon} />
+                            <Combobox.Input
+                                className={styles.searchInput}
+                                placeholder={placeholder}
+                            />
+                            {loading && (
                                 <Loader2Icon className={styles.spinner} />
-                                <span>Searching...</span>
-                            </div>
-                        ) : error ? (
-                            <div className={styles.status}>{error}</div>
-                        ) : items.length === 0 ? (
-                            <ArkCombobox.Empty className={styles.empty}>
-                                Start typing to search tickers...
-                            </ArkCombobox.Empty>
+                            )}
+                        </div>
+
+                        {error ? (
+                            <div className={styles.statusMsg}>{error}</div>
+                        ) : activeItems.length === 0 &&
+                          query.trim().length >= 2 &&
+                          !loading ? (
+                            <Combobox.Empty className={styles.statusMsg}>
+                                No tickers found for "{query}"
+                            </Combobox.Empty>
                         ) : (
-                            items.map((item) => (
-                                <ArkCombobox.Item
-                                    key={item.symbol}
-                                    item={item}
-                                    className={styles.item}
+                            <div className={styles.listContainer}>
+                                <Combobox.ItemGroup
+                                    className={styles.itemGroup}
                                 >
-                                    <ArkCombobox.ItemText
-                                        className={styles.itemText}
-                                    >
-                                        <span className={styles.itemTitle}>
-                                            {item.symbol}
-                                        </span>
-                                        <span className={styles.itemSubtitle}>
-                                            {formatSubtitle(item)}
-                                        </span>
-                                    </ArkCombobox.ItemText>
-                                    <ArkCombobox.ItemIndicator
-                                        className={styles.itemIndicator}
-                                    >
-                                        <CheckIcon />
-                                    </ArkCombobox.ItemIndicator>
-                                </ArkCombobox.Item>
-                            ))
+                                    {query.trim().length < 2 && (
+                                        <Combobox.ItemGroupLabel
+                                            className={styles.sectionHeader}
+                                        >
+                                            <TrendingUpIcon size={12} />
+                                            <span>Popular</span>
+                                        </Combobox.ItemGroupLabel>
+                                    )}
+                                    {collection.items.map((item) => (
+                                        <Combobox.Item
+                                            key={item.symbol}
+                                            item={item}
+                                            className={styles.itemRow}
+                                        >
+                                            <TickerAvatar
+                                                symbol={item.symbol}
+                                            />
+                                            <Combobox.ItemText
+                                                className={styles.itemText}
+                                            >
+                                                <span
+                                                    className={styles.itemTitle}
+                                                >
+                                                    {item.symbol.replace(
+                                                        /\.IS$/i,
+                                                        "",
+                                                    )}
+                                                </span>
+                                                <span
+                                                    className={
+                                                        styles.itemSubtitle
+                                                    }
+                                                >
+                                                    {formatSubtitle(item)}
+                                                </span>
+                                            </Combobox.ItemText>
+                                            <Combobox.ItemIndicator
+                                                className={styles.itemCheck}
+                                            >
+                                                <CheckIcon size={14} />
+                                            </Combobox.ItemIndicator>
+                                        </Combobox.Item>
+                                    ))}
+                                </Combobox.ItemGroup>
+                            </div>
                         )}
-                    </ArkCombobox.Content>
-                </ArkCombobox.Positioner>
+                    </Combobox.Content>
+                </Combobox.Positioner>
             </Portal>
-        </ArkCombobox.Root>
+        </Combobox.Root>
     );
 }

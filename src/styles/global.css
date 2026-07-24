@@ -157,17 +157,22 @@ a[href*="tradingview.com"] {
 }
 
 .react-grid-item {
+    box-sizing: border-box !important;
     transition: none !important;
 }
 
+.react-grid-item:not(.resizing):not(.react-grid-item-resizing) {
+    box-sizing: border-box !important;
+    width: calc((100% - 150px) / 24 * var(--w, 1) + (var(--w, 1) - 1) * 6px) !important;
+}
+
 .react-grid-item.react-draggable-dragging {
-    transition:
-        transform 10ms ease,
-        width 100ms ease,
-        height 100ms ease !important;
+    box-sizing: border-box !important;
+    transition: transform 0ms linear !important;
 }
 
 .react-grid-item.resizing {
+    box-sizing: border-box !important;
     transition:
         width 20ms ease,
         height 20ms ease !important;

@@ -24,7 +24,8 @@ import type {
     TableProps,
     TableSpacerRow,
 } from "./types";
-import { db } from "../../db";
+import { api } from "../../services/api";
+import { fetchListRowState, saveListRowState } from "../../services/watchlist";
 import styles from "./Table.module.css";
 
 const SPACER_PREFIX = "spacer:";
@@ -110,12 +111,35 @@ function normalizeVisibleColumnIds(
     return visible;
 }
 
-function normalizeRowOrder(rowOrder: string[], rowIds: string[]): string[] {
-    const available = new Set(rowIds);
-    const next = uniqueOrdered(rowOrder).filter((id) => available.has(id));
+function normalizeRowOrder(
+    rowOrder: string[],
+    rowIds: string[],
+    spacers?: TableSpacerRow[],
+): string[] {
+    const validSpacerIds = spacers
+        ? new Set(spacers.map((s) => s.id))
+        : new Set(rowIds.filter((id) => id.startsWith(SPACER_PREFIX)));
+
+    const next: string[] = [];
+    const seen = new Set<string>();
+
+    for (const id of uniqueOrdered(rowOrder)) {
+        if (!id) continue;
+
+        // If it's a spacer row, drop it only if it is NOT in validSpacerIds (i.e. deleted)
+        if (id.startsWith(SPACER_PREFIX)) {
+            if (!validSpacerIds.has(id)) continue;
+        }
+
+        seen.add(id);
+        next.push(id);
+    }
 
     for (const id of rowIds) {
-        if (!next.includes(id)) next.push(id);
+        if (!seen.has(id)) {
+            seen.add(id);
+            next.push(id);
+        }
     }
 
     return next;
@@ -637,6 +661,7 @@ export function Table<TData extends object>({
     enableRowReorder = true,
     disableRowReorderWhenSorted: _disableRowReorderWhenSorted = true,
     rowStateId,
+    isHydrating: externalHydrating,
     onControllerReady,
 }: TableProps<TData>) {
     const rootRef = useRef<HTMLDivElement | null>(null);
@@ -654,6 +679,7 @@ export function Table<TData extends object>({
     const settledRowTimerRef = useRef<number | null>(null);
     const lastSavedPreferencesKeyRef = useRef("");
     const lastSavedRowStateKeyRef = useRef("");
+    const loadedRowStateIdRef = useRef("");
     const draggingColumnIdRef = useRef("");
     const dragOverColumnIdRef = useRef("");
     const armedColumnDragIdRef = useRef("");
@@ -830,10 +856,10 @@ export function Table<TData extends object>({
                 return prev;
             }
 
-            const normalized = normalizeRowOrder(prev, allRowIds);
+            const normalized = normalizeRowOrder(prev, allRowIds, normalizedSpacers);
             return areStringArraysEqual(prev, normalized) ? prev : normalized;
         });
-    }, [allRowIds, dataRowCount, spacerCount, dataRowIdsKey, spacerIdsKey]);
+    }, [allRowIds, dataRowCount, spacerCount, dataRowIdsKey, spacerIdsKey, normalizedSpacers]);
 
     useEffect(() => {
         setSorting((prev) => normalizeSorting(prev, allColumnIds));
@@ -847,8 +873,9 @@ export function Table<TData extends object>({
 
         const loadPreferences = async () => {
             try {
-                const persisted = await db.tablePreferences.get(persistenceId);
-                if (!active || !persisted) return;
+                const url = `/user/table-prefs?scope_type=${encodeURIComponent(_scopeType)}&scope_id=${encodeURIComponent(_scopeId)}&table_id=${encodeURIComponent(_tableId)}`;
+                const persisted = await api.get<any>(url);
+                if (!active || !persisted || !persisted.visibleColumnIds) return;
 
                 setVisibleColumnIds(
                     normalizeVisibleColumnIds(
@@ -938,41 +965,18 @@ export function Table<TData extends object>({
         let active = true;
 
         const savePreferences = async () => {
-            const now = Date.now();
-
             try {
-                const updated = await db.tablePreferences.update(
-                    persistenceId,
-                    {
-                        scopeType: _scopeType,
-                        scopeId: _scopeId,
-                        tableId: _tableId,
+                await api.put("/user/table-prefs", {
+                    scopeType: _scopeType,
+                    scopeId: _scopeId,
+                    tableId: _tableId,
+                    prefs: {
                         visibleColumnIds: normalizedVisible,
                         columnOrder: normalizedOrder,
                         columnWidths: normalizedWidths,
                         sorting: normalizedSorting,
-                        updatedAt: now,
                     },
-                );
-
-                if (!active) return;
-
-                if (updated === 0) {
-                    await db.tablePreferences.put({
-                        id: persistenceId,
-                        scopeType: _scopeType,
-                        scopeId: _scopeId,
-                        tableId: _tableId,
-                        visibleColumnIds: normalizedVisible,
-                        columnOrder: normalizedOrder,
-                        columnWidths: normalizedWidths,
-                        rowOrder: [],
-                        spacers: [],
-                        sorting: normalizedSorting,
-                        createdAt: now,
-                        updatedAt: now,
-                    });
-                }
+                });
 
                 if (active) {
                     lastSavedPreferencesKeyRef.current = nextPreferencesKey;
@@ -1006,39 +1010,49 @@ export function Table<TData extends object>({
         let active = true;
 
         setRowStateHydrated(false);
+        loadedRowStateIdRef.current = "";
         lastSavedRowStateKeyRef.current = "";
 
         const loadRowState = async () => {
             try {
-                const persisted =
-                    await db.tableRowState.get(effectiveRowStateId);
+                const persisted = await fetchListRowState(effectiveRowStateId);
                 if (!active) return;
 
-                if (persisted) {
+                if (persisted && (persisted.rowOrder?.length > 0 || persisted.spacers?.length > 0)) {
                     const loadedSpacers = normalizeSpacerRows(
                         persisted.spacers,
                     );
-                    // Keep persisted ordering as-is during hydrate. Rows may not
-                    // be loaded yet; normalizing too early can drop IDs
-                    // permanently.
                     const loadedRowOrder = uniqueOrdered(persisted.rowOrder);
+                    const initialRowOrder = normalizeRowOrder(
+                        loadedRowOrder,
+                        [...dataRowIds, ...loadedSpacers.map((s) => s.id)],
+                        loadedSpacers,
+                    );
 
-                    setRowOrder(loadedRowOrder);
+                    setRowOrder(initialRowOrder);
                     setSpacers(loadedSpacers);
+                    loadedRowStateIdRef.current = effectiveRowStateId;
                     lastSavedRowStateKeyRef.current = JSON.stringify({
-                        rowOrder: loadedRowOrder,
+                        rowOrder: initialRowOrder,
                         spacers: loadedSpacers,
                     });
 
                     return;
                 }
 
-                // If this row-state scope has never been saved, clear previous
-                // scope state so spacers/order cannot leak across list switches.
                 const clearedSpacers = normalizeSpacerRows(defaultSpacers);
-                setRowOrder([]);
+                const clearedRowOrder = normalizeRowOrder(
+                    [],
+                    [...dataRowIds, ...clearedSpacers.map((s) => s.id)],
+                    clearedSpacers,
+                );
+                setRowOrder(clearedRowOrder);
                 setSpacers(clearedSpacers);
-                lastSavedRowStateKeyRef.current = "";
+                loadedRowStateIdRef.current = effectiveRowStateId;
+                lastSavedRowStateKeyRef.current = JSON.stringify({
+                    rowOrder: clearedRowOrder,
+                    spacers: clearedSpacers,
+                });
             } catch (error) {
                 console.warn("[Table] Failed to hydrate row state", error);
             } finally {
@@ -1057,6 +1071,7 @@ export function Table<TData extends object>({
 
     useEffect(() => {
         if (!rowStateHydrated) return;
+        if (loadedRowStateIdRef.current !== effectiveRowStateId) return;
         if (draggingRowId) return;
 
         const hasPersistedDataRowIds = rowOrder.some(
@@ -1066,19 +1081,18 @@ export function Table<TData extends object>({
             id.startsWith(SPACER_PREFIX),
         );
         if (dataRowCount === 0 && hasPersistedDataRowIds) {
-            // Avoid truncating a restored row order before data rows hydrate.
             return;
         }
         if (spacerCount === 0 && hasPersistedSpacerRowIds) {
-            // Avoid truncating restored spacer positions before spacers hydrate.
             return;
         }
 
         const persistedSpacers = normalizeSpacerRows(spacers);
-        const persistedRowOrder = normalizeRowOrder(rowOrder, [
-            ...dataRowIds,
-            ...persistedSpacers.map((spacer) => spacer.id),
-        ]);
+        const persistedRowOrder = normalizeRowOrder(
+            rowOrder,
+            [...dataRowIds, ...persistedSpacers.map((spacer) => spacer.id)],
+            persistedSpacers,
+        );
         const nextRowStateKey = JSON.stringify({
             rowOrder: persistedRowOrder,
             spacers: persistedSpacers,
@@ -1088,18 +1102,10 @@ export function Table<TData extends object>({
         let active = true;
 
         const saveRowState = async () => {
-            const now = Date.now();
-
             try {
-                const existing =
-                    await db.tableRowState.get(effectiveRowStateId);
-
-                await db.tableRowState.put({
-                    id: effectiveRowStateId,
+                await saveListRowState(effectiveRowStateId, {
                     rowOrder: persistedRowOrder,
                     spacers: persistedSpacers,
-                    createdAt: existing?.createdAt ?? now,
-                    updatedAt: now,
                 });
 
                 if (active) {
@@ -1148,8 +1154,8 @@ export function Table<TData extends object>({
     }, [visibleColumnIds, allColumnIds, lockedSet]);
 
     const orderedRowIds = useMemo(
-        () => normalizeRowOrder(rowOrder, allRowIds),
-        [rowOrder, allRowIds],
+        () => normalizeRowOrder(rowOrder, allRowIds, normalizedSpacers),
+        [rowOrder, allRowIds, normalizedSpacers],
     );
 
     const orderedDataRowIds = useMemo(
@@ -1731,6 +1737,9 @@ export function Table<TData extends object>({
         [height, maxHeight],
     );
 
+    const isHydrating =
+        !preferencesHydrated || !rowStateHydrated || Boolean(externalHydrating);
+
     return (
         <>
             <div
@@ -1738,6 +1747,7 @@ export function Table<TData extends object>({
                 className={cx(
                     styles.root,
                     variant === "widget" ? styles.widget : styles.full,
+                    isHydrating && styles.hydrating,
                     className,
                 )}
                 style={rootStyle}

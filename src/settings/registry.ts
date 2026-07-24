@@ -106,11 +106,6 @@ export function normalizeSettingSections(
  */
 export function registerSetting(def: SettingDefinition): void {
   assertSectionMetadataConsistency(def);
-  if (settingsMap.has(def.id)) {
-    console.warn(
-      `Setting with id "${def.id}" is already registered. Overwriting.`,
-    );
-  }
   settingsMap.set(def.id, def);
 }
 

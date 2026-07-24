@@ -85,7 +85,7 @@ export function TopBar({
         <>
             <header class={styles.topbar}>
                 {/* Brand */}
-                <span class={styles.brand}>lima</span>
+                <span class={styles.brand}>tickrbase</span>
 
                 {/* Screen tabs — only visible on dashboard route */}
                 {route === "dashboard" && (

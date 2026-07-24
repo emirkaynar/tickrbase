@@ -79,6 +79,18 @@ export const api = {
         );
     },
 
+    put<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+        return withRetry(() =>
+            fetch(`${API_BASE}${path}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: body !== undefined ? JSON.stringify(body) : undefined,
+                credentials: "include",
+                signal,
+            }).then((r) => parseResponse<T>(r)),
+        );
+    },
+
     delete<T>(path: string, signal?: AbortSignal): Promise<T> {
         return withRetry(() =>
             fetch(`${API_BASE}${path}`, {

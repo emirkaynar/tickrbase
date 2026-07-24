@@ -1,8 +1,9 @@
 import { useEffect, useRef, useCallback } from "preact/hooks";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { createChart } from "lightweight-charts";
-import { Select, Skeleton, TickerSelector, WidgetRemoveButton } from "../../ui";
+import { Select, TickerSelector } from "../../ui";
 import type { SelectItem } from "../../ui";
+import { Shell } from "../Shell";
 import { useChartState } from "./useChartState";
 import { createChartConfig, getCandleColors } from "./chartConfig";
 import { registerWidget } from "../registry";
@@ -133,9 +134,10 @@ function BasicChart({ id, onRemove }: Props) {
     );
 
     return (
-        <div class={styles.root}>
-            {/* Drag handle + controls */}
-            <div class={`${styles.handle} widget-handle`}>
+        <Shell
+            id={id}
+            className={styles.root}
+            headerLeft={
                 <div class={styles.widgetInputs}>
                     <TickerSelector
                         value={symbol}
@@ -149,29 +151,14 @@ function BasicChart({ id, onRemove }: Props) {
                         variant="widget"
                     />
                 </div>
-                <div class={`${styles.dragGrip} sc-drag-grip`} />
-                <div class={styles.controls}>
-                    <WidgetRemoveButton
-                        class={styles.removeBtn}
-                        onClick={onRemove}
-                    />
-                </div>
-            </div>
-
-            {/* Chart canvas */}
-            <div class={styles.chartContainer} ref={containerRef}>
-                {(!stateReady || status === "loading") && (
-                    <Skeleton variant="rect" />
-                )}
-                {status === "error" && (
-                    <div class={styles.overlayError}>
-                        <p class={styles.errorMsg}>{errorMsg}</p>
-                    </div>
-                )}
-            </div>
-
+            }
+            loading={!stateReady || status === "loading"}
+            error={status === "error" ? errorMsg : null}
+            onRemove={onRemove}
+        >
+            <div class={styles.chartContainer} ref={containerRef} />
             {warning && <span class={styles.warning}>{warning}</span>}
-        </div>
+        </Shell>
     );
 }
 
@@ -179,8 +166,8 @@ function BasicChart({ id, onRemove }: Props) {
 registerWidget({
     type: "basic-chart",
     label: "Basic Chart",
-    defaultSize: { w: 11, h: 12 },
-    minSize: { w: 7, h: 8 },
+    defaultSize: { w: 8, h: 9 },
+    minSize: { w: 6, h: 6 },
     component: BasicChart,
     settingSections: [
         {
