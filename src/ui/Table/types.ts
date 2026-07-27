@@ -59,6 +59,11 @@ export type TableScope = {
     tableId: string;
 };
 
+export type ColumnPinningConfig = {
+    left?: string[];
+    right?: string[];
+};
+
 export type TableProps<TData extends object> = {
     rows: TData[];
     columns: TableColumnDef<TData>[];
@@ -69,6 +74,8 @@ export type TableProps<TData extends object> = {
     variant?: TableVariant;
     className?: string;
     stickyColumnId?: string;
+    stickyRightColumnId?: string;
+    pinnedColumns?: ColumnPinningConfig;
     lockedColumnIds?: string[];
     initialSpacerRows?: TableSpacerRow[];
     emptyMessage?: string;

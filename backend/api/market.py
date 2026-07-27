@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated, Optional
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import (
@@ -23,6 +23,7 @@ from ..schemas.models import (
     QuotesResponse,
     SymbolsResponse,
 )
+from ..services import logos as logos_service
 from ..services import lookup as lookup_service
 from ..services import prices as prices_service
 from ..services import quotes as quotes_service
@@ -35,6 +36,24 @@ router = APIRouter(tags=["Market Data"])
 @router.get("/health")
 async def health_check():
     return {"status": "ok", "service": "tickrbase-backend-v2"}
+
+
+@router.get("/logo/{ticker}")
+async def get_ticker_logo(ticker: str):
+    image_bytes = await logos_service.get_logo(ticker)
+    if image_bytes is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Logo not found",
+        )
+    return Response(
+        content=image_bytes,
+        media_type="image/webp",
+        headers={
+            "Cache-Control": "public, max-age=604800",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
 
 
 @router.get("/price/{ticker}", response_model=PriceResponse)

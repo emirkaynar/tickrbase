@@ -1,5 +1,13 @@
 import { useEffect, useState } from "preact/hooks";
-import { MoonIcon, PlusIcon, SunIcon, PencilIcon, Settings, LogOut, User as UserIcon } from "lucide-react";
+import {
+    MoonIcon,
+    PlusIcon,
+    SunIcon,
+    PencilIcon,
+    Settings,
+    LogOut,
+    User as UserIcon,
+} from "lucide-react";
 import { Button, Tabs, Tooltip } from "../../ui";
 import type { TabItem } from "../../ui";
 import type { Theme } from "../../hooks/useTheme";
@@ -100,7 +108,7 @@ export function TopBar({
                                 variant="ghost"
                                 size="sm"
                                 onClick={onManageScreens}
-                                title="Manage screens"
+                                aria-label="Manage screens"
                             >
                                 <PencilIcon />
                             </Button>
@@ -111,9 +119,13 @@ export function TopBar({
                 {/* Add widget — only on dashboard */}
                 {route === "dashboard" && (
                     <Tooltip content="Add widget">
-                    <Button variant="outline" size="sm" onClick={onAddWidget}>
-                        <PlusIcon /> Widget
-                    </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={onAddWidget}
+                        >
+                            <PlusIcon /> Widget
+                        </Button>
                     </Tooltip>
                 )}
 
@@ -136,11 +148,11 @@ export function TopBar({
                         >
                             {link.label === "Settings" ? (
                                 <>
-                                <Tooltip content="Settings">
-                                    <span class={styles.navIcon}>
-                                        <Settings size={14} />
-                                    </span>
-                                </Tooltip>
+                                    <Tooltip content="Settings">
+                                        <span class={styles.navIcon}>
+                                            <Settings size={14} />
+                                        </span>
+                                    </Tooltip>
                                 </>
                             ) : (
                                 link.label
@@ -151,12 +163,31 @@ export function TopBar({
 
                 {/* User indicator & Logout */}
                 {user && (
-                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "12px", color: "var(--color-text-muted)", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <div
+                        style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "8px",
+                        }}
+                    >
+                        <span
+                            style={{
+                                fontSize: "12px",
+                                color: "var(--color-text-muted)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                            }}
+                        >
                             <UserIcon size={13} /> {user.email}
                         </span>
                         <Tooltip content="Log out">
-                            <Button variant="ghost" size="sm" onClick={onLogout} title="Log out">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onLogout}
+                                aria-label="Log out"
+                            >
                                 <LogOut size={14} />
                             </Button>
                         </Tooltip>
@@ -169,7 +200,7 @@ export function TopBar({
                         variant="ghost"
                         size="sm"
                         onClick={onToggleTheme}
-                        title="Toggle theme"
+                        aria-label="Toggle theme"
                     >
                         {theme === "dark" ? <SunIcon /> : <MoonIcon />}
                     </Button>

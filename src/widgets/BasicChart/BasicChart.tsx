@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "preact/hooks";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { createChart } from "lightweight-charts";
-import { Select, TickerSelector } from "../../ui";
+import { Select, TickerSelector, Tooltip } from "../../ui";
 import type { SelectItem } from "../../ui";
 import { Shell } from "../Shell";
 import { useChartState } from "./useChartState";
@@ -60,6 +60,9 @@ function BasicChart({ id, onRemove }: Props) {
         reapplyCurrentBars,
         captureRange,
         setPrevClose,
+        scaleMode,
+        setScaleMode,
+        applyScaleFormatting,
     } = useChartState(id, { chartRef, seriesRef, intervalRef });
 
     const isIntraday = !["1d", "1wk", "1mo"].includes(interval);
@@ -90,7 +93,12 @@ function BasicChart({ id, onRemove }: Props) {
                     setPrevClose(quote.previous_close);
                     if (quote.current_price !== null) {
                         setPrice(quote.current_price);
-                        setChangePercent(calcChangePercent(quote.current_price, quote.previous_close));
+                        setChangePercent(
+                            calcChangePercent(
+                                quote.current_price,
+                                quote.previous_close,
+                            ),
+                        );
                     }
                 }
             })
@@ -100,7 +108,7 @@ function BasicChart({ id, onRemove }: Props) {
             cancelled = true;
             ctrl.abort();
         };
-    }, [symbol, stateReady]);
+    }, [symbol, stateReady, setPrevClose]);
 
     // Live price tick updates for ticker selector trigger
     useEffect(() => {
@@ -110,7 +118,9 @@ function BasicChart({ id, onRemove }: Props) {
             if (tick.symbol !== symbol) return;
             setPrice(tick.price);
             if (prevCloseRef.current !== null) {
-                setChangePercent(calcChangePercent(tick.price, prevCloseRef.current));
+                setChangePercent(
+                    calcChangePercent(tick.price, prevCloseRef.current),
+                );
             }
         });
 
@@ -200,7 +210,8 @@ function BasicChart({ id, onRemove }: Props) {
         }
         seriesRef.current = addChartSeries(chart, chartType);
         reapplyCurrentBars();
-    }, [chartType, captureRange, reapplyCurrentBars]);
+        applyScaleFormatting();
+    }, [chartType, captureRange, reapplyCurrentBars, applyScaleFormatting]);
 
     const handleSymbolSelect = useCallback(
         (value: string) => {
@@ -225,11 +236,11 @@ function BasicChart({ id, onRemove }: Props) {
             if (
                 [
                     "candlestick",
+                    "heikin_ashi",
                     "line",
                     "area",
                     "bar",
                     "baseline",
-                    "heikin_ashi",
                 ].includes(value)
             ) {
                 setChartType(value as ChartType);
@@ -290,7 +301,52 @@ function BasicChart({ id, onRemove }: Props) {
             error={status === "error" ? errorMsg : null}
             onRemove={onRemove}
         >
-            <div class={styles.chartContainer} ref={containerRef} />
+            <div class={styles.chartContainer} ref={containerRef}>
+                <div class={styles.axisCorner}>
+                    <Tooltip content="Logarithmic Scale">
+                        <button
+                            type="button"
+                            class={[
+                                styles.scaleBtn,
+                                scaleMode === "logarithmic"
+                                    ? styles.scaleBtnActive
+                                    : "",
+                            ].join(" ")}
+                            onClick={() =>
+                                setScaleMode(
+                                    scaleMode === "logarithmic"
+                                        ? "normal"
+                                        : "logarithmic",
+                                )
+                            }
+                            aria-label="Toggle Logarithmic Scale"
+                        >
+                            LOG
+                        </button>
+                    </Tooltip>
+                    <Tooltip content="Percentage Scale">
+                        <button
+                            type="button"
+                            class={[
+                                styles.scaleBtn,
+                                scaleMode === "percentage"
+                                    ? styles.scaleBtnActive
+                                    : "",
+                            ].join(" ")}
+                            onClick={() =>
+                                setScaleMode(
+                                    scaleMode === "percentage"
+                                        ? "normal"
+                                        : "percentage",
+                                )
+                            }
+                            aria-label="Toggle Percentage Scale"
+                        >
+                            %
+                        </button>
+                    </Tooltip>
+                </div>
+            </div>
             {warning && <span class={styles.warning}>{warning}</span>}
         </Shell>
     );

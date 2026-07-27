@@ -12,6 +12,8 @@ import {
     getCoreRowModel,
     getSortedRowModel,
     useReactTable,
+    type Column,
+    type ColumnPinningState,
     type ColumnSizingState,
     type Row,
     type SortingState,
@@ -24,6 +26,8 @@ import type {
     TableProps,
     TableSpacerRow,
 } from "./types";
+import { Trash2 } from "lucide-react";
+import { Tooltip } from "../Tooltip/Tooltip";
 import { api } from "../../services/api";
 import { fetchListRowState, saveListRowState } from "../../services/watchlist";
 import styles from "./Table.module.css";
@@ -43,6 +47,24 @@ function normalizeSpacerId(id: string): string {
 
 function createSpacerId(): string {
     return `${SPACER_PREFIX}${Date.now()}-${Math.floor(Math.random() * 100_000)}`;
+}
+
+const EMPTY_STYLE: JSX.CSSProperties = {};
+
+function getCommonPinningStyles<TData extends object>(
+    column: Column<TData, unknown>,
+    isHeader = false,
+): JSX.CSSProperties {
+    const isPinned = column.getIsPinned();
+    if (!isPinned) return EMPTY_STYLE;
+
+    return {
+        position: "sticky",
+        left: isPinned === "left" ? `${column.getStart("left")}px` : undefined,
+        right:
+            isPinned === "right" ? `${column.getAfter("right")}px` : undefined,
+        zIndex: isHeader ? 7 : 4,
+    };
 }
 
 function cx(...parts: Array<string | false | null | undefined>): string {
@@ -85,9 +107,13 @@ function normalizeColumnOrder(
     const ordered = uniqueOrdered(columnOrder).filter((id) =>
         available.has(id),
     );
+    const orderedSet = new Set(ordered);
 
     for (const id of allColumnIds) {
-        if (!ordered.includes(id)) ordered.push(id);
+        if (!orderedSet.has(id)) {
+            ordered.push(id);
+            orderedSet.add(id);
+        }
     }
 
     return ordered;
@@ -103,9 +129,13 @@ function normalizeVisibleColumnIds(
     const visible = uniqueOrdered(visibleColumnIds).filter((id) =>
         available.has(id),
     );
+    const visibleSet = new Set(visible);
 
     for (const id of locked) {
-        if (!visible.includes(id)) visible.push(id);
+        if (!visibleSet.has(id)) {
+            visible.push(id);
+            visibleSet.add(id);
+        }
     }
 
     return visible;
@@ -287,7 +317,8 @@ function getDefaultColumnWidth(
 type DraggableHeaderProps = {
     dragEnabled: boolean;
     draggable: boolean;
-    sticky: boolean;
+    pinned?: "left" | "right" | false;
+    pinningStyle?: JSX.CSSProperties;
     size: number;
     isDragSource: boolean;
     isDropTarget: boolean;
@@ -309,7 +340,8 @@ type DraggableHeaderProps = {
 function DraggableHeader({
     dragEnabled,
     draggable,
-    sticky,
+    pinned,
+    pinningStyle,
     size,
     isDragSource,
     isDropTarget,
@@ -334,10 +366,12 @@ function DraggableHeader({
                 width: `${size}px`,
                 minWidth: `${size}px`,
                 maxWidth: `${size}px`,
+                ...pinningStyle,
             }}
             className={cx(
                 styles.headerCell,
-                sticky && styles.stickyCell,
+                pinned === "left" && styles.stickyCell,
+                pinned === "right" && styles.stickyCellRight,
                 isDragSource && styles.dragSource,
                 isDropTarget && styles.dropTarget,
             )}
@@ -427,7 +461,6 @@ function DraggableDataRow<TData extends object>({
     rowId,
     row,
     layoutVersion,
-    stickyColumnId,
     draggable,
     isDragSource,
     isDropTarget,
@@ -477,7 +510,8 @@ function DraggableDataRow<TData extends object>({
             )}
         >
             {row.getVisibleCells().map((cell) => {
-                const sticky = cell.column.id === stickyColumnId;
+                const isPinned = cell.column.getIsPinned();
+                const pinningStyle = getCommonPinningStyles(cell.column, false);
                 const meta = cell.column.columnDef.meta as
                     | TableColumnMeta
                     | undefined;
@@ -486,12 +520,12 @@ function DraggableDataRow<TData extends object>({
                 return (
                     <td
                         key={cell.id}
-                        style={{
-                            width: `${cell.column.getSize()}px`,
-                            minWidth: `${cell.column.getSize()}px`,
-                            maxWidth: `${cell.column.getSize()}px`,
-                        }}
-                        className={cx(styles.cell, sticky && styles.stickyCell)}
+                        style={pinningStyle}
+                        className={cx(
+                            styles.cell,
+                            isPinned === "left" && styles.stickyCell,
+                            isPinned === "right" && styles.stickyCellRight,
+                        )}
                     >
                         <div
                             className={cx(styles.cellContent, alignClassName)}
@@ -509,8 +543,6 @@ function DraggableDataRow<TData extends object>({
                     </td>
                 );
             })}
-
-            <td className={styles.fillCell} aria-hidden="true" />
         </tr>
     );
 }
@@ -523,7 +555,6 @@ function areDataRowPropsEqual<TData extends object>(
         prev.rowId === next.rowId &&
         prev.row.original === next.row.original &&
         prev.layoutVersion === next.layoutVersion &&
-        prev.stickyColumnId === next.stickyColumnId &&
         prev.draggable === next.draggable &&
         prev.isDragSource === next.isDragSource &&
         prev.isDropTarget === next.isDropTarget &&
@@ -600,20 +631,25 @@ function DraggableSpacerRow({
                     <span className={styles.spacerLabel} title={spacer.label}>
                         {spacer.label || "Group"}
                     </span>
-                    <button
-                        type="button"
-                        className={styles.spacerRemoveButton}
-                        draggable={false}
-                        onPointerDown={(event) => {
-                            event.stopPropagation();
-                        }}
-                        onClick={(event) => {
-                            event.stopPropagation();
-                            handleRemove();
-                        }}
-                    >
-                        Remove
-                    </button>
+                    <div className={styles.spacerRemoveWrapper}>
+                        <Tooltip content="Remove group">
+                            <button
+                                type="button"
+                                className={styles.spacerRemoveButton}
+                                draggable={false}
+                                aria-label="Remove group"
+                                onPointerDown={(event) => {
+                                    event.stopPropagation();
+                                }}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleRemove();
+                                }}
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </Tooltip>
+                    </div>
                 </div>
             </td>
         </tr>
@@ -652,6 +688,8 @@ export function Table<TData extends object>({
     variant = "widget",
     className,
     stickyColumnId = "symbol",
+    stickyRightColumnId,
+    pinnedColumns,
     lockedColumnIds = DEFAULT_LOCKED_COLUMN_IDS,
     initialSpacerRows: _initialSpacerRows = DEFAULT_INITIAL_SPACERS,
     emptyMessage = "No rows to display.",
@@ -856,10 +894,21 @@ export function Table<TData extends object>({
                 return prev;
             }
 
-            const normalized = normalizeRowOrder(prev, allRowIds, normalizedSpacers);
+            const normalized = normalizeRowOrder(
+                prev,
+                allRowIds,
+                normalizedSpacers,
+            );
             return areStringArraysEqual(prev, normalized) ? prev : normalized;
         });
-    }, [allRowIds, dataRowCount, spacerCount, dataRowIdsKey, spacerIdsKey, normalizedSpacers]);
+    }, [
+        allRowIds,
+        dataRowCount,
+        spacerCount,
+        dataRowIdsKey,
+        spacerIdsKey,
+        normalizedSpacers,
+    ]);
 
     useEffect(() => {
         setSorting((prev) => normalizeSorting(prev, allColumnIds));
@@ -875,7 +924,8 @@ export function Table<TData extends object>({
             try {
                 const url = `/user/table-prefs?scope_type=${encodeURIComponent(_scopeType)}&scope_id=${encodeURIComponent(_scopeId)}&table_id=${encodeURIComponent(_tableId)}`;
                 const persisted = await api.get<any>(url);
-                if (!active || !persisted || !persisted.visibleColumnIds) return;
+                if (!active || !persisted || !persisted.visibleColumnIds)
+                    return;
 
                 setVisibleColumnIds(
                     normalizeVisibleColumnIds(
@@ -942,29 +992,30 @@ export function Table<TData extends object>({
     useEffect(() => {
         if (!preferencesHydrated) return;
 
-        const normalizedVisible = normalizeVisibleColumnIds(
-            visibleColumnIds,
-            allColumnIds,
-            normalizedLockedColumnIds,
-        );
-        const normalizedOrder = normalizeColumnOrder(columnOrder, allColumnIds);
-        const normalizedWidths = mergeDefaultColumnWidths(
-            normalizeColumnWidths(columnWidths, allColumnIds),
-            defaultNormalizedColumnWidths,
-        );
-        const normalizedSorting = normalizeSorting(sorting, allColumnIds);
-
-        const nextPreferencesKey = JSON.stringify({
-            visibleColumnIds: normalizedVisible,
-            columnOrder: normalizedOrder,
-            columnWidths: normalizedWidths,
-            sorting: normalizedSorting,
-        });
-        if (nextPreferencesKey === lastSavedPreferencesKeyRef.current) return;
-
         let active = true;
 
-        const savePreferences = async () => {
+        const timer = setTimeout(async () => {
+            const normalizedVisible = normalizeVisibleColumnIds(
+                visibleColumnIds,
+                allColumnIds,
+                normalizedLockedColumnIds,
+            );
+            const normalizedOrder = normalizeColumnOrder(columnOrder, allColumnIds);
+            const normalizedWidths = mergeDefaultColumnWidths(
+                normalizeColumnWidths(columnWidths, allColumnIds),
+                defaultNormalizedColumnWidths,
+            );
+            const normalizedSorting = normalizeSorting(sorting, allColumnIds);
+
+            const nextPreferencesKey = JSON.stringify({
+                visibleColumnIds: normalizedVisible,
+                columnOrder: normalizedOrder,
+                columnWidths: normalizedWidths,
+                sorting: normalizedSorting,
+            });
+
+            if (nextPreferencesKey === lastSavedPreferencesKeyRef.current) return;
+
             try {
                 await api.put("/user/table-prefs", {
                     scopeType: _scopeType,
@@ -984,12 +1035,11 @@ export function Table<TData extends object>({
             } catch (error) {
                 console.warn("[Table] Failed to persist preferences", error);
             }
-        };
-
-        void savePreferences();
+        }, 500);
 
         return () => {
             active = false;
+            clearTimeout(timer);
         };
     }, [
         preferencesHydrated,
@@ -1018,7 +1068,11 @@ export function Table<TData extends object>({
                 const persisted = await fetchListRowState(effectiveRowStateId);
                 if (!active) return;
 
-                if (persisted && (persisted.rowOrder?.length > 0 || persisted.spacers?.length > 0)) {
+                if (
+                    persisted &&
+                    (persisted.rowOrder?.length > 0 ||
+                        persisted.spacers?.length > 0)
+                ) {
                     const loadedSpacers = normalizeSpacerRows(
                         persisted.spacers,
                     );
@@ -1133,14 +1187,20 @@ export function Table<TData extends object>({
         effectiveRowStateId,
     ]);
 
-    const resetToDefaults = () => {
+    const resetToDefaults = useCallback(() => {
         setVisibleColumnIds(defaultVisibleColumnIds);
         setColumnOrder(defaultColumnOrder);
         setColumnWidths(defaultNormalizedColumnWidths);
         setSorting([]);
         setRowOrder(defaultRowOrder);
         setSpacers(defaultSpacers);
-    };
+    }, [
+        defaultVisibleColumnIds,
+        defaultColumnOrder,
+        defaultNormalizedColumnWidths,
+        defaultRowOrder,
+        defaultSpacers,
+    ]);
 
     const columnVisibility = useMemo<VisibilityState>(() => {
         const visibleSet = new Set(visibleColumnIds);
@@ -1174,6 +1234,33 @@ export function Table<TData extends object>({
         return next;
     }, [orderedDataRowIds, dataById]);
 
+    const initialLeftPinning = useMemo(
+        () =>
+            pinnedColumns?.left ??
+            (stickyColumnId ? [stickyColumnId] : ["symbol"]),
+        [pinnedColumns, stickyColumnId],
+    );
+    const initialRightPinning = useMemo(
+        () =>
+            pinnedColumns?.right ??
+            (stickyRightColumnId ? [stickyRightColumnId] : []),
+        [pinnedColumns, stickyRightColumnId],
+    );
+
+    const [columnPinning, setColumnPinning] = useState<ColumnPinningState>(
+        () => ({
+            left: initialLeftPinning,
+            right: initialRightPinning,
+        }),
+    );
+
+    useEffect(() => {
+        setColumnPinning({
+            left: initialLeftPinning,
+            right: initialRightPinning,
+        });
+    }, [initialLeftPinning, initialRightPinning]);
+
     const table = useReactTable({
         data: orderedRows,
         columns,
@@ -1183,7 +1270,9 @@ export function Table<TData extends object>({
             columnOrder,
             columnSizing: columnWidths,
             columnVisibility,
+            columnPinning,
         },
+        onColumnPinningChange: setColumnPinning,
         onSortingChange: (updater) => {
             setSorting((prev) =>
                 normalizeSorting(resolveUpdater(updater, prev), allColumnIds),
@@ -1232,9 +1321,7 @@ export function Table<TData extends object>({
     const renderedColumnCount = Math.max(visibleLeafColumns.length + 1, 1);
     const tableRows = table.getRowModel().rows;
     const rowLayoutVersion = useMemo(() => {
-        const parts = visibleLeafColumns.map(
-            (column) => `${column.id}:${column.getSize()}`,
-        );
+        const parts = visibleLeafColumns.map((column) => column.id);
         return `${stickyColumnId}|${parts.join("|")}`;
     }, [visibleLeafColumns, stickyColumnId]);
     const tableRowsById = useMemo(() => {
@@ -1524,11 +1611,6 @@ export function Table<TData extends object>({
     const handleColumnDragStart = (columnId: string, event: DragEvent) => {
         if (!enableColumnReorder || lockedSet.has(columnId)) return;
 
-        if (armedColumnDragIdRef.current !== columnId) {
-            event.preventDefault();
-            return;
-        }
-
         clearPendingColumnDragHold();
 
         draggingColumnIdRef.current = columnId;
@@ -1754,9 +1836,6 @@ export function Table<TData extends object>({
             >
                 <table
                     className={styles.table}
-                    style={{
-                        width: `max(100%, ${Math.max(table.getTotalSize(), 1)}px)`,
-                    }}
                 >
                     <colgroup>
                         {visibleLeafColumns.map((column) => (
@@ -1814,15 +1893,20 @@ export function Table<TData extends object>({
                                           (sortDirection === "asc" ? "↑" : "↓"))
                                         : null;
 
+                                    const isPinned =
+                                        header.column.getIsPinned();
+                                    const pinningStyle = getCommonPinningStyles(
+                                        header.column,
+                                        true,
+                                    );
+
                                     return (
                                         <DraggableHeader
                                             key={header.id}
                                             dragEnabled={canDragColumn}
                                             draggable={canDragColumn}
-                                            sticky={
-                                                header.column.id ===
-                                                stickyColumnId
-                                            }
+                                            pinned={isPinned}
+                                            pinningStyle={pinningStyle}
                                             size={header.getSize()}
                                             isDragSource={
                                                 draggingColumnId ===

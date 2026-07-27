@@ -159,6 +159,8 @@ export type ChartType =
     | "baseline"
     | "heikin_ashi";
 
+export type ScaleMode = "normal" | "logarithmic" | "percentage";
+
 /* ── Chart interval ──────────────────────────────────────────────────────── */
 export type Interval =
     | "1m"

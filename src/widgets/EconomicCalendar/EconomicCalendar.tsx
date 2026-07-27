@@ -107,6 +107,7 @@ function EconomicCalendar({ id, onRemove }: Props) {
       id={id}
       className={styles.root}
       headerLeft={<div class={styles.heading}>Economic Calendar</div>}
+      draggableHeaderLeft={true}
       loading={loading}
       onRemove={onRemove}
     >

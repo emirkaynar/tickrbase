@@ -72,6 +72,7 @@ type ListTableRow = ListItem & {
 };
 
 const LISTS_LOCKED_COLUMN_IDS = ["symbol", "actions"];
+const LISTS_PINNED_COLUMNS = { left: ["symbol"], right: ["actions"] };
 const SNAPSHOT_REFRESH_MS = 15_000;
 const PRICE_FLUSH_INTERVAL_MS = 1000;
 const MAX_PULSE_KEYS_PER_FRAME = 8;
@@ -284,7 +285,6 @@ function areColumnOptionsEqual(
 function Watchlist({ id, onRemove }: Props) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const listTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const addSymbolTriggerRef = useRef<HTMLButtonElement | null>(null);
   const addGroupTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [lists, setLists] = useState<ListRecord[]>([]);
   const [activeListId, setActiveListId] = useState("");
@@ -333,9 +333,7 @@ function Watchlist({ id, onRemove }: Props) {
   const [listPopoverOpen, setListPopoverOpen] = useState(false);
   const [newListName, setNewListName] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [addSymbolPopoverOpen, setAddSymbolPopoverOpen] = useState(false);
   const [addGroupPopoverOpen, setAddGroupPopoverOpen] = useState(false);
-  const [newSymbol, setNewSymbol] = useState("");
   const [newGroupLabel, setNewGroupLabel] = useState("");
   const [isPageVisible, setIsPageVisible] = useState(
     () => document.visibilityState === "visible",
@@ -579,7 +577,7 @@ function Watchlist({ id, onRemove }: Props) {
   const dispatchQueuedPulses = useCallback(() => {
     pulseDispatchRafRef.current = null;
     if (unmountedRef.current) return;
-    if (isWidgetInteractingRef.current) return;
+    if (isWidgetInteractingRef.current || isScrollingRef.current) return;
 
     const queued = Object.keys(pendingPulseByKeyRef.current);
     if (queued.length === 0) return;
@@ -653,10 +651,28 @@ function Watchlist({ id, onRemove }: Props) {
     [dispatchQueuedPulses, disablePulse],
   );
 
+  const isScrollingRef = useRef(false);
+  const scrollTimeoutRef = useRef<number | null>(null);
+  const flushPendingPricesRef = useRef<() => void>(() => {});
+
+  const schedulePriceFlush = useCallback(() => {
+    if (isWidgetInteractingRef.current) return;
+    if (priceFlushTimerRef.current != null) return;
+
+    priceFlushTimerRef.current = window.setTimeout(
+      () => flushPendingPricesRef.current(),
+      PRICE_FLUSH_INTERVAL_MS,
+    );
+  }, []);
+
   const flushPendingPrices = useCallback(() => {
     priceFlushTimerRef.current = null;
     if (unmountedRef.current) return;
     if (isWidgetInteractingRef.current) return;
+    if (isScrollingRef.current) {
+      schedulePriceFlush();
+      return;
+    }
 
     const pendingEntries = Object.entries(pendingPriceByTickerRef.current);
     if (pendingEntries.length === 0) return;
@@ -703,16 +719,38 @@ function Watchlist({ id, onRemove }: Props) {
         queueCellPulse(createCellPulseKey(symbol, "changePercent"));
       }
     }
-  }, [isPageVisible, queueCellPulse, disablePulse]);
+  }, [isPageVisible, queueCellPulse, disablePulse, schedulePriceFlush]);
 
-  const schedulePriceFlush = useCallback(() => {
-    if (isWidgetInteractingRef.current) return;
-    if (priceFlushTimerRef.current != null) return;
+  useEffect(() => {
+    flushPendingPricesRef.current = flushPendingPrices;
+  }, [flushPendingPrices]);
 
-    priceFlushTimerRef.current = window.setTimeout(
-      flushPendingPrices,
-      PRICE_FLUSH_INTERVAL_MS,
-    );
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const scrollViewport = root.querySelector(`.${styles.scrollViewport}`);
+    if (!scrollViewport) return;
+
+    const handleScroll = () => {
+      isScrollingRef.current = true;
+      if (scrollTimeoutRef.current !== null) {
+        window.clearTimeout(scrollTimeoutRef.current);
+      }
+      scrollTimeoutRef.current = window.setTimeout(() => {
+        isScrollingRef.current = false;
+        scrollTimeoutRef.current = null;
+        flushPendingPrices();
+      }, 150);
+    };
+
+    scrollViewport.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      scrollViewport.removeEventListener("scroll", handleScroll);
+      if (scrollTimeoutRef.current !== null) {
+        window.clearTimeout(scrollTimeoutRef.current);
+      }
+    };
   }, [flushPendingPrices]);
 
   useEffect(() => {
@@ -1280,8 +1318,8 @@ function Watchlist({ id, onRemove }: Props) {
           locked: true,
           removable: false,
         },
-        size: 48,
-        minSize: 48,
+        size: 32,
+        minSize: 32,
         cell: ({ row }) => (
           <Tooltip content="Remove">
             <button
@@ -1372,19 +1410,21 @@ function Watchlist({ id, onRemove }: Props) {
     }
   }, [activeListId, refreshLists]);
 
-  const handleAddSymbol = useCallback(async () => {
-    if (!activeListId || !newSymbol.trim()) return;
+  const handleAddSymbol = useCallback(
+    async (symbol: string) => {
+      const cleaned = symbol.trim().toUpperCase();
+      if (!activeListId || !cleaned) return;
 
-    try {
-      await addSymbolToList(activeListId, newSymbol);
-      const nextItems = await fetchListItems(activeListId);
-      setItems(nextItems);
-      setNewSymbol("");
-      setAddSymbolPopoverOpen(false);
-    } catch {
-      setError("Could not add symbol to list.");
-    }
-  }, [activeListId, newSymbol]);
+      try {
+        await addSymbolToList(activeListId, cleaned);
+        const nextItems = await fetchListItems(activeListId);
+        setItems(nextItems);
+      } catch {
+        setError("Could not add symbol to list.");
+      }
+    },
+    [activeListId],
+  );
 
   const handleAddGroup = useCallback(() => {
     const label = newGroupLabel.trim();
@@ -1605,18 +1645,6 @@ function Watchlist({ id, onRemove }: Props) {
     [],
   );
 
-  const addSymbolPopoverPositioning = useMemo(
-    () => ({
-      placement: "top-start" as const,
-      strategy: "fixed" as const,
-      gutter: 8,
-      shift: 8,
-      flip: true,
-      hideWhenDetached: true,
-      getAnchorElement: () => addSymbolTriggerRef.current,
-    }),
-    [],
-  );
 
   const addGroupPopoverPositioning = useMemo(
     () => ({
@@ -1642,7 +1670,6 @@ function Watchlist({ id, onRemove }: Props) {
             onOpenChange={(details) => {
               setListPopoverOpen(details.open);
               if (details.open) {
-                setAddSymbolPopoverOpen(false);
                 setAddGroupPopoverOpen(false);
               }
             }}
@@ -1774,7 +1801,7 @@ function Watchlist({ id, onRemove }: Props) {
                   scopeId={id}
                   tableId="watchlist-v3"
                   variant="widget"
-                  stickyColumnId="symbol"
+                  pinnedColumns={LISTS_PINNED_COLUMNS}
                   lockedColumnIds={LISTS_LOCKED_COLUMN_IDS}
                   rowStateId={activeListId || undefined}
                   isHydrating={isListSwitching}
@@ -1799,66 +1826,29 @@ function Watchlist({ id, onRemove }: Props) {
           <ArcScrollArea.Corner className={styles.Corner} />
         </ArcScrollArea.Root>
       <div className={styles.bottomActions}>
-        <ArkPopover.Root
-          open={addSymbolPopoverOpen}
-          onOpenChange={(details) => {
-            setAddSymbolPopoverOpen(details.open);
-            if (details.open) {
-              setAddGroupPopoverOpen(false);
-              setListPopoverOpen(false);
-            }
-            if (!details.open) {
-              setNewSymbol("");
+        <TickerSelector
+          value=""
+          placeholder="Search symbol to add..."
+          onChange={(selectedSymbol) => {
+            if (selectedSymbol) {
+              void handleAddSymbol(selectedSymbol);
             }
           }}
-          positioning={addSymbolPopoverPositioning}
-          lazyMount
-        >
-          <ArkPopover.Trigger asChild>
+          trigger={
             <button
-              ref={addSymbolTriggerRef}
               type="button"
               className={styles.bottomActionButton}
             >
               <Plus size={12} /> Add Symbol
             </button>
-          </ArkPopover.Trigger>
-          <Portal>
-            <ArkPopover.Positioner>
-              <ArkPopover.Content className={styles.bottomActionPopover}>
-                <div className={styles.bottomActionEditor}>
-                  <TickerSelector
-                    value={newSymbol}
-                    onChange={setNewSymbol}
-                    placeholder="Search symbol"
-                    className={styles.symbolSelector}
-                  />
-                  <Button
-                    variant="outline"
-                    onClick={() => void handleAddSymbol()}
-                  >
-                    Add
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setAddSymbolPopoverOpen(false);
-                      setNewSymbol("");
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </ArkPopover.Content>
-            </ArkPopover.Positioner>
-          </Portal>
-        </ArkPopover.Root>
+          }
+        />
 
         <ArkPopover.Root
           open={addGroupPopoverOpen}
           onOpenChange={(details) => {
             setAddGroupPopoverOpen(details.open);
             if (details.open) {
-              setAddSymbolPopoverOpen(false);
               setListPopoverOpen(false);
             }
             if (!details.open) {

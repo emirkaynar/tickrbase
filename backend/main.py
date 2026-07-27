@@ -60,7 +60,11 @@ app.add_middleware(
 
 @app.exception_handler(ValueError)
 async def value_error_handler(_request: Request, exc: ValueError):
-    return JSONResponse(status_code=400, content={"error": True, "message": str(exc)})
+    return JSONResponse(
+        status_code=400,
+        content={"error": True, "message": str(exc)},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 @app.exception_handler(HTTPException)
@@ -68,12 +72,17 @@ async def http_exception_handler(_request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": True, "message": str(exc.detail)},
+        headers={"Access-Control-Allow-Origin": "*"},
     )
 
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(_request: Request, exc: Exception):
-    return JSONResponse(status_code=500, content={"error": True, "message": str(exc)})
+    return JSONResponse(
+        status_code=500,
+        content={"error": True, "message": str(exc)},
+        headers={"Access-Control-Allow-Origin": "*"},
+    )
 
 
 app.include_router(auth_router)

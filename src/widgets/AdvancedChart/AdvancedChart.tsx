@@ -279,6 +279,7 @@ function AdvancedChart({ id, onRemove }: Props) {
             id={id}
             className={styles.root}
             headerLeft={<div class={styles.heading}>Advanced Chart</div>}
+            draggableHeaderLeft={true}
             loading={loading}
             error={error}
             onRemove={onRemove}

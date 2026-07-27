@@ -139,3 +139,46 @@
     z-index: var(--z-base);
     pointer-events: none;
 }
+
+.axisCorner {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-1);
+    padding: 0 var(--space-2);
+    z-index: 10;
+    background: var(--color-bg-elevated);
+}
+
+.scaleBtn {
+    height: 20px;
+    padding: 0 var(--space-1);
+    border: none;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--color-text-subtle);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.scaleBtn:hover {
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+}
+
+.scaleBtnActive {
+    background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+    color: var(--color-primary);
+}
+
+.scaleBtnActive:hover {
+    background: color-mix(in srgb, var(--color-primary) 25%, transparent);
+    color: var(--color-primary);
+}

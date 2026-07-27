@@ -8,6 +8,7 @@ import {
     SearchIcon,
     TrendingUpIcon,
 } from "lucide-react";
+import { API_BASE } from "../../services/api";
 import { fetchLookup } from "../../services/lookup";
 import type { LookupItem } from "../../services/types";
 import styles from "./TickerSelector.module.css";
@@ -75,8 +76,29 @@ const DEFAULT_POPULAR_TICKERS: TickerSelectorItem[] = [
 ];
 
 function TickerAvatar({ symbol }: { symbol: string }) {
+    const [imgError, setImgError] = useState(false);
+
+    useEffect(() => {
+        setImgError(false);
+    }, [symbol]);
+
     const clean = symbol.replace(/\.IS$/i, "");
     const initials = clean.slice(0, 2).toUpperCase();
+
+    if (!imgError) {
+        return (
+            <div className={styles.avatar}>
+                <img
+                    src={`${API_BASE}/logo/${encodeURIComponent(symbol)}`}
+                    alt={clean}
+                    className={styles.avatarImg}
+                    onError={() => setImgError(true)}
+                    loading="lazy"
+                />
+            </div>
+        );
+    }
+
     return <div className={styles.avatar}>{initials}</div>;
 }
 

@@ -7,6 +7,7 @@ type Props = {
     className?: string;
     headerLeft?: ComponentChildren;
     headerRight?: ComponentChildren;
+    draggableHeaderLeft?: boolean;
     loading?: boolean;
     error?: string | null;
     onRemove?: () => void;
@@ -17,6 +18,7 @@ export function Shell({
     className,
     headerLeft,
     headerRight,
+    draggableHeaderLeft = false,
     loading = false,
     error,
     onRemove,
@@ -26,7 +28,18 @@ export function Shell({
         <div className={[styles.root, className].filter(Boolean).join(" ")}>
             {(headerLeft || headerRight || onRemove) && (
                 <div className={`${styles.handle} widget-handle`}>
-                    <div className={styles.headerLeft}>{headerLeft}</div>
+                    <div
+                        className={[
+                            styles.headerLeft,
+                            draggableHeaderLeft
+                                ? `sc-drag-grip ${styles.draggableHeaderLeft}`
+                                : "",
+                        ]
+                            .filter(Boolean)
+                            .join(" ")}
+                    >
+                        {headerLeft}
+                    </div>
                     <div className={`${styles.dragGrip} sc-drag-grip`} />
                     <div className={styles.headerRight}>
                         {headerRight}

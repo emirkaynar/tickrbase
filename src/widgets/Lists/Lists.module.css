@@ -226,6 +226,8 @@
 .content {
     position: relative;
     flex: 0 0 auto;
+    width: max-content;
+    min-width: 100%;
     min-height: 100%;
 }
 
@@ -244,18 +246,27 @@
 
 .rowDeleteButton {
     border: none;
-    background: transparent;
-    color: var(--color-text-subtle);
+    background: var(--color-bg-elevated);
+    color: var(--color-text);
     cursor: pointer;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border-radius: var(--radius-sm);
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
+    opacity: 0;
+    pointer-events: none;
     transition:
+        opacity var(--transition-fast),
         color var(--transition-fast),
         background var(--transition-fast);
+}
+
+:global(.bodyRow:hover) .rowDeleteButton,
+:global(tr:hover) .rowDeleteButton {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .rowDeleteButton:hover {
@@ -336,12 +347,15 @@
     box-sizing: border-box;
 }
 .scrollViewport {
+    width: 100%;
     height: 100%;
     min-height: 0;
     scrollbar-width: none;
+    overflow: auto !important;
 }
 .scrollContent {
-    width: 100%;
+    width: max-content;
+    min-width: 100%;
     min-height: 100%;
     box-sizing: border-box;
     display: flex;

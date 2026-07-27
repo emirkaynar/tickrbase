@@ -36,7 +36,7 @@
 }
 
 .popoverContent {
-    width: 300px;
+    width: 240px;
     max-height: 380px;
     display: flex;
     flex-direction: column;
@@ -156,6 +156,14 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    overflow: hidden;
+}
+
+.avatarImg {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: contain;
 }
 
 .itemText {

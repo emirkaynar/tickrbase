@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from "preact/hooks";
 import type { IChartApi, ISeriesApi, UTCTimestamp } from "lightweight-charts";
+import { PriceScaleMode } from "lightweight-charts";
 import { api } from "../../services/api";
 import { fetchHistory } from "../../services/history";
 import { livePricesClient } from "../../services/livePrices";
-import type { Bar, Interval } from "../../services/types";
+import type { Bar, Interval, ScaleMode } from "../../services/types";
 import { INTERVALS } from "../../services/types";
 
 import type { ChartType } from "../../services/types";
@@ -31,11 +32,14 @@ type UseChartStateReturn = {
     interval: Interval;
     chartType: ChartType;
     timezone: string;
+    scaleMode: ScaleMode;
     stateReady: boolean;
     setSymbol: (s: string) => void;
     selectInterval: (i: Interval) => void;
     setChartType: (c: ChartType) => void;
     setTimezone: (t: string) => void;
+    setScaleMode: (m: ScaleMode) => void;
+    applyScaleFormatting: () => void;
     reapplyCurrentBars: () => void;
     captureRange: () => void;
     setPrevClose: (val: number | null) => void;
@@ -129,6 +133,7 @@ export function useChartState(
     );
     const [chartType, setChartType] = useState<ChartType>("candlestick");
     const [timezone, setTimezone] = useState<string>("Europe/Istanbul");
+    const [scaleMode, setScaleMode] = useState<ScaleMode>("normal");
     const [stateReady, setStateReady] = useState(false);
 
     const chartTypeRef = useRef<ChartType>(chartType);
@@ -137,6 +142,65 @@ export function useChartState(
         chartTypeRef.current = chartType;
     }, [chartType]);
 
+    const applyScaleFormatting = useCallback(() => {
+        const chart = chartRef.current;
+        const series = seriesRef.current;
+        if (!chart) return;
+
+        if (scaleMode === "logarithmic") {
+            chart.priceScale("right").applyOptions({
+                mode: PriceScaleMode.Logarithmic,
+            });
+            if (series) {
+                series.applyOptions({
+                    priceFormat: {
+                        type: "price",
+                        precision: 2,
+                        minMove: 0.01,
+                    },
+                });
+            }
+        } else if (scaleMode === "percentage") {
+            chart.priceScale("right").applyOptions({
+                mode: PriceScaleMode.Normal,
+            });
+            if (series) {
+                const basePrice = prevCloseRef.current;
+                series.applyOptions({
+                    priceFormat: {
+                        type: "custom",
+                        formatter: (price: number) => {
+                            if (!basePrice || basePrice === 0)
+                                return price.toFixed(2);
+                            const pct =
+                                ((price - basePrice) / basePrice) * 100;
+                            const formatted = pct.toFixed(2);
+                            return `${pct > 0 ? "+" : ""}${formatted}%`;
+                        },
+                        minMove: 0.01,
+                    },
+                });
+            }
+        } else {
+            chart.priceScale("right").applyOptions({
+                mode: PriceScaleMode.Normal,
+            });
+            if (series) {
+                series.applyOptions({
+                    priceFormat: {
+                        type: "price",
+                        precision: 2,
+                        minMove: 0.01,
+                    },
+                });
+            }
+        }
+    }, [scaleMode, chartRef, seriesRef]);
+
+    useEffect(() => {
+        applyScaleFormatting();
+    }, [scaleMode, applyScaleFormatting]);
+
     const setPrevClose = useCallback((val: number | null) => {
         prevCloseRef.current = val;
         if (chartTypeRef.current === "baseline" && seriesRef.current && val !== null) {
@@ -144,7 +208,8 @@ export function useChartState(
                 baseValue: { type: "price", price: val },
             });
         }
-    }, [seriesRef]);
+        applyScaleFormatting();
+    }, [seriesRef, applyScaleFormatting]);
 
     // Restore persisted state from backend API on mount
     useEffect(() => {
@@ -172,6 +237,11 @@ export function useChartState(
                 }
                 if (saved.state?.timeScale) {
                     chartStateRef.current = saved.state.timeScale;
+                }
+                if (saved.state?.priceScale) {
+                    if (saved.state.priceScale.mode) {
+                        setScaleMode(saved.state.priceScale.mode as ScaleMode);
+                    }
                 }
             }
         };
@@ -209,7 +279,7 @@ export function useChartState(
         };
     }, []);
 
-    // Persist symbol+interval+chartType+timezone changes
+    // Persist symbol+interval+chartType+timezone+priceScale changes
     useEffect(() => {
         if (!stateReady) return;
         void api.put(`/user/widgets/${id}/state`, {
@@ -218,12 +288,15 @@ export function useChartState(
             state: {
                 chartType,
                 timezone,
+                priceScale: {
+                    mode: scaleMode,
+                },
                 timeScale: chartStateRef.current
                     ? chartStateRef.current
                     : undefined,
             },
         });
-    }, [id, symbol, interval, chartType, timezone, stateReady]);
+    }, [id, symbol, interval, chartType, timezone, scaleMode, stateReady]);
 
     function calculateHeikinAshi(bars: Bar[]): Bar[] {
         if (!bars.length) return [];
@@ -345,13 +418,16 @@ export function useChartState(
                 state: {
                     chartType: chartTypeRef.current,
                     timezone,
+                    priceScale: {
+                        mode: scaleMode,
+                    },
                     timeScale: chartStateRef.current,
                 },
             });
         } catch {
             /* ignore */
         }
-    }, [id, symbol, interval, timezone, chartRef]);
+    }, [id, symbol, interval, timezone, scaleMode, chartRef]);
 
     // Data load + polling
     useEffect(() => {
@@ -570,11 +646,14 @@ export function useChartState(
         interval,
         chartType,
         timezone,
+        scaleMode,
         stateReady,
         setSymbol,
         selectInterval,
         setChartType,
         setTimezone,
+        setScaleMode,
+        applyScaleFormatting,
         reapplyCurrentBars,
         captureRange,
         setPrevClose,
