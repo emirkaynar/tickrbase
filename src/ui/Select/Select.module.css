@@ -92,13 +92,14 @@
 .content {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    padding: var(--space-1);
+    gap: var(--space-0-5);
+    padding: var(--space-1-5);
     min-width: 80px;
-    background: var(--color-bg-elevated);
-    border: 1px solid var(--color-border);
+    background: var(--color-mica-surface-light);
+    backdrop-filter: blur(var(--mica-backdrop-blur))
+        saturate(var(--mica-backdrop-saturate));
     border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-sm);
     outline: none;
     z-index: var(--z-dropdown);
     animation: scale-in var(--transition-fast) forwards;
@@ -117,14 +118,15 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-3);
-    padding: var(--space-1) var(--space-2);
+    padding: var(--space-1-5) var(--space-2);
     border-radius: var(--radius-sm);
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
-    color: var(--color-text-muted);
+    color: var(--color-text);
     cursor: pointer;
     outline: none;
     user-select: none;
+    transition: background var(--transition-fast);
 
     & svg {
         width: 12px;
@@ -148,16 +150,16 @@
 }
 
 .item[data-highlighted] {
-    background: var(--color-bg-surface);
+    background: var(--color-mica-surface-light);
     color: var(--color-text);
 }
 
 .item[data-state="checked"] {
-    color: var(--color-primary);
+    background: var(--color-mica-surface-light);
 }
 
 .item[data-disabled] {
-    opacity: 0.4;
+    opacity: 0.6;
 }
 
 .itemIndicator {

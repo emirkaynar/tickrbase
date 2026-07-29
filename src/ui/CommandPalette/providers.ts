@@ -43,10 +43,10 @@ export const widgetProvider: CommandProvider = {
                 label: "Symbol Overview",
                 badge: "Yahoo Finance",
                 hint: "Overview of a specific stock symbol",
-                keywords: ["symbol", "overview", "stock"],
-                enabled: false,
+                keywords: ["symbol", "overview", "stock", "stats"],
+                enabled: true,
                 section: "Overview",
-                action: { kind: "placeholder" },
+                action: { kind: "add-widget", widget: "symbol-overview" },
             },
             {
                 id: "widget-basic-chart",

@@ -1,7 +1,8 @@
 import type { ComponentChildren } from "preact";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useCallback, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Combobox, useListCollection } from "@ark-ui/react/combobox";
 import { Portal } from "@ark-ui/react/portal";
+import { ScrollArea } from "@ark-ui/react/scroll-area";
 import {
     CheckIcon,
     Loader2Icon,
@@ -82,15 +83,14 @@ function TickerAvatar({ symbol }: { symbol: string }) {
         setImgError(false);
     }, [symbol]);
 
-    const clean = symbol.replace(/\.IS$/i, "");
-    const initials = clean.slice(0, 2).toUpperCase();
+    const initials = symbol.slice(0, 2).toUpperCase();
 
     if (!imgError) {
         return (
             <div className={styles.avatar}>
                 <img
                     src={`${API_BASE}/logo/${encodeURIComponent(symbol)}`}
-                    alt={clean}
+                    alt={symbol}
                     className={styles.avatarImg}
                     onError={() => setImgError(true)}
                     loading="lazy"
@@ -125,8 +125,6 @@ export function TickerSelector({
         [],
     );
     const requestTokenRef = useRef(0);
-
-    const cleanSymbol = useMemo(() => value.replace(/\.IS$/i, ""), [value]);
 
     useEffect(() => {
         const normalized = query.trim();
@@ -182,13 +180,25 @@ export function TickerSelector({
 
     const { collection, set } = useListCollection<TickerSelectorItem>({
         initialItems: activeItems,
-        itemToString: (item) => item.symbol.replace(/\.IS$/i, ""),
+        itemToString: (item) => item.symbol,
         itemToValue: (item) => item.symbol,
     });
 
     useEffect(() => {
         set(activeItems);
     }, [activeItems, set]);
+
+    const viewportRef = useRef<HTMLDivElement>(null);
+
+    const handleScrollToIndex = useCallback((details: { index: number; immediate?: boolean }) => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        const itemElements = viewport.querySelectorAll('[data-part="item"]');
+        const target = itemElements[details.index] as HTMLElement | undefined;
+        if (target) {
+            target.scrollIntoView({ block: "center", behavior: "smooth" });
+        }
+    }, []);
 
     return (
         <Combobox.Root<TickerSelectorItem>
@@ -211,6 +221,7 @@ export function TickerSelector({
             onInputValueChange={(details) => {
                 setQuery(details.inputValue);
             }}
+            scrollToIndexFn={handleScrollToIndex}
             closeOnSelect
             selectionBehavior="replace"
             positioning={{ placement: "bottom-start", gutter: 6 }}
@@ -223,7 +234,7 @@ export function TickerSelector({
                     ) : (
                         <button type="button" className={styles.defaultTrigger}>
                             <span className={styles.triggerSymbol}>
-                                {cleanSymbol || "Select Ticker"}
+                                {value || "Select Ticker"}
                             </span>
                         </button>
                     )}
@@ -236,7 +247,7 @@ export function TickerSelector({
                         <div className={styles.searchHeader}>
                             <SearchIcon className={styles.searchIcon} />
                             <Combobox.Input
-                                className={styles.searchInput}
+                                className={styles.searchInput}  
                                 placeholder={placeholder}
                             />
                             {loading && (
@@ -253,55 +264,60 @@ export function TickerSelector({
                                 No tickers found for "{query}"
                             </Combobox.Empty>
                         ) : (
-                            <div className={styles.listContainer}>
-                                <Combobox.ItemGroup
-                                    className={styles.itemGroup}
-                                >
-                                    {query.trim().length < 2 && (
-                                        <Combobox.ItemGroupLabel
-                                            className={styles.sectionHeader}
+                            <ScrollArea.Root className={styles.scrollRoot}>
+                                <ScrollArea.Viewport ref={viewportRef} className={styles.scrollViewport}>
+                                    <ScrollArea.Content className={styles.scrollContent}>
+                                        <Combobox.ItemGroup
+                                            className={styles.itemGroup}
                                         >
-                                            <TrendingUpIcon size={12} />
-                                            <span>Popular</span>
-                                        </Combobox.ItemGroupLabel>
-                                    )}
-                                    {collection.items.map((item) => (
-                                        <Combobox.Item
-                                            key={item.symbol}
-                                            item={item}
-                                            className={styles.itemRow}
-                                        >
-                                            <TickerAvatar
-                                                symbol={item.symbol}
-                                            />
-                                            <Combobox.ItemText
-                                                className={styles.itemText}
-                                            >
-                                                <span
-                                                    className={styles.itemTitle}
+                                            {query.trim().length < 2 && (
+                                                <Combobox.ItemGroupLabel
+                                                    className={styles.sectionHeader}
                                                 >
-                                                    {item.symbol.replace(
-                                                        /\.IS$/i,
-                                                        "",
-                                                    )}
-                                                </span>
-                                                <span
-                                                    className={
-                                                        styles.itemSubtitle
-                                                    }
+                                                    <TrendingUpIcon size={12} />
+                                                    <span>Popular</span>
+                                                </Combobox.ItemGroupLabel>
+                                            )}
+                                            {collection.items.map((item) => (
+                                                <Combobox.Item
+                                                    key={item.symbol}
+                                                    item={item}
+                                                    className={styles.itemRow}
                                                 >
-                                                    {formatSubtitle(item)}
-                                                </span>
-                                            </Combobox.ItemText>
-                                            <Combobox.ItemIndicator
-                                                className={styles.itemCheck}
-                                            >
-                                                <CheckIcon size={14} />
-                                            </Combobox.ItemIndicator>
-                                        </Combobox.Item>
-                                    ))}
-                                </Combobox.ItemGroup>
-                            </div>
+                                                    <TickerAvatar
+                                                        symbol={item.symbol}
+                                                    />
+                                                    <Combobox.ItemText
+                                                        className={styles.itemText}
+                                                    >
+                                                        <span
+                                                            className={styles.itemTitle}
+                                                        >
+                                                            {item.symbol}
+                                                        </span>
+                                                        <span
+                                                            className={
+                                                                styles.itemSubtitle
+                                                            }
+                                                        >
+                                                            {formatSubtitle(item)}
+                                                        </span>
+                                                    </Combobox.ItemText>
+                                                    <Combobox.ItemIndicator
+                                                        className={styles.itemCheck}
+                                                    >
+                                                        <CheckIcon size={14} />
+                                                    </Combobox.ItemIndicator>
+                                                </Combobox.Item>
+                                            ))}
+                                        </Combobox.ItemGroup>
+                                    </ScrollArea.Content>
+                                </ScrollArea.Viewport>
+                                <ScrollArea.Scrollbar className={styles.scrollbar} orientation="vertical">
+                                    <ScrollArea.Thumb className={styles.scrollThumb} />
+                                </ScrollArea.Scrollbar>
+                                <ScrollArea.Corner className={styles.corner} />
+                            </ScrollArea.Root>
                         )}
                     </Combobox.Content>
                 </Combobox.Positioner>

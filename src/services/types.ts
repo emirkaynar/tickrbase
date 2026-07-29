@@ -86,6 +86,7 @@ export type QuoteFieldGroup = "session" | "volume" | "quote";
 
 export type QuoteSnapshot = {
     symbol: string;
+    currency?: string | null;
     current_price: number | null;
     previous_close: number | null;
     open: number | null;
@@ -106,6 +107,32 @@ export type QuotesResponse = {
     quotes: QuoteSnapshot[];
     stale: boolean;
     last_updated: string;
+};
+
+export type OverviewData = {
+    symbol: string;
+    currency?: string | null;
+    company_name?: string | null;
+    market_cap?: number | null;
+    pe_ratio?: number | null;
+    forward_pe?: number | null;
+    eps?: number | null;
+    forward_eps?: number | null;
+    dividend_yield?: number | null;
+    dividend_rate?: number | null;
+    beta?: number | null;
+    fifty_two_week_high?: number | null;
+    fifty_two_week_low?: number | null;
+    fifty_day_average?: number | null;
+    two_hundred_day_average?: number | null;
+    shares_outstanding?: number | null;
+    float_shares?: number | null;
+    sector?: string | null;
+    industry?: string | null;
+    description?: string | null;
+    vwap?: number | null;
+    stale?: boolean;
+    last_updated?: string;
 };
 
 export type ListItem = { ticker: string };

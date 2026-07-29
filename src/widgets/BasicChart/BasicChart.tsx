@@ -12,6 +12,7 @@ import { INTERVALS, INTERVAL_CONFIG } from "../../services/types";
 import type { ChartType, Interval } from "../../services/types";
 import { livePricesClient } from "../../services/livePrices";
 import { fetchQuotes, calcChangePercent } from "../../services/quotes";
+import { formatPercentChange } from "../../utils";
 import styles from "./BasicChart.module.css";
 
 type Props = { id: string; onRemove: () => void };
@@ -29,11 +30,6 @@ const CHART_TYPE_ITEMS: SelectItem[] = [
     { label: "Baseline", value: "baseline" },
     { label: "Heikin-Ashi", value: "heikin_ashi" },
 ];
-
-const PCT_FORMATTER = new Intl.NumberFormat("tr-TR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-});
 
 function BasicChart({ id, onRemove }: Props) {
     const containerRef = useRef<HTMLDivElement>(null);
@@ -262,8 +258,7 @@ function BasicChart({ id, onRemove }: Props) {
                               : styles.changeNeutral
                     }
                 >
-                    {changePercent > 0 ? "▲ " : changePercent < 0 ? "▼ " : ""}
-                    {PCT_FORMATTER.format(Math.abs(changePercent))}%
+                    {formatPercentChange(changePercent)}
                 </span>
             )}
         </button>
@@ -281,21 +276,23 @@ function BasicChart({ id, onRemove }: Props) {
                         onChange={handleSymbolSelect}
                         trigger={tickerTrigger}
                     />
+                </>
+            }
+            headerRight={
+                <>
                     <Select
                         items={INTERVAL_ITEMS}
                         value={interval}
                         onChange={handleIntervalSelect}
                         variant="widget"
                     />
+                    <Select
+                        items={CHART_TYPE_ITEMS}
+                        value={chartType}
+                        onChange={handleChartTypeSelect}
+                        variant="widget"
+                    />
                 </>
-            }
-            headerRight={
-                <Select
-                    items={CHART_TYPE_ITEMS}
-                    value={chartType}
-                    onChange={handleChartTypeSelect}
-                    variant="widget"
-                />
             }
             loading={!stateReady || status === "loading"}
             error={status === "error" ? errorMsg : null}

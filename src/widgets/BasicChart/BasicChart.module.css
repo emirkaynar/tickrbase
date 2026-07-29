@@ -88,22 +88,24 @@
     font-weight: var(--font-weight-medium);
 }
 
+.changeNegative,
+.changeNeutral,
 .changePositive {
     font-family: var(--font-mono);
-    color: var(--color-bull);
     font-weight: var(--font-weight-semibold);
+    text-wrap: nowrap;
+}
+
+.changePositive {
+    color: var(--color-bull);
 }
 
 .changeNegative {
-    font-family: var(--font-mono);
     color: var(--color-bear);
-    font-weight: var(--font-weight-semibold);
 }
 
 .changeNeutral {
-    font-family: var(--font-mono);
     color: var(--color-text-subtle);
-    font-weight: var(--font-weight-medium);
 }
 
 .chartContainer {

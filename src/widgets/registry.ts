@@ -9,7 +9,8 @@ export type WidgetType =
     | "basic-chart"
     | "advanced-chart"
     | "economic-calendar"
-    | "watchlist";
+    | "watchlist"
+    | "symbol-overview";
 
 export type WidgetSize = { w: number; h: number };
 

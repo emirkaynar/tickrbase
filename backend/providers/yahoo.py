@@ -225,8 +225,13 @@ class YahooFinanceProvider(DataProvider):
             else None
         )
 
+        currency = str(
+            fast.get("currency") or ("TRY" if normalized.endswith(".IS") else "USD")
+        ).upper()
+
         payload = {
             "symbol": normalized,
+            "currency": currency,
             "current_price": current_price,
             "previous_close": previous_close if "session" in requested else None,
             "open": open_price if "session" in requested else None,

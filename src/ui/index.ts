@@ -12,6 +12,8 @@ export type {
     SelectTriggerVariant,
     SelectVariant,
 } from "./Select/Select";
+export { MiniBaselineChart } from "./MiniBaselineChart/MiniBaselineChart";
+export type { BaselineDataPoint } from "./MiniBaselineChart/MiniBaselineChart";
 export { Skeleton } from "./Skeleton/Skeleton";
 export { Table } from "./Table/Table";
 export type {

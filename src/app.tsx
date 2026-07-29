@@ -5,6 +5,7 @@ import "./widgets/BasicChart/BasicChart";
 import "./widgets/AdvancedChart/AdvancedChart";
 import "./widgets/EconomicCalendar/EconomicCalendar";
 import "./widgets/Lists/Lists";
+import "./widgets/SymbolOverview/SymbolOverview";
 
 import { useRouter } from "./router";
 import { useLayout } from "./grid/useLayout";

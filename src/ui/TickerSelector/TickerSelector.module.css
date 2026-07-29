@@ -17,7 +17,9 @@
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
     cursor: pointer;
-    transition: background var(--transition-fast), color var(--transition-fast);
+    transition:
+        background var(--transition-fast),
+        color var(--transition-fast);
 }
 
 .defaultTrigger:hover {
@@ -37,10 +39,12 @@
 
 .popoverContent {
     width: 240px;
-    max-height: 380px;
+    max-height: 280px;
     display: flex;
     flex-direction: column;
-    background: var(--color-bg-elevated);
+    background: var(--color-mica-surface-light);
+    backdrop-filter: blur(var(--mica-backdrop-blur))
+        saturate(var(--mica-backdrop-saturate));
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-md);
@@ -59,14 +63,17 @@
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-2) var(--space-3);
-    background: var(--color-bg-surface);
-    border-bottom: 1px solid var(--color-border);
+    margin: var(--space-1-5);
+    border: 1px solid transparent;
+    margin-bottom: 0;
+    background-color: var(--color-mica-surface-light);
+    border-radius: var(--radius-sm);
 }
 
 .searchIcon {
     width: 14px;
     height: 14px;
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
     flex-shrink: 0;
 }
 
@@ -80,10 +87,6 @@
     outline: none;
 }
 
-.searchInput::placeholder {
-    color: var(--color-text-subtle);
-}
-
 .spinner {
     width: 14px;
     height: 14px;
@@ -92,13 +95,77 @@
     flex-shrink: 0;
 }
 
-.listContainer {
+.scrollRoot {
     flex: 1;
-    overflow-y: auto;
+    position: relative;
+    overflow: hidden;
     display: flex;
     flex-direction: column;
-    padding: var(--space-1);
+    min-height: 0;
+}
+
+.scrollViewport {
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
     overscroll-behavior: contain;
+}
+
+.scrollContent {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-1-5);
+}
+
+.scrollbar {
+    display: flex;
+    position: relative;
+    background-color: var(--color-bg-surface);
+    border-radius: 0.375rem;
+    margin: 0.25rem;
+    opacity: 0;
+    transition: opacity 150ms;
+    pointer-events: none;
+
+    &::before {
+        content: "";
+        position: absolute;
+    }
+
+    &[data-scrolling] {
+        transition-duration: 0ms;
+    }
+
+    &[data-hover],
+    &[data-scrolling] {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    &[data-orientation="vertical"] {
+        width: 0.25rem;
+
+        &::before {
+            width: 1.25rem;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        &:not([data-overflow-y]) {
+            display: none;
+        }
+    }
+}
+
+.scrollThumb {
+    width: 100%;
+    border-radius: inherit;
+    background-color: var(--color-text-muted);
+}
+
+.corner {
+    background-color: transparent;
 }
 
 .sectionHeader {
@@ -110,7 +177,7 @@
     font-weight: var(--font-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
 }
 
 .itemGroup {
@@ -130,12 +197,12 @@
     cursor: pointer;
     text-align: left;
     transition: background var(--transition-fast);
-    width: 100%;
+    width: 228px;
 }
 
 .itemRow[data-highlighted],
 .itemRow:hover {
-    background: var(--color-bg-surface);
+    background: var(--color-mica-surface-light);
 }
 
 .itemRow[data-state="checked"] {
@@ -146,8 +213,7 @@
     width: 28px;
     height: 28px;
     border-radius: var(--radius-sm);
-    background: var(--color-bg-surface);
-    border: 1px solid var(--color-border-subtle);
+    background-color: var(--color-mica-surface-light);
     color: var(--color-primary);
     font-family: var(--font-mono);
     font-size: 11px;
@@ -183,7 +249,7 @@
 
 .itemSubtitle {
     font-size: var(--font-size-xs);
-    color: var(--color-text-subtle);
+    color: var(--color-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

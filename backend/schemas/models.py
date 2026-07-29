@@ -93,6 +93,7 @@ class LookupResponse(BaseModel):
 
 class QuoteSnapshot(BaseModel):
     symbol: str
+    currency: str | None = None
     current_price: float | None = None
     previous_close: float | None = None
     open: float | None = None
@@ -111,6 +112,32 @@ class QuoteSnapshot(BaseModel):
 class QuotesResponse(BaseModel):
     symbols: list[str]
     quotes: list[QuoteSnapshot]
+    stale: bool = False
+    last_updated: str
+
+
+class OverviewResponse(BaseModel):
+    symbol: str
+    currency: str | None = None
+    company_name: str | None = None
+    market_cap: float | None = None
+    pe_ratio: float | None = None
+    forward_pe: float | None = None
+    eps: float | None = None
+    forward_eps: float | None = None
+    dividend_yield: float | None = None
+    dividend_rate: float | None = None
+    beta: float | None = None
+    fifty_two_week_high: float | None = None
+    fifty_two_week_low: float | None = None
+    fifty_day_average: float | None = None
+    two_hundred_day_average: float | None = None
+    shares_outstanding: float | None = None
+    float_shares: float | None = None
+    sector: str | None = None
+    industry: str | None = None
+    description: str | None = None
+    vwap: float | None = None
     stale: bool = False
     last_updated: str
 

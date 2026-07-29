@@ -19,12 +19,14 @@ from ..providers.base import DataProvider
 from ..schemas.models import (
     HistoryResponse,
     LookupResponse,
+    OverviewResponse,
     PriceResponse,
     QuotesResponse,
     SymbolsResponse,
 )
 from ..services import logos as logos_service
 from ..services import lookup as lookup_service
+from ..services import overview as overview_service
 from ..services import prices as prices_service
 from ..services import quotes as quotes_service
 from ..services import symbols as symbols_service
@@ -200,5 +202,21 @@ async def get_lookup(
         }
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+
+@router.get("/overview/{ticker}", response_model=OverviewResponse)
+async def get_overview_route(
+    ticker: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    redis=Depends(get_redis),
+):
+    provider = get_provider(current_user.tier)
+    try:
+        payload, stale, fetched_at = await overview_service.get_overview(
+            provider, redis, ticker
+        )
+        return payload
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
