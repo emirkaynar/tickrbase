@@ -2,21 +2,18 @@ from __future__ import annotations
 
 import json
 import time
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession
+import redis.asyncio as aioredis
 
 from ..core.config import (
     LOOKUP_MAX_RESULTS,
     LOOKUP_MIN_QUERY_LENGTH,
     LOOKUP_TTL_SECONDS,
 )
-from ..core.models_db import LookupCache
 from ..providers.base import DataProvider
 
 
 async def search_lookup(
-    db: AsyncSession,
+    redis: aioredis.Redis,
     provider: DataProvider,
     query: str,
 ) -> tuple[str, list[dict], bool, int]:
@@ -27,35 +24,32 @@ async def search_lookup(
         )
 
     now = int(time.time())
-    result = await db.execute(
-        select(LookupCache).where(LookupCache.query == cleaned.lower())
-    )
-    row = result.scalar_one_or_none()
+    cache_key = f"lookup:{cleaned.lower()}"
 
-    if row is not None:
+    stale_items: list[dict] | None = None
+    stale_fetched_at: int | None = None
+
+    cached_str = await redis.get(cache_key)
+    if cached_str:
         try:
-            items = json.loads(row.payload)
-            fetched_at = int(row.fetched_at)
+            data = json.loads(cached_str)
+            items = data["items"]
+            fetched_at = int(data["fetched_at"])
             stale = (now - fetched_at) > LOOKUP_TTL_SECONDS
             if not stale:
                 return cleaned, items, False, fetched_at
-        except (json.JSONDecodeError, ValueError):
+            stale_items = items
+            stale_fetched_at = fetched_at
+        except (json.JSONDecodeError, KeyError, ValueError):
             pass
 
     try:
-        items = provider.lookup(cleaned, count=LOOKUP_MAX_RESULTS)
+        items = await provider.lookup_async(cleaned, count=LOOKUP_MAX_RESULTS)
+        payload = json.dumps({"items": items, "fetched_at": now})
+        await redis.set(cache_key, payload, ex=LOOKUP_TTL_SECONDS)
+        return cleaned, items, False, now
     except Exception:
-        if row is not None:
-            return cleaned, json.loads(row.payload), True, int(row.fetched_at)
+
+        if stale_items is not None and stale_fetched_at is not None:
+            return cleaned, stale_items, True, stale_fetched_at
         raise
-
-    stmt = insert(LookupCache).values(
-        query=cleaned.lower(), payload=json.dumps(items), fetched_at=now
-    )
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["query"],
-        set_={"payload": json.dumps(items), "fetched_at": now},
-    )
-    await db.execute(stmt)
-
-    return cleaned, items, False, now

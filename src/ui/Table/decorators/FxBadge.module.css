@@ -1,0 +1,21 @@
+.fxBadge {
+    display: inline-flex;
+    width: var(--font-size-md);
+    height: var(--font-size-md);
+    align-items: center;
+    justify-content: center;
+    vertical-align: middle;
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: var(--color-primary);
+    cursor: help;
+    user-select: none;
+    outline: none;
+    border-radius: var(--radius-xs, 2px);
+}
+
+.fxBadge:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+}

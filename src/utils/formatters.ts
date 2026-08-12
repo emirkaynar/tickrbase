@@ -101,10 +101,10 @@ export function formatPercentChange(
     }).format(Math.abs(val));
 
     if (val > 0) {
-        return `${showArrow ? "▲ " : ""}${absValStr}%`;
+        return `${showArrow ? "▲ " : "+"}${absValStr}%`;
     }
     if (val < 0) {
-        return `${showArrow ? "▼ " : ""}${absValStr}%`;
+        return `${showArrow ? "▼ " : "-"}${absValStr}%`;
     }
     return `${absValStr}%`;
 }

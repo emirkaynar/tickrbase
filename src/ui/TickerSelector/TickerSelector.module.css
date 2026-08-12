@@ -49,7 +49,7 @@
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-md);
     outline: none;
-    z-index: var(--z-dropdown);
+    z-index: calc(var(--z-modal) + 10);
     overflow: hidden;
     animation: scale-in var(--transition-fast) forwards;
 }
@@ -223,14 +223,26 @@
     justify-content: center;
     flex-shrink: 0;
     overflow: hidden;
+    position: relative;
 }
 
 .avatarImg {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     border-radius: inherit;
     object-fit: contain;
+    background-color: var(--color-mica-surface-light);
+    opacity: 0;
+    transition: opacity 200ms ease-in-out;
 }
+
+.avatarImg[data-loaded="true"] {
+    opacity: 1;
+}
+
 
 .itemText {
     display: flex;

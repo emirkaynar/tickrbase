@@ -2,7 +2,7 @@ import type { ComponentChildren } from "preact";
 import styles from "./Button.module.css";
 
 type ButtonVariant = "solid" | "ghost" | "outline";
-type ButtonSize = "sm" | "md";
+type ButtonSize = "sm" | "md" | "icon";
 
 type Props = {
     variant?: ButtonVariant;

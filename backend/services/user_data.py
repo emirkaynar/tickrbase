@@ -144,24 +144,27 @@ async def save_user_layout(db: AsyncSession, user_id: int, payload: LayoutPayloa
 
     # Upsert screens
     for s in payload.screens:
+        scoped_s_id = s.id if s.id.startswith(f"{user_id}:") else f"{user_id}:{s.id}"
         stmt_screen = insert(UserScreen).values(
-            id=s.id,
+            id=scoped_s_id,
             user_id=user_id,
             name=s.name,
             order=s.order,
             created_at=s.createdAt,
         ).on_conflict_do_update(
             index_elements=["id"],
-            set_={"name": s.name, "order": s.order},
+            set_={"user_id": user_id, "name": s.name, "order": s.order},
         )
         await db.execute(stmt_screen)
 
     # Upsert widgets
     for w in payload.widgets:
+        scoped_w_id = w.id if w.id.startswith(f"{user_id}:") else f"{user_id}:{w.id}"
+        scoped_s_id = w.screenId if w.screenId.startswith(f"{user_id}:") else f"{user_id}:{w.screenId}"
         stmt_widget = insert(UserWidget).values(
-            id=w.id,
+            id=scoped_w_id,
             user_id=user_id,
-            screen_id=w.screenId,
+            screen_id=scoped_s_id,
             type=w.type,
             x=w.x,
             y=w.y,
@@ -173,7 +176,8 @@ async def save_user_layout(db: AsyncSession, user_id: int, payload: LayoutPayloa
         ).on_conflict_do_update(
             index_elements=["id"],
             set_={
-                "screen_id": w.screenId,
+                "user_id": user_id,
+                "screen_id": scoped_s_id,
                 "x": w.x,
                 "y": w.y,
                 "w": w.w,
@@ -190,12 +194,14 @@ async def save_user_layout(db: AsyncSession, user_id: int, payload: LayoutPayloa
 # --- WIDGET STATE SERVICES ---
 
 async def get_widget_state(db: AsyncSession, user_id: int, widget_id: str) -> WidgetStatePayload | None:
+    scoped_widget_id = widget_id if widget_id.startswith(f"{user_id}:") else f"{user_id}:{widget_id}"
     res = await db.execute(
         select(UserWidgetState).where(
-            UserWidgetState.user_id == user_id, UserWidgetState.widget_id == widget_id
+            UserWidgetState.user_id == user_id,
+            (UserWidgetState.widget_id == widget_id) | (UserWidgetState.widget_id == scoped_widget_id)
         )
     )
-    ws = res.scalar_one_or_none()
+    ws = res.scalars().first()
     if not ws:
         return None
 
@@ -210,18 +216,24 @@ async def get_widget_state(db: AsyncSession, user_id: int, widget_id: str) -> Wi
 async def save_widget_state(
     db: AsyncSession, user_id: int, widget_id: str, payload: WidgetStatePayload
 ) -> None:
-    existing_widget = await db.scalar(
-        select(UserWidget).where(
-            UserWidget.id == widget_id, UserWidget.user_id == user_id
+    scoped_widget_id = widget_id if widget_id.startswith(f"{user_id}:") else f"{user_id}:{widget_id}"
+    existing_widget = (
+        await db.execute(
+            select(UserWidget).where(
+                UserWidget.user_id == user_id,
+                (UserWidget.id == widget_id) | (UserWidget.id == scoped_widget_id)
+            )
         )
-    )
+    ).scalars().first()
     if not existing_widget:
-        screen = await db.scalar(
-            select(UserScreen).where(UserScreen.user_id == user_id).order_by(UserScreen.order)
-        )
+        screen = (
+            await db.execute(
+                select(UserScreen).where(UserScreen.user_id == user_id).order_by(UserScreen.order)
+            )
+        ).scalars().first()
         if not screen:
             screen = UserScreen(
-                id=f"screen-{user_id}-default",
+                id=f"{user_id}:screen-default",
                 user_id=user_id,
                 name="Default Screen",
                 order=0,
@@ -233,26 +245,25 @@ async def save_widget_state(
         parts = widget_id.rsplit("-", 1)
         widget_type = parts[0] if len(parts) > 1 else "unknown"
 
-        db.add(
-            UserWidget(
-                id=widget_id,
-                user_id=user_id,
-                screen_id=screen.id,
-                type=widget_type,
-                x=0,
-                y=0,
-                w=6,
-                h=6,
-                min_w=1,
-                min_h=1,
-                created_at=int(time.time() * 1000),
-            )
+        existing_widget = UserWidget(
+            id=scoped_widget_id,
+            user_id=user_id,
+            screen_id=screen.id,
+            type=widget_type,
+            x=0,
+            y=0,
+            w=6,
+            h=6,
+            min_w=1,
+            min_h=1,
+            created_at=int(time.time() * 1000),
         )
+        db.add(existing_widget)
         await db.flush()
 
     state_json = json.dumps(payload.state) if payload.state is not None else None
     stmt = insert(UserWidgetState).values(
-        widget_id=widget_id,
+        widget_id=existing_widget.id,
         user_id=user_id,
         symbol=payload.symbol,
         interval=payload.interval,
@@ -260,6 +271,7 @@ async def save_widget_state(
     ).on_conflict_do_update(
         index_elements=["widget_id"],
         set_={
+            "user_id": user_id,
             "symbol": payload.symbol,
             "interval": payload.interval,
             "state_json": state_json,
@@ -280,8 +292,9 @@ async def list_watchlists(db: AsyncSession, user_id: int) -> list[WatchlistSchem
     # Create default watchlist if none exists
     if not rows:
         now = int(time.time() * 1000)
+        default_id = f"{user_id}:list:default"
         default_wl = UserWatchlist(
-            id="list:default",
+            id=default_id,
             user_id=user_id,
             name="Watchlist",
             name_lower="watchlist",
@@ -315,9 +328,10 @@ async def save_watchlist(
     now = int(time.time() * 1000)
     items_json = json.dumps(payload.items)
     row_state_json = json.dumps(payload.rowState) if payload.rowState is not None else None
+    scoped_id = list_id if list_id.startswith(f"{user_id}:") else f"{user_id}:{list_id}"
 
     stmt = insert(UserWatchlist).values(
-        id=list_id,
+        id=scoped_id,
         user_id=user_id,
         name=payload.name,
         name_lower=payload.name.strip().lower(),
@@ -329,6 +343,7 @@ async def save_watchlist(
     ).on_conflict_do_update(
         index_elements=["id"],
         set_={
+            "user_id": user_id,
             "name": payload.name,
             "name_lower": payload.name.strip().lower(),
             "order": payload.order,
@@ -341,7 +356,7 @@ async def save_watchlist(
     await db.commit()
 
     return WatchlistSchema(
-        id=list_id,
+        id=scoped_id,
         name=payload.name,
         order=payload.order,
         items=payload.items,
@@ -352,8 +367,12 @@ async def save_watchlist(
 
 
 async def delete_watchlist(db: AsyncSession, user_id: int, list_id: str) -> None:
+    scoped_id = list_id if list_id.startswith(f"{user_id}:") else f"{user_id}:{list_id}"
     await db.execute(
-        delete(UserWatchlist).where(UserWatchlist.user_id == user_id, UserWatchlist.id == list_id)
+        delete(UserWatchlist).where(
+            UserWatchlist.user_id == user_id,
+            (UserWatchlist.id == list_id) | (UserWatchlist.id == scoped_id)
+        )
     )
     await db.commit()
 
@@ -390,19 +409,28 @@ async def save_user_settings(db: AsyncSession, user_id: int, settings: dict[str,
 async def get_table_pref(
     db: AsyncSession, user_id: int, scope_type: str, scope_id: str, table_id: str
 ) -> dict[str, object] | None:
-    pref_id = f"{scope_type}:{scope_id}:{table_id}"
+    pref_id = f"{user_id}:{scope_type}:{scope_id}:{table_id}"
     res = await db.execute(
         select(UserTablePref.prefs_json).where(
             UserTablePref.user_id == user_id, UserTablePref.id == pref_id
         )
     )
-    raw_json = res.scalar_one_or_none()
+    raw_json = res.scalars().first()
+    if not raw_json:
+        legacy_id = f"{scope_type}:{scope_id}:{table_id}"
+        res = await db.execute(
+            select(UserTablePref.prefs_json).where(
+                UserTablePref.user_id == user_id, UserTablePref.id == legacy_id
+            )
+        )
+        raw_json = res.scalars().first()
+
     return json.loads(raw_json) if raw_json else None
 
 
 async def save_table_pref(db: AsyncSession, user_id: int, payload: TablePrefPayload) -> None:
     now = int(time.time() * 1000)
-    pref_id = f"{payload.scopeType}:{payload.scopeId}:{payload.tableId}"
+    pref_id = f"{user_id}:{payload.scopeType}:{payload.scopeId}:{payload.tableId}"
     stmt = insert(UserTablePref).values(
         id=pref_id,
         user_id=user_id,
@@ -413,7 +441,7 @@ async def save_table_pref(db: AsyncSession, user_id: int, payload: TablePrefPayl
         updated_at=now,
     ).on_conflict_do_update(
         index_elements=["id"],
-        set_={"prefs_json": json.dumps(payload.prefs), "updated_at": now},
+        set_={"user_id": user_id, "prefs_json": json.dumps(payload.prefs), "updated_at": now},
     )
     await db.execute(stmt)
     await db.commit()

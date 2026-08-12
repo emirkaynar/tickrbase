@@ -1,7 +1,16 @@
+.trigger {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+}
+
 .content {
     padding: var(--space-1-5) var(--space-3);
     background: var(--color-mica-surface-light);
-    backdrop-filter: blur(var(--mica-backdrop-blur)) saturate(var(--mica-backdrop-saturate));
+    -webkit-backdrop-filter: blur(var(--mica-backdrop-blur))
+        saturate(var(--mica-backdrop-saturate));
+    backdrop-filter: blur(var(--mica-backdrop-blur))
+        saturate(var(--mica-backdrop-saturate));
     border: none;
     border-radius: var(--radius-sm);
     font-size: var(--font-size-sm);
@@ -9,7 +18,6 @@
     color: var(--color-text);
     box-shadow: var(--shadow-sm);
     z-index: var(--z-tooltip);
-    white-space: nowrap;
 
     &[data-state="open"] {
         animation: scale-fade-in 0.15s ease-out;
@@ -19,6 +27,12 @@
         animation: scale-fade-out 0.1s ease-in;
     }
 }
+
+.long {
+    max-width: 200px;
+    word-break: break-word;
+}
+
 
 @keyframes scale-fade-in {
     from {

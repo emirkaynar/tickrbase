@@ -1,0 +1,286 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    width: 100%;
+}
+
+.controlsBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-3);
+}
+
+.timeframeGroup {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.timeframeBtn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
+    font-weight: var(--font-weight-semibold);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.timeframeBtn:hover {
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+}
+
+.activeTimeframe {
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+    border-color: var(--color-border);
+}
+
+.benchmarkGroup {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.rightControls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.viewModeGroup {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--color-bg-surface);
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+}
+
+.viewModeBtn {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
+    font-weight: var(--font-weight-semibold);
+    padding: 4px 8px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.viewModeBtn:hover {
+    color: var(--color-text);
+}
+
+.activeViewMode {
+    background: var(--color-bg-elevated);
+    color: var(--color-text);
+}
+
+.disabledGroup {
+    opacity: 0.4;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.chartCard {
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    height: 380px;
+    position: relative;
+    overflow: hidden;
+}
+
+.chartCanvas {
+    width: 100%;
+    height: 100%;
+    min-height: 320px;
+}
+
+/* Floating magnet tooltip — matches MiniBaselineChart.module.css */
+.canvasTooltip {
+    position: absolute;
+    z-index: 10000;
+    pointer-events: none;
+    display: none;
+    transform: translate(-50%, -100%);
+    margin-top: -4px;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.tooltipDate {
+    color: var(--color-text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.tooltipRow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-muted);
+}
+
+.tooltipVal {
+    margin-left: auto;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+    padding-left: 12px;
+}
+
+.tooltipDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-bull);
+    flex-shrink: 0;
+    transition: background 0.3s ease;
+}
+
+.tooltipDotNeg {
+    background: var(--color-bear);
+}
+
+.tooltipBenchDot {
+    width: 10px;
+    height: 2px;
+    background: var(--color-text-subtle);
+    border-radius: 1px;
+    flex-shrink: 0;
+}
+
+
+.heatmapSection {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+}
+
+.heatmapHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sectionTitle {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+}
+
+.heatmapGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-2);
+}
+
+.heatmapTile {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border-subtle);
+    color: #fff;
+    min-height: 80px;
+    box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.15);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.heatmapTile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.tilePositive {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.85), rgba(5, 150, 105, 0.95));
+}
+
+.tileNegative {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.85), rgba(220, 38, 38, 0.95));
+}
+
+.tileTicker {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+}
+
+.tileValue {
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
+    opacity: 0.9;
+}
+
+.tilePnl {
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    font-family: var(--font-family-mono);
+}
+
+.placeholderCard {
+    background: var(--color-bg-elevated);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+}
+
+.placeholderHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.placeholderHeader h3 {
+    margin: 0;
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+}
+
+.placeholderBadge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+    color: var(--color-primary);
+    border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.placeholderBody p {
+    margin: 0 0 var(--space-3) 0;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-sm);
+}
+
+.metaRow {
+    display: flex;
+    gap: var(--space-4);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+

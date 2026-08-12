@@ -24,6 +24,11 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "False").lower() in ("true", "1", "t")
 COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax")
 
+ENV_NAME = os.getenv("ENV", "dev").lower()
+DEV_MODE = ENV_NAME in ("dev", "development", "local", "true", "1")
+ENABLE_DB_LOGGING = os.getenv("ENABLE_DB_LOGGING", str(DEV_MODE)).lower() in ("true", "1", "t")
+ENABLE_REDIS_LOGGING = os.getenv("ENABLE_REDIS_LOGGING", str(DEV_MODE)).lower() in ("true", "1", "t")
+
 cors_env = os.getenv("CORS_ORIGINS")
 if cors_env:
     CORS_ORIGINS = [o.strip() for o in cors_env.split(",") if o.strip()]
@@ -39,13 +44,16 @@ QUOTES_MAX_SYMBOLS_PER_REQUEST = 25
 QUOTES_DEFAULT_GROUPS = ("session", "volume", "quote")
 HISTORY_TTL_SECONDS = 600
 SYMBOLS_TTL_SECONDS = 86_400
-LOOKUP_TTL_SECONDS = 900
+LOOKUP_TTL_SECONDS = 604_800  # 7 days cache for search queries
 LOOKUP_MIN_QUERY_LENGTH = 2
+
 LOOKUP_MAX_RESULTS = 25
 
 LOGO_DEV_TOKEN = os.getenv("LOGO_DEV_TOKEN", "")
 LOGO_DEV_MONTHLY_LIMIT = int(os.getenv("LOGO_DEV_MONTHLY_LIMIT", "500000"))
-LOGO_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7  # 7 days
+LOGO_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 days
+LOGO_NEGATIVE_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 days
+
 
 WS_PROTOCOL_VERSION = "1.0"
 WS_MAX_CLIENTS = 200
@@ -82,9 +90,8 @@ YAHOO_MAX_RANGE = {
     "1mo": "max",
 }
 
-TRADINGVIEW_SCANNER_URL = "https://scanner.tradingview.com/turkey/scan"
-
 FALLBACK_SYMBOLS = [
+
     {"label": "ASELS", "value": "ASELS.IS"},
     {"label": "THYAO", "value": "THYAO.IS"},
     {"label": "BESTE", "value": "BESTE.IS"},

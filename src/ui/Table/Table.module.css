@@ -19,7 +19,11 @@
 }
 
 .full {
-    min-height: 360px;
+    min-height: 320px;
+    width: 100% !important;
+    table {
+        width: 100% !important;
+    }
 }
 
 .loading {
@@ -90,6 +94,7 @@
     gap: var(--space-1);
     min-height: 32px;
     padding: var(--space-1) var(--space-2) var(--space-1) var(--space-1-5);
+    margin-right: var(--space-1);
 }
 
 .headerContent {
@@ -112,11 +117,18 @@
     align-items: center;
     gap: var(--space-1);
     min-width: 0;
+    width: 100% !important;
+    min-height: 24px;
     cursor: pointer;
     padding: 0;
+    transition: color var(--transition-fast);
 }
 
 .sortButton:hover {
+    color: var(--color-text);
+}
+
+.sortButton:has(.sortIndicator) {
     color: var(--color-text);
 }
 
@@ -131,15 +143,19 @@
 }
 
 .sortIndicator {
-    color: var(--color-text-muted);
+    color: var(--color-primary);
+    background: var(--color-bg-surface);
     font-size: var(--font-size-xs);
     line-height: 1;
+    min-width: 14px !important;
+    -webkit-box-shadow: -3px 0px 2px 0px var(--color-bg-surface);
+    box-shadow: -3px 0px 2px 0px var(--color-bg-surface);
 }
 
 .columnResizer {
     position: absolute;
     top: 0;
-    right: -4px;
+    right: 0;
     width: 8px;
     height: 100%;
     cursor: ew-resize;
@@ -151,14 +167,14 @@
     position: absolute;
     top: var(--space-1-5);
     bottom: var(--space-1-5);
-    left: 3px;
+    left: 4px;
     width: 2px;
     background: var(--color-text-subtle);
     border-radius: var(--radius-full);
     transition: background var(--transition-fast);
 }
 
-.headerCell:hover .columnResizer::after {
+.columnResizer:hover::after {
     background: var(--color-text);
 }
 .headerCell:hover .resizing::after {
@@ -240,7 +256,7 @@
     align-items: center;
     gap: var(--space-1);
     min-height: 32px;
-    padding: var(--space-1-5);
+    padding: var(--space-1-5) var(--space-1);
 }
 
 .cellValue {
@@ -291,13 +307,10 @@
     background: var(--color-bg-surface);
 }
 
-.bodyRow:hover .stickyCellRight {
-    background: transparent;
-    background: linear-gradient(
-        90deg,
-        transparent 0%,
-        var(--color-bg-surface) 10%
-    );
+.bodyRow:hover .stickyCellRight, .bodyRow:focus-visible .stickyCellRight {
+    background: var(--color-bg-surface);
+    -webkit-box-shadow: -10px 0px 5px -2px var(--color-bg-surface);
+    box-shadow: -10px 0px 5px -2px var(--color-bg-surface);
 }
 
 .dragSource {
@@ -354,7 +367,7 @@
         box-shadow var(--transition-fast);
 }
 
-.spacerRow:hover .spacerCell{
+.spacerRow:hover .spacerCell {
     background: var(--color-bg-surface);
 }
 

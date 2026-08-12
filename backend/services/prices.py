@@ -29,21 +29,33 @@ async def get_price(
     cached_str = await redis.get(cache_key)
     now = int(time.time())
 
+    stale_fallback: float | None = None
+    stale_fetched_at: int | None = None
+
     if cached_str:
         try:
             data = json.loads(cached_str)
             price = float(data["price"])
             fetched_at = int(data["fetched_at"])
             stale = (now - fetched_at) > PRICE_TTL_SECONDS
-            return price, stale, fetched_at
+            if not stale:
+                return price, False, fetched_at
+            stale_fallback = price
+            stale_fetched_at = fetched_at
         except (json.JSONDecodeError, KeyError, ValueError):
             pass
 
-    price, fetched_at = provider.get_price(normalized)
-    payload = json.dumps({"price": price, "fetched_at": fetched_at})
-    await redis.set(cache_key, payload, ex=PRICE_TTL_SECONDS * 2)
+    try:
+        price, fetched_at = await provider.get_price_async(normalized)
+        payload = json.dumps({"price": price, "fetched_at": fetched_at})
+        await redis.set(cache_key, payload, ex=PRICE_TTL_SECONDS * 2)
+        return price, False, fetched_at
+    except Exception:
+        if stale_fallback is not None and stale_fetched_at is not None:
+            return stale_fallback, True, stale_fetched_at
+        raise
 
-    return price, False, fetched_at
+
 
 
 def to_price_payload(ticker: str, price: float, stale: bool, fetched_at: int) -> dict:

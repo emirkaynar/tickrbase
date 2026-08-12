@@ -1,3 +1,4 @@
+# Verified touch for buy_fx_rate in TransactionResponse
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -58,30 +59,47 @@ app.add_middleware(
 )
 
 
+def _cors_origin(request: Request) -> str:
+    origin = request.headers.get("origin")
+    if origin and origin in CORS_ORIGINS:
+        return origin
+    return CORS_ORIGINS[0] if CORS_ORIGINS else "http://localhost:5173"
+
+
 @app.exception_handler(ValueError)
-async def value_error_handler(_request: Request, exc: ValueError):
+async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(
         status_code=400,
         content={"error": True, "message": str(exc)},
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers={
+            "Access-Control-Allow-Origin": _cors_origin(request),
+            "Access-Control-Allow-Credentials": "true",
+        },
     )
 
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(_request: Request, exc: HTTPException):
+async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": True, "message": str(exc.detail)},
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers={
+            "Access-Control-Allow-Origin": _cors_origin(request),
+            "Access-Control-Allow-Credentials": "true",
+        },
     )
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception_handler(_request: Request, exc: Exception):
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    print(f"[UNHANDLED EXCEPTION] {exc}")
     return JSONResponse(
         status_code=500,
         content={"error": True, "message": str(exc)},
-        headers={"Access-Control-Allow-Origin": "*"},
+        headers={
+            "Access-Control-Allow-Origin": _cors_origin(request),
+            "Access-Control-Allow-Credentials": "true",
+        },
     )
 
 

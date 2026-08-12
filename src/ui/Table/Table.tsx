@@ -71,7 +71,8 @@ function cx(...parts: Array<string | false | null | undefined>): string {
     return parts.filter(Boolean).join(" ");
 }
 
-function uniqueOrdered(values: string[]): string[] {
+function uniqueOrdered(values: string[] | undefined | null): string[] {
+    if (!Array.isArray(values)) return [];
     const seen = new Set<string>();
     const next: string[] = [];
 
@@ -100,7 +101,7 @@ function areStringArraysEqual(left: string[], right: string[]): boolean {
 }
 
 function normalizeColumnOrder(
-    columnOrder: string[],
+    columnOrder: string[] | undefined | null,
     allColumnIds: string[],
 ): string[] {
     const available = new Set(allColumnIds);
@@ -120,7 +121,7 @@ function normalizeColumnOrder(
 }
 
 function normalizeVisibleColumnIds(
-    visibleColumnIds: string[],
+    visibleColumnIds: string[] | undefined | null,
     allColumnIds: string[],
     lockedColumnIds: string[],
 ): string[] {
@@ -142,7 +143,7 @@ function normalizeVisibleColumnIds(
 }
 
 function normalizeRowOrder(
-    rowOrder: string[],
+    rowOrder: string[] | undefined | null,
     rowIds: string[],
     spacers?: TableSpacerRow[],
 ): string[] {
@@ -176,14 +177,15 @@ function normalizeRowOrder(
 }
 
 function normalizeSorting(
-    sorting: SortingState,
+    sorting: SortingState | undefined | null,
     allColumnIds: string[],
 ): SortingState {
+    if (!Array.isArray(sorting)) return [];
     const available = new Set(allColumnIds);
     const next: SortingState = [];
 
     for (const item of sorting) {
-        if (!available.has(item.id)) continue;
+        if (!available.has(item?.id)) continue;
         next.push({ id: item.id, desc: Boolean(item.desc) });
         if (next.length >= 1) break;
     }
@@ -191,11 +193,13 @@ function normalizeSorting(
     return next;
 }
 
-function normalizeSpacerRows(spacers: TableSpacerRow[]): TableSpacerRow[] {
+function normalizeSpacerRows(spacers: TableSpacerRow[] | undefined | null): TableSpacerRow[] {
+    if (!Array.isArray(spacers)) return [];
     const seen = new Set<string>();
     const next: TableSpacerRow[] = [];
 
     for (const spacer of spacers) {
+        if (!spacer) continue;
         const id = normalizeSpacerId(spacer.id);
         if (seen.has(id)) continue;
         seen.add(id);
@@ -213,9 +217,10 @@ function normalizeSpacerRows(spacers: TableSpacerRow[]): TableSpacerRow[] {
 }
 
 function normalizeColumnWidths(
-    columnWidths: ColumnSizingState,
+    columnWidths: ColumnSizingState | undefined | null,
     allColumnIds: string[],
 ): ColumnSizingState {
+    if (!columnWidths || typeof columnWidths !== "object") return {};
     const available = new Set(allColumnIds);
     const next: ColumnSizingState = {};
 
@@ -841,26 +846,37 @@ export function Table<TData extends object>({
     );
     const effectiveRowStateId = rowStateId ?? persistenceId;
 
+    const allColumnIdsKey = useMemo(() => toIdKey(allColumnIds), [allColumnIds]);
+
+    const allColumnIdsRef = useRef(allColumnIds);
+    allColumnIdsRef.current = allColumnIds;
+
+    const normalizedLockedColumnIdsRef = useRef(normalizedLockedColumnIds);
+    normalizedLockedColumnIdsRef.current = normalizedLockedColumnIds;
+
+    const defaultNormalizedColumnWidthsRef = useRef(defaultNormalizedColumnWidths);
+    defaultNormalizedColumnWidthsRef.current = defaultNormalizedColumnWidths;
+
     useEffect(() => {
-        setVisibleColumnIds((prev) =>
-            normalizeVisibleColumnIds(
+        setVisibleColumnIds((prev) => {
+            const next = normalizeVisibleColumnIds(
                 prev,
-                allColumnIds,
-                normalizedLockedColumnIds,
-            ),
-        );
-        setColumnOrder((prev) => normalizeColumnOrder(prev, allColumnIds));
+                allColumnIdsRef.current,
+                normalizedLockedColumnIdsRef.current,
+            );
+            return areStringArraysEqual(prev, next) ? prev : next;
+        });
+        setColumnOrder((prev) => {
+            const next = normalizeColumnOrder(prev, allColumnIdsRef.current);
+            return areStringArraysEqual(prev, next) ? prev : next;
+        });
         setColumnWidths((prev) =>
             mergeDefaultColumnWidths(
-                normalizeColumnWidths(prev, allColumnIds),
-                defaultNormalizedColumnWidths,
+                normalizeColumnWidths(prev, allColumnIdsRef.current),
+                defaultNormalizedColumnWidthsRef.current,
             ),
         );
-    }, [
-        allColumnIds,
-        normalizedLockedColumnIds,
-        defaultNormalizedColumnWidths,
-    ]);
+    }, [allColumnIdsKey]);
 
     const normalizedSpacers = useMemo(
         () => normalizeSpacerRows(spacers),
@@ -911,8 +927,8 @@ export function Table<TData extends object>({
     ]);
 
     useEffect(() => {
-        setSorting((prev) => normalizeSorting(prev, allColumnIds));
-    }, [allColumnIds]);
+        setSorting((prev) => normalizeSorting(prev, allColumnIdsRef.current));
+    }, [allColumnIdsKey]);
 
     useEffect(() => {
         let active = true;
@@ -927,45 +943,49 @@ export function Table<TData extends object>({
                 if (!active || !persisted || !persisted.visibleColumnIds)
                     return;
 
+                const currentAllColumnIds = allColumnIdsRef.current;
+                const currentLockedIds = normalizedLockedColumnIdsRef.current;
+                const currentDefaultWidths = defaultNormalizedColumnWidthsRef.current;
+
                 setVisibleColumnIds(
                     normalizeVisibleColumnIds(
                         persisted.visibleColumnIds,
-                        allColumnIds,
-                        normalizedLockedColumnIds,
+                        currentAllColumnIds,
+                        currentLockedIds,
                     ),
                 );
                 setColumnOrder(
-                    normalizeColumnOrder(persisted.columnOrder, allColumnIds),
+                    normalizeColumnOrder(persisted.columnOrder, currentAllColumnIds),
                 );
                 setColumnWidths(
                     mergeDefaultColumnWidths(
                         normalizeColumnWidths(
                             persisted.columnWidths,
-                            allColumnIds,
+                            currentAllColumnIds,
                         ),
-                        defaultNormalizedColumnWidths,
+                        currentDefaultWidths,
                     ),
                 );
-                setSorting(normalizeSorting(persisted.sorting, allColumnIds));
+                setSorting(normalizeSorting(persisted.sorting, currentAllColumnIds));
 
                 const key = JSON.stringify({
                     visibleColumnIds: normalizeVisibleColumnIds(
                         persisted.visibleColumnIds,
-                        allColumnIds,
-                        normalizedLockedColumnIds,
+                        currentAllColumnIds,
+                        currentLockedIds,
                     ),
                     columnOrder: normalizeColumnOrder(
                         persisted.columnOrder,
-                        allColumnIds,
+                        currentAllColumnIds,
                     ),
                     columnWidths: mergeDefaultColumnWidths(
                         normalizeColumnWidths(
                             persisted.columnWidths,
-                            allColumnIds,
+                            currentAllColumnIds,
                         ),
-                        defaultNormalizedColumnWidths,
+                        currentDefaultWidths,
                     ),
-                    sorting: normalizeSorting(persisted.sorting, allColumnIds),
+                    sorting: normalizeSorting(persisted.sorting, currentAllColumnIds),
                 });
                 lastSavedPreferencesKeyRef.current = key;
             } catch (error) {
@@ -982,12 +1002,7 @@ export function Table<TData extends object>({
         return () => {
             active = false;
         };
-    }, [
-        persistenceId,
-        allColumnIds,
-        normalizedLockedColumnIds,
-        defaultNormalizedColumnWidths,
-    ]);
+    }, [persistenceId, allColumnIdsKey]);
 
     useEffect(() => {
         if (!preferencesHydrated) return;
@@ -995,17 +1010,21 @@ export function Table<TData extends object>({
         let active = true;
 
         const timer = setTimeout(async () => {
+            const currentAllColumnIds = allColumnIdsRef.current;
+            const currentLockedIds = normalizedLockedColumnIdsRef.current;
+            const currentDefaultWidths = defaultNormalizedColumnWidthsRef.current;
+
             const normalizedVisible = normalizeVisibleColumnIds(
                 visibleColumnIds,
-                allColumnIds,
-                normalizedLockedColumnIds,
+                currentAllColumnIds,
+                currentLockedIds,
             );
-            const normalizedOrder = normalizeColumnOrder(columnOrder, allColumnIds);
+            const normalizedOrder = normalizeColumnOrder(columnOrder, currentAllColumnIds);
             const normalizedWidths = mergeDefaultColumnWidths(
-                normalizeColumnWidths(columnWidths, allColumnIds),
-                defaultNormalizedColumnWidths,
+                normalizeColumnWidths(columnWidths, currentAllColumnIds),
+                currentDefaultWidths,
             );
-            const normalizedSorting = normalizeSorting(sorting, allColumnIds);
+            const normalizedSorting = normalizeSorting(sorting, currentAllColumnIds);
 
             const nextPreferencesKey = JSON.stringify({
                 visibleColumnIds: normalizedVisible,
@@ -1051,9 +1070,7 @@ export function Table<TData extends object>({
         columnOrder,
         columnWidths,
         sorting,
-        allColumnIds,
-        normalizedLockedColumnIds,
-        defaultNormalizedColumnWidths,
+        allColumnIdsKey,
     ]);
 
     useEffect(() => {

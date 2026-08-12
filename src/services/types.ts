@@ -42,6 +42,145 @@ export type PortfolioCreate = {
     avg_price: number;
 };
 
+export type PortfolioSummary = {
+    id: string;
+    name: string;
+    base_currency: string;
+    is_default: boolean;
+    created_at: number;
+};
+
+export type PortfolioCreatePayload = {
+    name: string;
+    base_currency?: string;
+    is_default?: boolean;
+};
+
+export type PositionResponse = {
+    id: string;
+    portfolio_id: string;
+    ticker: string;
+    asset_class: string;
+    sector: string | null;
+    quantity: number;
+    avg_price: number;
+    current_price: number;
+    market_value: number;
+    total_cost: number;
+    pnl: number;
+    pnl_percent: number;
+    weight_percent: number;
+    target_weight_pct: number | null;
+    tags: string[];
+    is_closed: boolean;
+    created_at: number;
+    updated_at: number;
+    /** Native trading currency (e.g. "TRY", "USD"). Values above are already in base_currency. */
+    currency: string;
+    /** FX rate applied: native → base_currency */
+    fx_rate_to_base: number;
+    avg_price_native: number;
+    current_price_native: number;
+    market_value_native: number;
+    pnl_native: number;
+    pnl_percent_native: number;
+};
+
+export type TransactionType =
+    | "BUY"
+    | "SELL"
+    | "DIVIDEND"
+    | "DEPOSIT"
+    | "WITHDRAWAL"
+    | "FEE"
+    | "TAX"
+    | "SPLIT";
+
+export type TransactionResponse = {
+    asset_class: string | undefined;
+    id: string;
+    portfolio_id: string;
+    ticker: string;
+    type: TransactionType;
+    quantity: number;
+    unit_price: number;
+    fee: number;
+    tax: number;
+    currency: string;
+    fx_rate_to_base: number;
+    realized_pnl: number | null;
+    executed_at: number;
+    notes: string | null;
+    created_at: number;
+    unit_price_base: number;
+    total_cost_base: number;
+    realized_pnl_base: number | null;
+    buy_fx_rate?: number | null;
+};
+
+export type TransactionCreatePayload = {
+    portfolio_id: string;
+    ticker: string;
+    type: TransactionType;
+    quantity?: number;
+    unit_price?: number;
+    fee?: number;
+    tax?: number;
+    currency?: string;
+    fx_rate_to_base?: number;
+    executed_at?: number | null;
+    notes?: string | null;
+};
+
+export type PortfolioKPIs = {
+    total_net_worth: number;
+    total_cost: number;
+    unrealized_pnl: number;
+    unrealized_pnl_percent: number;
+    realized_pnl: number;
+    cash_balance: number;
+    holding_count: number;
+    /** Which period the unrealized_pnl covers: "daily" | "weekly" | "monthly" | "all" */
+    pnl_period: string;
+    /** Unix timestamp when FX rates were fetched (for freshness cue) */
+    fx_rates_as_of: number;
+};
+
+export type PortfolioOverviewResponse = {
+    portfolio: PortfolioSummary | null;
+    kpis: PortfolioKPIs;
+    positions: PositionResponse[];
+};
+
+export type PortfolioHistoryPoint = {
+    time: number;
+    portfolio_value?: number | null;
+    market_value_base?: number | null;
+    net_invested_base?: number | null;
+    pnl_base?: number | null;
+    pnl_pct?: number | null;
+    pnl_delta_pct?: number | null;
+    fx_effect_base?: number | null;
+    portfolio_percent?: number | null;
+    benchmark_percent?: number | null;
+};
+
+export const BENCHMARK_OPTIONS = [
+    { ticker: "^GSPC", label: "S&P 500" },
+    { ticker: "^IXIC", label: "NASDAQ" },
+    { ticker: "XU100.IS", label: "BIST100" },
+] as const;
+
+export type BenchmarkTicker = (typeof BENCHMARK_OPTIONS)[number]["ticker"];
+export const DEFAULT_BENCHMARK: BenchmarkTicker = "^GSPC";
+
+export type PortfolioHistoryResponse = {
+    portfolio_id: string;
+    timeframe: string;
+    benchmark: string | null;
+    points: PortfolioHistoryPoint[];
+};
+
 export type AlertCondition = "above" | "below";
 
 export type AlertRecord = {

@@ -171,9 +171,9 @@ async def get_quotes(
 @router.get("/symbols", response_model=SymbolsResponse)
 async def get_symbols(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    redis=Depends(get_redis),
 ):
-    items, stale, fetched_at = await symbols_service.get_symbol_items(db)
+    items, stale, fetched_at = await symbols_service.get_symbol_items(redis)
     return {
         "items": items,
         "stale": stale,
@@ -181,16 +181,17 @@ async def get_symbols(
     }
 
 
+
 @router.get("/lookup", response_model=LookupResponse)
 async def get_lookup(
     q: str,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    redis=Depends(get_redis),
 ):
     provider = get_provider(current_user.tier)
     try:
         query, items, stale, fetched_at = await lookup_service.search_lookup(
-            db,
+            redis,
             provider,
             q,
         )
@@ -204,6 +205,7 @@ async def get_lookup(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
 
 
 @router.get("/overview/{ticker}", response_model=OverviewResponse)

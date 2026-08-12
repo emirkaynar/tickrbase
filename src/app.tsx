@@ -21,11 +21,14 @@ import { CommandPalette, toast, ToastViewport } from "./ui";
 import type { CommandPalettePage } from "./ui";
 import { livePricesClient, type LiveStatus } from "./services/livePrices";
 
+import { usePortfolioState } from "./hooks/usePortfolioState";
+
 export function App() {
     const { route, navigate } = useRouter();
     const { theme, toggleTheme } = useTheme();
     const auth = useAuth();
     const layout = useLayout(!!auth.user);
+    const portfolioState = usePortfolioState(!!auth.user);
 
     const [paletteOpen, setPaletteOpen] = useState(false);
     const [palettePage, setPalettePage] = useState<CommandPalettePage>("root");
@@ -128,6 +131,7 @@ export function App() {
             onToggleTheme={toggleTheme}
             user={auth.user}
             onLogout={auth.logout}
+            portfolioState={portfolioState}
         />
     );
 
@@ -149,7 +153,9 @@ export function App() {
                         onAddWidget={handleAddWidget}
                     />
                 )}
-                {route === "portfolio" && <PortfolioPage />}
+                {route === "portfolio" && (
+                    <PortfolioPage portfolioState={portfolioState} />
+                )}
                 {route === "settings" && <SettingsPage />}
             </AppLayout>
 

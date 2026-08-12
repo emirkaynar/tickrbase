@@ -1312,9 +1312,9 @@ function Watchlist({ id, onRemove }: Props) {
                     sortable: true,
                     sortIcon: (direction) =>
                         direction === "desc" ? (
-                            <ArrowDown size={14} />
+                            <ArrowDown/>
                         ) : (
-                            <ArrowUp size={14} />
+                            <ArrowUp/>
                         ),
                 },
                 size: 96,

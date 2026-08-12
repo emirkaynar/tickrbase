@@ -13,6 +13,25 @@ def normalize_ticker(ticker: str) -> str:
     return cleaned
 
 
+def currency_for_ticker(ticker: str) -> str:
+    """Fetch native trading currency dynamically from yfinance metadata."""
+    normalized = normalize_ticker(ticker)
+    try:
+        import yfinance as yf
+        info = yf.Ticker(normalized).fast_info
+        curr = info.get("currency")
+        if curr:
+            c = str(curr).upper()
+            return "GBP" if c in ("GBP", "GBP") else c
+    except Exception:
+        pass
+
+    # Basic fallback if network fails
+    if normalized.endswith(".IS"):
+        return "TRY"
+    return "USD"
+
+
 def _to_unix_seconds(dt: datetime) -> int:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)

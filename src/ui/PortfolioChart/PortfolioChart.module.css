@@ -1,0 +1,101 @@
+.root {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 220px;
+    overflow: hidden;
+    user-select: none;
+}
+
+.chartContainer {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.canvasTooltip {
+    position: absolute;
+    z-index: 10000;
+    pointer-events: none;
+    display: none;
+    margin: 0;
+}
+
+.tooltip {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 150px;
+}
+
+.tooltipDate {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    padding-bottom: var(--space-1);
+}
+
+.tooltipGrid {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    column-gap: var(--space-2);
+    row-gap: var(--space-1);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    color: var(--color-text-muted);
+}
+
+.tooltipLabel {
+    color: var(--color-text-muted);
+    font-weight: var(--font-weight-normal);
+    white-space: nowrap;
+}
+
+.tooltipVal {
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Series Dot Indicators */
+.tooltipDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    flex-shrink: 0;
+}
+
+.tooltipDotCost {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-text);
+    flex-shrink: 0;
+}
+
+.tooltipDotBull {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-bull);
+    flex-shrink: 0;
+}
+
+.tooltipDotBear {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-bear);
+    flex-shrink: 0;
+}
+
+.tooltipDotBench {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--color-warning);
+    flex-shrink: 0;
+}

@@ -166,7 +166,7 @@ async def get_history(
     stale = False
 
     if not has_cache:
-        candles = provider.get_history(
+        candles = await provider.get_history_async(
             normalized, interval, period=YAHOO_MAX_RANGE.get(interval)
         )
         if not candles:
@@ -185,12 +185,13 @@ async def get_history(
                 if max_range_period and max_range_period != "max":
                     start = max(start, _period_start(max_range_period, now_ts))
             try:
-                delta = provider.get_history(
+                delta = await provider.get_history_async(
                     normalized,
                     interval,
                     start=start,
                     end=now_ts,
                 )
+
                 if delta:
                     await _upsert_history(db, normalized, interval, delta)
                 await _set_last_refresh(db, normalized, interval, now_ts)

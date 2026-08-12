@@ -137,6 +137,28 @@ export function getAllSettings(): SettingDefinition[] {
 registerSettingSections([
   {
     category: "general",
+    subcategoryId: "portfolio",
+    subcategoryLabel: "Portfolio",
+    subcategoryIcon: "Briefcase",
+    settings: [
+      {
+        id: "portfolio.defaultCurrency",
+        type: "string",
+        label: "Default Base Currency for All Portfolios",
+        description: "Currency used when viewing 'All Portfolios' or as general fallback.",
+        defaultValue: "TRY",
+      },
+      {
+        id: "portfolio.showNativeSubtitles",
+        type: "boolean",
+        label: "Show Native Currency Subtitles",
+        description: "Display the asset's native trading currency as a muted subtitle under converted values in Holdings and Transactions.",
+        defaultValue: true,
+      },
+    ],
+  },
+  {
+    category: "general",
     subcategoryId: "language",
     subcategoryLabel: "Language",
     subcategoryIcon: "Languages",

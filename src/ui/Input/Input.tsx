@@ -13,6 +13,7 @@ type Props = {
     className?: string;
     id?: string;
     type?: "text" | "number" | "email";
+    step?: string;
 };
 
 export function Input({
@@ -26,11 +27,13 @@ export function Input({
     className,
     id,
     type = "text",
+    step,
 }: Props) {
     return (
         <input
             id={id}
             type={type}
+            step={step ?? (type === "number" ? "any" : undefined)}
             value={value}
             onInput={(e) =>
                 onChange((e.currentTarget as HTMLInputElement).value)

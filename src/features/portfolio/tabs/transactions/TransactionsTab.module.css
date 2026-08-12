@@ -1,0 +1,52 @@
+.actionButtons {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.rowDeleteButton,
+.rowEditButton {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition:
+        opacity var(--transition-fast),
+        color var(--transition-fast),
+        background var(--transition-fast);
+}
+
+:global(.bodyRow:hover) .rowDeleteButton,
+:global(.bodyRow:hover) .rowEditButton,
+:global(tr:hover) .rowDeleteButton,
+:global(tr:hover) .rowEditButton,
+:global(.bodyRow:focus-within) .rowDeleteButton,
+:global(.bodyRow:focus-within) .rowEditButton,
+:global(tr:focus-within) .rowDeleteButton,
+:global(tr:focus-within) .rowEditButton,
+.rowDeleteButton:focus,
+.rowDeleteButton:focus-visible,
+.rowEditButton:focus,
+.rowEditButton:focus-visible {
+    opacity: 1 !important;
+    pointer-events: auto !important;
+}
+
+.rowDeleteButton:hover:not(:disabled),
+.rowDeleteButton:focus-visible:not(:disabled),
+.rowDeleteButton:focus:not(:disabled) {
+    color: var(--color-danger) !important;
+    background: var(--color-bg-elevated) !important;
+}
+
+.rowEditButton:hover:not(:disabled),
+.rowEditButton:focus-visible:not(:disabled),
+.rowEditButton:focus:not(:disabled) {
+    color: var(--color-primary) !important;
+    background: var(--color-bg-elevated) !important;
+}
+
+.deleteDialogActions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+}

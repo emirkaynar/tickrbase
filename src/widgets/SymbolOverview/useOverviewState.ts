@@ -19,7 +19,7 @@ const INTERVAL_CONFIG: Record<
 };
 
 export function useOverviewState(widgetId: string) {
-    const [symbol, setSymbolState] = useState<string>("TICKER");
+    const [symbol, setSymbolState] = useState<string>("AAPL");
     const [activeTab, setActiveTab] = useState<string>("summary");
     const [activeInterval, setActiveInterval] = useState<ChartOverviewInterval>("D");
 
@@ -96,6 +96,9 @@ export function useOverviewState(widgetId: string) {
     useEffect(() => {
         if (!stateReady) return;
         livePricesClient.updateSymbol(widgetId, symbol);
+        return () => {
+            livePricesClient.removeWidget(widgetId);
+        };
     }, [widgetId, symbol, stateReady]);
 
     // Listen for live ticks

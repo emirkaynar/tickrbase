@@ -15,6 +15,9 @@ import type { Route } from "../../router";
 import type { UserMe } from "../../services/api";
 import styles from "./TopBar.module.css";
 
+import { Select } from "../../ui";
+import type { UsePortfolioStateReturn } from "../../hooks/usePortfolioState";
+
 type Screen = { id: string; name: string };
 
 type Props = {
@@ -29,6 +32,7 @@ type Props = {
     onToggleTheme: () => void;
     user: UserMe | null;
     onLogout: () => void;
+    portfolioState?: UsePortfolioStateReturn;
 };
 
 function toIstanbul(date: Date, opts: Intl.DateTimeFormatOptions): string {
@@ -75,6 +79,7 @@ export function TopBar({
     onToggleTheme,
     user,
     onLogout,
+    portfolioState,
 }: Props) {
     const clock = useClock();
 
@@ -88,6 +93,16 @@ export function TopBar({
         { label: "Portfolio", route: "portfolio" },
         { label: "Settings", route: "settings" },
     ];
+
+    const portfolioOptions = portfolioState
+        ? [
+              ...portfolioState.portfolios.map((p) => ({
+                  label: `${p.name} (${p.base_currency})`,
+                  value: p.id,
+              })),
+              { label: "+ New Portfolio...", value: "__new__" },
+          ]
+        : [];
 
     return (
         <>
@@ -113,6 +128,23 @@ export function TopBar({
                                 <PencilIcon />
                             </Button>
                         </Tooltip>
+                    </div>
+                )}
+
+                {/* Portfolio selector & currency — only visible on portfolio route */}
+                {route === "portfolio" && portfolioState && (
+                    <div class={styles.screenStrip}>
+                        <Select
+                            items={portfolioOptions}
+                            value={portfolioState.activePortfolioId}
+                            onChange={(val) => {
+                                if (val === "__new__") {
+                                    portfolioState.setIsCreateModalOpen(true);
+                                } else {
+                                    portfolioState.setActivePortfolioId(val);
+                                }
+                            }}
+                        />
                     </div>
                 )}
 

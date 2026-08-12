@@ -9,7 +9,10 @@ from typing import Any
 
 from fastapi import WebSocket
 
+import json
+
 from ..core.config import (
+    PRICE_TTL_SECONDS,
     WS_CLIENT_QUEUE_SIZE,
     WS_MAX_CLIENTS,
     WS_MAX_GLOBAL_SYMBOLS,
@@ -18,7 +21,9 @@ from ..core.config import (
     WS_RECONNECT_BACKOFF_MAX_SECONDS,
     WS_RECONNECT_BACKOFF_MIN_SECONDS,
 )
+from ..core.redis import get_redis_client
 from ..providers.yahoo import normalize_ticker
+
 
 logger = logging.getLogger(__name__)
 
@@ -218,6 +223,17 @@ class LivePriceStreamHub:
         if raw is not None:
             payload["raw"] = raw
 
+        # Update Redis L1 price cache & publish to Redis Pub/Sub
+        try:
+            redis = get_redis_client()
+            ts_sec = int(ts / 1000) if ts > 1_000_000_000_000 else int(ts)
+            cache_key = f"price:{symbol}"
+            price_payload = json.dumps({"price": price, "fetched_at": ts_sec})
+            await redis.set(cache_key, price_payload, ex=PRICE_TTL_SECONDS * 2)
+            await redis.publish("market_ticks", json.dumps({"symbol": symbol, "price": price, "ts": ts}))
+        except Exception as exc:
+            logger.debug(f"Redis tick update failed: {exc}")
+
         for client_id, symbols in list(self._client_symbols.items()):
             if symbol in symbols:
                 queue = self._queues.get(client_id)
@@ -226,6 +242,7 @@ class LivePriceStreamHub:
                         queue.put_nowait(payload)
                     except asyncio.QueueFull:
                         self._drop_count += 1
+
 
     async def _client_writer_loop(
         self, client_id: str, websocket: WebSocket

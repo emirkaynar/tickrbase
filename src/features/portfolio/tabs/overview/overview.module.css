@@ -1,0 +1,277 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    width: 100%;
+}
+
+.row1 {
+    display: grid;
+    grid-template-columns: 65fr 35fr;
+    gap: var(--space-6);
+    width: 100%;
+}
+
+.row2 {
+    display: grid;
+    grid-template-columns: 50fr 50fr;
+    gap: var(--space-6);
+    width: 100%;
+}
+
+.row3 {
+    width: 100%;
+}
+
+.card {
+    border-radius: var(--radius-md);
+    padding: var(--space-2);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1-5);
+    position: relative;
+    overflow: hidden;
+}
+
+.cardHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    min-height: 32px;
+}
+
+.cardTitle {
+    font-size: var(--font-size-md);
+    font-weight: var(--font-weight-semibold);
+    color: var(--color-text);
+    margin: 0;
+}
+
+.controlsGroup {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btnGroup {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    background: var(--color-bg-surface);
+    padding: 2px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--color-border);
+}
+
+.controlBtn {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
+    font-weight: var(--font-weight-semibold);
+    padding: 4px 8px;
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.controlBtn:hover {
+    color: var(--color-text);
+}
+
+.controlBtnActive {
+    background: var(--color-bg-elevated);
+    color: var(--color-text);
+}
+
+.selectControl {
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
+    padding: 4px 8px;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s ease;
+}
+
+.selectControl:hover, .selectControl:focus {
+    border-color: var(--color-primary);
+}
+
+.chartHeight {
+    height: 260px;
+    width: 100%;
+}
+
+/* Donut container */
+.donutWrapper {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: 160px;
+}
+
+.donutChartBox {
+    position: relative;
+    width: 180px;
+    height: 180px;
+    flex-shrink: 0;
+}
+
+.donutCenterOverlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.donutCenterLabel {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.donutCenterValue {
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-bold);
+    font-family: var(--font-family-mono);
+    color: var(--color-text);
+}
+
+.legendGrid {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
+}
+
+.legendItem {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.legendDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.legendLabel {
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.legendPct {
+    margin-left: auto;
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+}
+
+/* Treemap container */
+.treemapWrapper {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    width: 100%;
+    min-width: 0;
+    position: relative;
+}
+
+.treemapChartBox {
+    width: 100%;
+    height: 220px;
+    min-width: 0;
+    margin: 0;
+}
+
+/* PortfolioAnalysis styles */
+.analysisBody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.sectionHeader {
+    font-size: 11px;
+    font-weight: var(--font-weight-bold);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-bottom: 4px;
+}
+
+.performersList {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.performerItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-surface);
+    border: 1px solid var(--color-border);
+    font-size: var(--font-size-xs);
+    font-family: var(--font-family-mono);
+}
+
+.performerSymbol {
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text);
+}
+
+.performerValues {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.positiveText {
+    color: var(--color-bull);
+    font-weight: var(--font-weight-semibold);
+}
+
+.negativeText {
+    color: var(--color-bear);
+    font-weight: var(--font-weight-semibold);
+}
+
+.xrayPlaceholder {
+    margin-top: auto;
+    padding: 10px;
+    border: 1px dashed var(--color-border);
+    border-radius: var(--radius-sm);
+    text-align: center;
+    color: var(--color-text-subtle);
+    font-size: 11px;
+    background: color-mix(in srgb, var(--color-bg-surface) 50%, transparent);
+}
+
+@media (max-width: 900px) {
+    .row1, .row2 {
+        grid-template-columns: 1fr;
+    }
+}

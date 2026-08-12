@@ -77,30 +77,47 @@ const DEFAULT_POPULAR_TICKERS: TickerSelectorItem[] = [
 ];
 
 function TickerAvatar({ symbol }: { symbol: string }) {
+    const [loaded, setLoaded] = useState(false);
     const [imgError, setImgError] = useState(false);
+    const imgRef = useRef<HTMLImageElement>(null);
 
     useEffect(() => {
+        setLoaded(false);
         setImgError(false);
+    }, [symbol]);
+
+    useEffect(() => {
+        const img = imgRef.current;
+        if (img && img.complete) {
+            if (img.naturalWidth > 0) {
+                setLoaded(true);
+            } else if (img.naturalWidth === 0 && img.src) {
+                setImgError(true);
+            }
+        }
     }, [symbol]);
 
     const initials = symbol.slice(0, 2).toUpperCase();
 
-    if (!imgError) {
-        return (
-            <div className={styles.avatar}>
+    return (
+        <div className={styles.avatar}>
+            <span>{initials}</span>
+            {!imgError && (
                 <img
+                    ref={imgRef}
                     src={`${API_BASE}/logo/${encodeURIComponent(symbol)}`}
                     alt={symbol}
                     className={styles.avatarImg}
+                    data-loaded={loaded ? "true" : "false"}
+                    onLoad={() => setLoaded(true)}
                     onError={() => setImgError(true)}
-                    loading="lazy"
                 />
-            </div>
-        );
-    }
-
-    return <div className={styles.avatar}>{initials}</div>;
+            )}
+        </div>
+    );
 }
+
+
 
 function formatSubtitle(item: TickerSelectorItem): string {
     if (item.exchange && item.company_name) {

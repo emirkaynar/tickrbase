@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import (
 )
 from sqlalchemy.orm import DeclarativeBase
 
-from .config import DATABASE_URL
+from .config import DATABASE_URL, ENABLE_DB_LOGGING
 
 engine: AsyncEngine = create_async_engine(
     DATABASE_URL,
@@ -19,6 +19,24 @@ engine: AsyncEngine = create_async_engine(
     pool_size=10,
     max_overflow=20,
 )
+
+if ENABLE_DB_LOGGING:
+    import time
+    from sqlalchemy import event
+
+    @event.listens_for(engine.sync_engine, "before_cursor_execute")
+    def _before_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        context._query_start_time = time.perf_counter()
+
+    @event.listens_for(engine.sync_engine, "after_cursor_execute")
+    def _after_cursor_execute(conn, cursor, statement, parameters, context, executemany):
+        start = getattr(context, "_query_start_time", None)
+        total_ms = (time.perf_counter() - start) * 1000.0 if start else 0.0
+        sql_clean = " ".join(statement.split())
+        if len(sql_clean) > 180:
+            sql_clean = sql_clean[:180] + "..."
+        print(f"🔵 [PG SQL {total_ms:6.2f}ms] {sql_clean}")
+
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

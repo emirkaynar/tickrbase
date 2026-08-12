@@ -29,32 +29,43 @@ async def get_overview(
     cache_key = f"overview:{normalized}"
 
     cached_str = await redis.get(cache_key)
+    stale_fallback: dict | None = None
+    stale_fetched_at: int | None = None
+
     if cached_str:
         try:
             item = json.loads(cached_str)
             fetched_at = int(item["fetched_at"])
             payload = item["data"]
             stale = (now - fetched_at) > OVERVIEW_TTL_SECONDS
-            payload["stale"] = stale
-            payload["last_updated"] = iso_timestamp(fetched_at)
-            return payload, stale, fetched_at
+            if not stale:
+                payload["stale"] = False
+                payload["last_updated"] = iso_timestamp(fetched_at)
+                return payload, False, fetched_at
+            stale_fallback = payload
+            stale_fetched_at = fetched_at
         except (json.JSONDecodeError, KeyError, ValueError):
             pass
 
-    # Fetch info from yfinance provider
-    info = provider.get_company_info(normalized) or {}
 
-    # Calculate VWAP from today's 5m bars
+    import asyncio
+
+    # Fetch info and VWAP 5m candles concurrently in worker threads
+    info_task = provider.get_company_info_async(normalized)
+    history_task = provider.get_history_async(normalized, interval="5m", period="1d")
+
+    info_res, candles_res = await asyncio.gather(info_task, history_task, return_exceptions=True)
+
+    info = info_res if isinstance(info_res, dict) else {}
+    candles = candles_res if isinstance(candles_res, list) else []
+
     vwap: float | None = None
-    try:
-        candles = provider.get_history(normalized, interval="5m", period="1d")
-        if candles:
-            tot_tp_v = sum(((c.high + c.low + c.close) / 3.0) * (c.volume or 0) for c in candles)
-            tot_v = sum((c.volume or 0) for c in candles)
-            if tot_v > 0:
-                vwap = round(tot_tp_v / tot_v, 4)
-    except Exception:
-        pass
+    if candles:
+        tot_tp_v = sum(((c.high + c.low + c.close) / 3.0) * (c.volume or 0) for c in candles)
+        tot_v = sum((c.volume or 0) for c in candles)
+        if tot_v > 0:
+            vwap = round(tot_tp_v / tot_v, 4)
+
 
     company_name = (
         info.get("longName")
@@ -105,3 +116,4 @@ async def get_overview(
         pass
 
     return payload, False, now
+
