@@ -17,6 +17,7 @@ import {
     Trash2Icon,
 } from "lucide-react";
 import { Dialog } from "../Dialog/Dialog";
+import type { WidgetType } from "../../widgets/registry";
 import { type CommandItem, type CommandPalettePage } from "./model";
 import { defaultCommandProviders, resolveCommands } from "./providers";
 import styles from "./CommandPalette.module.css";
@@ -25,13 +26,7 @@ type Props = {
     open: boolean;
     initialPage: CommandPalettePage;
     onClose: () => void;
-    onAddWidget: (
-        type:
-            | "basic-chart"
-            | "advanced-chart"
-            | "economic-calendar"
-            | "watchlist",
-    ) => void;
+    onAddWidget: (type: WidgetType) => void;
     screens: Array<{ id: string; name: string }>;
     activeScreenId: string;
     onSetActiveScreen: (screenId: string) => void;

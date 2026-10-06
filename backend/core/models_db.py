@@ -150,7 +150,7 @@ class PortfolioPosition(Base):
     portfolio_id = Column(String(100), ForeignKey("user_portfolios.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     ticker = Column(String(50), nullable=False)
-    asset_class = Column(String(50), nullable=False, default="EQUITY")
+    asset_class = Column(String(50), nullable=False, default="Equity")
     sector = Column(String(100), nullable=True)
     quantity = Column(Float, nullable=False, default=0.0)
     avg_price = Column(Float, nullable=False, default=0.0)

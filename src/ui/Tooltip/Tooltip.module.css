@@ -6,7 +6,7 @@
 
 .content {
     padding: var(--space-1-5) var(--space-3);
-    background: var(--color-mica-surface-light);
+    background: var(--color-mica-surface-base);
     -webkit-backdrop-filter: blur(var(--mica-backdrop-blur))
         saturate(var(--mica-backdrop-saturate));
     backdrop-filter: blur(var(--mica-backdrop-blur))
@@ -32,7 +32,6 @@
     max-width: 200px;
     word-break: break-word;
 }
-
 
 @keyframes scale-fade-in {
     from {

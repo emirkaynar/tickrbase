@@ -31,7 +31,7 @@ export function Tooltip({ content, children, variant }: Props) {
             </ArkTooltip.Trigger>
             <Portal>
                 <ArkTooltip.Positioner>
-                    <ArkTooltip.Content class={`${styles.content} ${variantClass}`}>
+                    <ArkTooltip.Content className={`${styles.content} ${variantClass}`}>
                         {content}
                     </ArkTooltip.Content>
                 </ArkTooltip.Positioner>

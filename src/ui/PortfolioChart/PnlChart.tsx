@@ -10,6 +10,7 @@ import {
 import type { PortfolioHistoryPoint } from "../../services/types";
 import { getChartColors, getFonts } from "../../styles/tokens";
 import { formatPercent } from "../../utils/formatters";
+import { Portal } from "@ark-ui/react/portal";
 import tooltipStyles from "../Tooltip/Tooltip.module.css";
 import styles from "./PortfolioChart.module.css";
 
@@ -28,7 +29,11 @@ function formatDate(unixSec: number): string {
     }).format(dt);
 }
 
-export function PnlChart({ points, benchmarkLabel = "Benchmark", className }: Props) {
+export function PnlChart({
+    points,
+    benchmarkLabel = "Benchmark",
+    className,
+}: Props) {
     const rootRef = useRef<HTMLDivElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const tooltipRef = useRef<HTMLDivElement>(null);
@@ -60,7 +65,9 @@ export function PnlChart({ points, benchmarkLabel = "Benchmark", className }: Pr
             },
             grid: {
                 vertLines: { visible: false },
-                horzLines: { color: `color-mix(in srgb, ${colors.border} 40%, transparent)` },
+                horzLines: {
+                    color: `color-mix(in srgb, ${colors.border} 40%, transparent)`,
+                },
             },
             crosshair: {
                 mode: CrosshairMode.Magnet,
@@ -90,8 +97,16 @@ export function PnlChart({ points, benchmarkLabel = "Benchmark", className }: Pr
                 priceFormatter: (val: number) => formatPercent(val),
                 timeFormatter: (time: any) => {
                     let sec = typeof time === "number" ? time : 0;
-                    if (!sec && time && typeof time === "object" && "year" in time) {
-                        sec = Math.floor(Date.UTC(time.year, time.month - 1, time.day) / 1000);
+                    if (
+                        !sec &&
+                        time &&
+                        typeof time === "object" &&
+                        "year" in time
+                    ) {
+                        sec = Math.floor(
+                            Date.UTC(time.year, time.month - 1, time.day) /
+                                1000,
+                        );
                     }
                     return sec ? formatDate(sec) : "";
                 },
@@ -146,18 +161,30 @@ export function PnlChart({ points, benchmarkLabel = "Benchmark", className }: Pr
                 return;
             }
 
-            const histData = param.seriesData.get(histSeries) as { value?: number };
-            const cumData = param.seriesData.get(cumSeries) as { value?: number };
+            const histData = param.seriesData.get(histSeries) as {
+                value?: number;
+            };
+            const cumData = param.seriesData.get(cumSeries) as {
+                value?: number;
+            };
 
             let benchData: { value?: number } | undefined = undefined;
             if (benchmarkSeriesRef.current) {
-                benchData = param.seriesData.get(benchmarkSeriesRef.current) as { value?: number };
+                benchData = param.seriesData.get(
+                    benchmarkSeriesRef.current,
+                ) as { value?: number };
             }
 
             let timeSec = typeof param.time === "number" ? param.time : 0;
-            if (!timeSec && typeof param.time === "object" && "year" in param.time) {
+            if (
+                !timeSec &&
+                typeof param.time === "object" &&
+                "year" in param.time
+            ) {
                 const tObj = param.time as any;
-                timeSec = Math.floor(Date.UTC(tObj.year, tObj.month - 1, tObj.day) / 1000);
+                timeSec = Math.floor(
+                    Date.UTC(tObj.year, tObj.month - 1, tObj.day) / 1000,
+                );
             }
 
             const dateStr = timeSec ? formatDate(timeSec) : "";
@@ -166,7 +193,9 @@ export function PnlChart({ points, benchmarkLabel = "Benchmark", className }: Pr
             const benchNum = benchData?.value;
 
             const isPos = histNum >= 0;
-            const dotClass = isPos ? styles.tooltipDotBull : styles.tooltipDotBear;
+            const dotClass = isPos
+                ? styles.tooltipDotBull
+                : styles.tooltipDotBear;
 
             let gridItems = `
                 <span class="${dotClass}"></span>
@@ -196,22 +225,28 @@ export function PnlChart({ points, benchmarkLabel = "Benchmark", className }: Pr
             `;
             tooltip.style.display = "flex";
 
+            const rootRect = root.getBoundingClientRect();
             const toolTipWidth = tooltip.offsetWidth || 160;
             const toolTipHeight = tooltip.offsetHeight || 80;
             const toolTipMargin = 15;
 
             // Snap Y to the magnet dot on the cumulative series line
-            const seriesY = cumSeries.priceToCoordinate(cumNum) ?? histSeries.priceToCoordinate(histNum);
-            const y = seriesY !== null && seriesY !== undefined ? seriesY : param.point.y;
+            const seriesY =
+                cumSeries.priceToCoordinate(cumNum) ??
+                histSeries.priceToCoordinate(histNum);
+            const y =
+                seriesY !== null && seriesY !== undefined
+                    ? seriesY
+                    : param.point.y;
 
-            let left = param.point.x + toolTipMargin;
-            if (left > container.clientWidth - toolTipWidth) {
-                left = param.point.x - toolTipMargin - toolTipWidth;
+            let left = rootRect.left + param.point.x + toolTipMargin;
+            if (left > rootRect.right - toolTipWidth) {
+                left = rootRect.left + param.point.x - toolTipMargin - toolTipWidth;
             }
 
-            let top = y + toolTipMargin;
-            if (top > container.clientHeight - toolTipHeight) {
-                top = y - toolTipHeight - toolTipMargin;
+            let top = rootRect.top + y + toolTipMargin;
+            if (top > rootRect.bottom - toolTipHeight) {
+                top = rootRect.top + y - toolTipHeight - toolTipMargin;
             }
 
             tooltip.style.left = `${left}px`;
@@ -319,10 +354,14 @@ export function PnlChart({ points, benchmarkLabel = "Benchmark", className }: Pr
             className={[styles.root, className].filter(Boolean).join(" ")}
         >
             <div ref={containerRef} className={styles.chartContainer} />
-            <div
-                ref={tooltipRef}
-                className={[tooltipStyles.content, styles.canvasTooltip].filter(Boolean).join(" ")}
-            />
+            <Portal>
+                <div
+                    ref={tooltipRef}
+                    className={[tooltipStyles.content, styles.canvasTooltip]
+                        .filter(Boolean)
+                        .join(" ")}
+                />
+            </Portal>
         </div>
     );
 }

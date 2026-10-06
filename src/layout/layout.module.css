@@ -10,7 +10,7 @@
     flex: 1;
     overflow: hidden;
     position: relative;
-    animation: page-in 300ms ease-out both;
+    animation: page-in 300ms ease-out;
 }
 
 @keyframes page-in {

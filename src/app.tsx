@@ -19,6 +19,7 @@ import { SettingsPage } from "./features/settings/SettingsPage";
 import { AuthModal } from "./features/auth/AuthModal";
 import { CommandPalette, toast, ToastViewport } from "./ui";
 import type { CommandPalettePage } from "./ui";
+import type { WidgetType } from "./widgets/registry";
 import { livePricesClient, type LiveStatus } from "./services/livePrices";
 
 import { usePortfolioState } from "./hooks/usePortfolioState";
@@ -80,13 +81,7 @@ export function App() {
         openPalette("manage-screens");
     }
 
-    async function handlePaletteAddWidget(
-        type:
-            | "basic-chart"
-            | "advanced-chart"
-            | "economic-calendar"
-            | "watchlist",
-    ) {
+    async function handlePaletteAddWidget(type: WidgetType) {
         const result = await layout.addWidget(type);
         if (!result.success && result.noSpace) {
             setPaletteOpen(false);

@@ -1,3 +1,5 @@
+import type { WidgetType } from "../../widgets/registry";
+
 export type CommandPalettePage =
     | "root"
     | "add-widget"
@@ -10,11 +12,7 @@ export type CommandAction =
     | { kind: "go-manage-screens" }
     | {
           kind: "add-widget";
-          widget:
-              | "basic-chart"
-              | "advanced-chart"
-              | "economic-calendar"
-              | "watchlist";
+          widget: WidgetType;
       }
     | { kind: "placeholder" };
 
@@ -30,9 +28,7 @@ export type CommandItem = {
 };
 
 export type CommandContext = {
-    availableWidgets: ReadonlyArray<
-        "basic-chart" | "advanced-chart" | "economic-calendar" | "watchlist"
-    >;
+    availableWidgets: ReadonlyArray<WidgetType>;
     screens: ReadonlyArray<{ id: string; name: string }>;
     activeScreenId: string;
 };

@@ -100,7 +100,7 @@
     --color-focus-ring: hsl(220, 80%, 60%);
 
     /* Mica material */
-    --color-mica-surface-base: hsla(0, 0%, 5%, 0.6);
+    --color-mica-surface-base: hsla(0, 0%, 35%, 0.52);
     --color-mica-border: hsla(0, 0%, 35%, 0.22);
 
     --color-mica-surface-light: hsla(0, 0%, 50%, 0.2);
