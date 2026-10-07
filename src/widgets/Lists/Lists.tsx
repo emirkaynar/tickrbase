@@ -1434,16 +1434,20 @@ function Watchlist({ id, onRemove }: Props) {
         async (symbol: string) => {
             const cleaned = symbol.trim().toUpperCase();
             if (!activeListId || !cleaned) return;
+            if (items.some((item) => item.ticker === cleaned)) return;
+
+            setItems((prev) => [...prev, { ticker: cleaned }]);
 
             try {
                 await addSymbolToList(activeListId, cleaned);
-                const nextItems = await fetchListItems(activeListId);
-                setItems(nextItems);
             } catch {
+                setItems((prev) =>
+                    prev.filter((item) => item.ticker !== cleaned),
+                );
                 setError("Could not add symbol to list.");
             }
         },
-        [activeListId],
+        [activeListId, items],
     );
 
     const handleAddGroup = useCallback(() => {

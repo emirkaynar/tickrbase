@@ -37,7 +37,7 @@ async def get_user_layout(db: AsyncSession, user_id: int) -> LayoutPayload:
     # If no screens exist, return default screen layout
     if not screens_db:
         now = int(time.time() * 1000)
-        default_screen_id = f"screen-{now}"
+        default_screen_id = f"{user_id}:screen-{now}"
         default_screen = UserScreen(
             id=default_screen_id,
             user_id=user_id,
@@ -119,32 +119,63 @@ async def get_user_layout(db: AsyncSession, user_id: int) -> LayoutPayload:
 async def save_user_layout(db: AsyncSession, user_id: int, payload: LayoutPayload) -> None:
     now = int(time.time() * 1000)
 
-    # Sync active screen setting
+    # Scope active screen setting
+    scoped_active_id = (
+        payload.activeScreenId
+        if (payload.activeScreenId and payload.activeScreenId.startswith(f"{user_id}:"))
+        else (f"{user_id}:{payload.activeScreenId}" if payload.activeScreenId else payload.activeScreenId)
+    )
+
     stmt_active = insert(UserSetting).values(
         user_id=user_id,
         key="activeScreenId",
-        value_json=json.dumps(payload.activeScreenId),
+        value_json=json.dumps(scoped_active_id),
         updated_at=now,
     ).on_conflict_do_update(
         index_elements=["user_id", "key"],
-        set_={"value_json": json.dumps(payload.activeScreenId), "updated_at": now},
+        set_={"value_json": json.dumps(scoped_active_id), "updated_at": now},
     )
     await db.execute(stmt_active)
 
-    # Delete existing screens & widgets not in payload
-    screen_ids = [s.id for s in payload.screens]
-    widget_ids = [w.id for w in payload.widgets]
+    # Pre-scope screen and widget IDs for delete and upsert
+    scoped_screens = []
+    scoped_screen_ids = []
+    for s in payload.screens:
+        sid = s.id if s.id.startswith(f"{user_id}:") else f"{user_id}:{s.id}"
+        scoped_screens.append((sid, s))
+        scoped_screen_ids.append(sid)
 
-    await db.execute(
-        delete(UserWidget).where(UserWidget.user_id == user_id, UserWidget.id.not_in(widget_ids))
-    )
-    await db.execute(
-        delete(UserScreen).where(UserScreen.user_id == user_id, UserScreen.id.not_in(screen_ids))
-    )
+    scoped_widgets = []
+    scoped_widget_ids = []
+    for w in payload.widgets:
+        wid = w.id if w.id.startswith(f"{user_id}:") else f"{user_id}:{w.id}"
+        sid = w.screenId if w.screenId.startswith(f"{user_id}:") else f"{user_id}:{w.screenId}"
+        scoped_widgets.append((wid, sid, w))
+        scoped_widget_ids.append(wid)
+
+    # Delete existing screens & widgets not in payload
+    if scoped_widget_ids:
+        await db.execute(
+            delete(UserWidget).where(
+                UserWidget.user_id == user_id,
+                UserWidget.id.not_in(scoped_widget_ids),
+            )
+        )
+    else:
+        await db.execute(delete(UserWidget).where(UserWidget.user_id == user_id))
+
+    if scoped_screen_ids:
+        await db.execute(
+            delete(UserScreen).where(
+                UserScreen.user_id == user_id,
+                UserScreen.id.not_in(scoped_screen_ids),
+            )
+        )
+    else:
+        await db.execute(delete(UserScreen).where(UserScreen.user_id == user_id))
 
     # Upsert screens
-    for s in payload.screens:
-        scoped_s_id = s.id if s.id.startswith(f"{user_id}:") else f"{user_id}:{s.id}"
+    for scoped_s_id, s in scoped_screens:
         stmt_screen = insert(UserScreen).values(
             id=scoped_s_id,
             user_id=user_id,
@@ -158,9 +189,7 @@ async def save_user_layout(db: AsyncSession, user_id: int, payload: LayoutPayloa
         await db.execute(stmt_screen)
 
     # Upsert widgets
-    for w in payload.widgets:
-        scoped_w_id = w.id if w.id.startswith(f"{user_id}:") else f"{user_id}:{w.id}"
-        scoped_s_id = w.screenId if w.screenId.startswith(f"{user_id}:") else f"{user_id}:{w.screenId}"
+    for scoped_w_id, scoped_s_id, w in scoped_widgets:
         stmt_widget = insert(UserWidget).values(
             id=scoped_w_id,
             user_id=user_id,

@@ -113,3 +113,11 @@
 :global(.react-grid-item.react-draggable-dragging) .handle {
     box-shadow: inset 0 10px 10px -10px var(--color-primary) !important;
 }
+
+:global(.react-grid-item.react-grid-item-resizing) .body,
+:global(.react-grid-item.react-draggable-dragging) .body,
+:global(.react-resizable.resizing) .body,
+:global(.react-draggable-dragging) .body {
+    pointer-events: none;
+    user-select: none;
+}

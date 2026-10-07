@@ -65,7 +65,6 @@
     padding: var(--space-2) var(--space-3);
     margin: var(--space-1-5);
     border: 1px solid transparent;
-    margin-bottom: 0;
     background-color: var(--color-mica-surface-light);
     border-radius: var(--radius-sm);
 }
@@ -114,7 +113,7 @@
 .scrollContent {
     display: flex;
     flex-direction: column;
-    padding: var(--space-1-5);
+    padding: 0 var(--space-1-5);
 }
 
 .scrollbar {
@@ -197,7 +196,7 @@
     cursor: pointer;
     text-align: left;
     transition: background var(--transition-fast);
-    width: 228px;
+    width: 226px;
 }
 
 .itemRow[data-highlighted],

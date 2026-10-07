@@ -12,7 +12,7 @@ import { INTERVALS, INTERVAL_CONFIG } from "../../services/types";
 import type { ChartType, Interval } from "../../services/types";
 import { livePricesClient } from "../../services/livePrices";
 import { fetchQuotes, calcChangePercent } from "../../services/quotes";
-import { formatPercentChange } from "../../utils";
+import { formatPercentChange, formatCurrency } from "../../utils";
 import styles from "./BasicChart.module.css";
 
 type Props = { id: string; onRemove: () => void };
@@ -37,7 +37,8 @@ function BasicChart({ id, onRemove }: Props) {
     const seriesRef = useRef<ISeriesApi<any> | null>(null);
     const intervalRef = useRef<Interval>("1d");
 
-    const [, setPrice] = useState<number | null>(null);
+    const [price, setPrice] = useState<number | null>(null);
+    const [currency, setCurrency] = useState<string | null>(null);
     const [changePercent, setChangePercent] = useState<number | null>(null);
     const prevCloseRef = useRef<number | null>(null);
 
@@ -75,6 +76,7 @@ function BasicChart({ id, onRemove }: Props) {
 
         let cancelled = false;
         setPrice(null);
+        setCurrency(null);
         setChangePercent(null);
         prevCloseRef.current = null;
         setPrevClose(null);
@@ -87,6 +89,7 @@ function BasicChart({ id, onRemove }: Props) {
                 if (quote) {
                     prevCloseRef.current = quote.previous_close;
                     setPrevClose(quote.previous_close);
+                    setCurrency(quote.currency ?? null);
                     if (quote.current_price !== null) {
                         setPrice(quote.current_price);
                         setChangePercent(
@@ -245,15 +248,26 @@ function BasicChart({ id, onRemove }: Props) {
         [setChartType],
     );
 
+    const isPos = changePercent != null && changePercent > 0;
+    const isNeg = changePercent != null && changePercent < 0;
+
     const tickerTrigger = (
         <button type="button" class={styles.tickerTrigger}>
             <span class={styles.triggerSymbol}>{symbol}</span>
+            {price != null && (
+                <span class={styles.priceValue}>
+                    {formatCurrency(price, symbol, {
+                        currency: currency ?? undefined,
+                        compact: false,
+                    })}
+                </span>
+            )}
             {changePercent !== null && (
                 <span
                     class={
-                        changePercent > 0
+                        isPos
                             ? styles.changePositive
-                            : changePercent < 0
+                            : isNeg
                               ? styles.changeNegative
                               : styles.changeNeutral
                     }
