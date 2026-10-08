@@ -279,7 +279,11 @@ async def _run_background_backfill(
                 db, provider, redis, portfolio_id, user_id, base_currency, start_ts, end_ts
             )
     except Exception as exc:
-        logger.warning(f"[BACKGROUND BACKFILL ERROR] portfolio={portfolio_id}: {exc}")
+        logger.warning(
+            "[BACKGROUND BACKFILL ERROR] portfolio=%r: %r",
+            portfolio_id,
+            exc,
+        )
     finally:
         _ACTIVE_BACKFILLS.discard(portfolio_id)
 
