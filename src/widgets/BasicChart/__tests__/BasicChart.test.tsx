@@ -4,61 +4,136 @@ import { BasicChart } from "../BasicChart";
 import { useChartState } from "../hooks/useChartState";
 import { useChartQuote } from "../hooks/useChartQuote";
 import { ChartMarketOverlay } from "../components/ChartMarketOverlay";
-import { graphicSettingsDefinition, resolveGraphicSettings } from "../settings/graphicSettings";
+import {
+  graphicSettingsDefinition,
+  resolveGraphicSettings,
+} from "../settings/graphicSettings";
 import { nodes } from "../../../ui/Combobox/testHarness";
 
 vi.mock("preact/hooks", () => ({
-    useRef: (current: unknown) => ({ current }),
-    useEffect: () => {},
-    useCallback: (callback: unknown) => callback,
+  useRef: (current: unknown) => ({ current }),
+  useEffect: () => {},
+  useCallback: (callback: unknown) => callback,
 }));
 vi.mock("../hooks/useChartState", () => ({ useChartState: vi.fn() }));
 vi.mock("../hooks/useChartQuote", () => ({ useChartQuote: vi.fn() }));
-vi.mock("../hooks/useInstrumentIdentity", () => ({ useInstrumentIdentity: () => ({ name: "Apple", exchange: "NASDAQ" }) }));
-vi.mock("../hooks/useExtendedPriceLabel", () => ({ useExtendedPriceLabel: () => {} }));
+vi.mock("../hooks/useInstrumentIdentity", () => ({
+  useInstrumentIdentity: () => ({ name: "Apple", exchange: "NASDAQ" }),
+}));
+vi.mock("../hooks/useExtendedPriceLabel", () => ({
+  useExtendedPriceLabel: () => {},
+}));
 vi.mock("../../registry", () => ({ registerWidget: vi.fn() }));
-vi.mock("../../../ui", () => ({ Select: () => null, TickerSelector: () => null, Tooltip: () => null, WidgetOptionsButton: () => null }));
+vi.mock("../../../ui", () => ({
+  Select: () => null,
+  TickerSelector: () => null,
+  Tooltip: () => null,
+  WidgetOptionsButton: () => null,
+}));
 
 const state = {
-    symbol: "AAPL", interval: "1d", chartType: "candlestick", timezone: "UTC", status: "loading",
-    errorMsg: "History unavailable", warning: "", stateReady: true,
-    data: { lastTick: null }, setPrevClose: vi.fn(),
-    graphicSettings: resolveGraphicSettings({}),
-    settings: { definition: graphicSettingsDefinition, values: {}, ready: true, status: "ready", error: null, onChange: vi.fn(), onReset: vi.fn(), onRetry: vi.fn() },
+  symbol: "AAPL",
+  interval: "1d",
+  chartType: "candlestick",
+  timezone: "UTC",
+  status: "loading",
+  errorMsg: "History unavailable",
+  warning: "",
+  stateReady: true,
+  data: { lastTick: null },
+  setPrevClose: vi.fn(),
+  graphicSettings: resolveGraphicSettings({}),
+
+  refreshVolume: vi.fn(),
+  settings: {
+    definition: graphicSettingsDefinition,
+    values: {},
+    ready: true,
+    status: "ready",
+    error: null,
+    onChange: vi.fn(),
+    onReset: vi.fn(),
+    onRetry: vi.fn(),
+  },
 };
-const quote = { price: 123, currency: "USD", changePercent: 1, snapshot: null, ready: true };
+const quote = {
+  price: 123,
+  currency: "USD",
+  changePercent: 1,
+  snapshot: null,
+  ready: true,
+};
 
 beforeEach(() => {
-    vi.mocked(useChartState).mockReturnValue(state as unknown as ReturnType<typeof useChartState>);
-    vi.mocked(useChartQuote).mockReturnValue(quote);
+  vi.mocked(useChartState).mockReturnValue(
+    state as unknown as ReturnType<typeof useChartState>,
+  );
+  vi.mocked(useChartQuote).mockReturnValue(quote);
 });
 
 function composition() {
-    const shell = BasicChart({ id: "test", onRemove: vi.fn() }) as VNode<{ loading: boolean; error: string | null }>;
-    const overlay = nodes(shell).find(node => node.type === ChartMarketOverlay)!;
-    return { overlay, shell };
+  const shell = BasicChart({ id: "test", onRemove: vi.fn() }) as VNode<{
+    loading: boolean;
+    error: string | null;
+  }>;
+  const overlay = nodes(shell).find(
+    (node) => node.type === ChartMarketOverlay,
+  )!;
+  return { overlay, shell };
 }
 
 describe("BasicChart summary and history loading", () => {
-    it("does not cover a usable snapshot with the history loading overlay", () => {
-        expect(composition().shell.props.loading).toBe(false);
-    });
+  it("does not cover a usable snapshot with the history loading overlay", () => {
+    expect(composition().shell.props.loading).toBe(false);
+  });
 
-    it("keeps the initial skeleton until quote data is ready", () => {
-        vi.mocked(useChartQuote).mockReturnValue({ ...quote, ready: false });
-        expect(composition().shell.props.loading).toBe(true);
-    });
+  it("keeps the initial skeleton until quote data is ready", () => {
+    vi.mocked(useChartQuote).mockReturnValue({ ...quote, ready: false });
+    expect(composition().shell.props.loading).toBe(true);
+  });
 
-    it("preserves a usable quote after history failure and exposes the error through the status pill", () => {
-        vi.mocked(useChartState).mockReturnValue({ ...state, status: "error" } as unknown as ReturnType<typeof useChartState>);
-        const { overlay, shell } = composition();
-        expect(shell.props.error).toBeNull();
-        expect(overlay.props.warning).toBe("History unavailable");
-    });
+  it("preserves a usable quote after history failure and exposes the error through the status pill", () => {
+    vi.mocked(useChartState).mockReturnValue({
+      ...state,
+      status: "error",
+    } as unknown as ReturnType<typeof useChartState>);
+    const { overlay, shell } = composition();
+    expect(shell.props.error).toBeNull();
+    expect(overlay.props.warning).toBe("History unavailable");
+  });
 
-    it("retains the normal error overlay when no usable quote is available", () => {
-        vi.mocked(useChartState).mockReturnValue({ ...state, status: "error" } as unknown as ReturnType<typeof useChartState>);
-        vi.mocked(useChartQuote).mockReturnValue({ ...quote, ready: false });
-        expect(composition().shell.props.error).toBe("History unavailable");
-    });
+  it("retains the normal error overlay when no usable quote is available", () => {
+    vi.mocked(useChartState).mockReturnValue({
+      ...state,
+      status: "error",
+    } as unknown as ReturnType<typeof useChartState>);
+    vi.mocked(useChartQuote).mockReturnValue({ ...quote, ready: false });
+    expect(composition().shell.props.error).toBe("History unavailable");
+  });
+});
+
+describe("BasicChart volume presentation", () => {
+  it.each([
+    { mode: "off", source: null },
+    { mode: "overlay", source: null },
+    { mode: "pane", source: null },
+    { mode: "overlay", source: "fixture" },
+    { mode: "pane", source: "fixture" },
+  ])("has no volume overlay text for %j", ({ mode, source }) => {
+    vi.mocked(useChartState).mockReturnValue({
+      ...state,
+      graphicSettings: resolveGraphicSettings({ volume: mode }),
+      data: { ...state.data, dataSymbol: state.symbol, source },
+    } as unknown as ReturnType<typeof useChartState>);
+    const rendered = nodes(composition().shell);
+    expect(
+      rendered.some(
+        (node) =>
+          node.props.title ===
+            "Provider-reported history, not realtime volume" ||
+          (typeof node.props.children === "string" &&
+            /volume/i.test(node.props.children)),
+      ),
+    ).toBe(false);
+  });
 });

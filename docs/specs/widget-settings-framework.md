@@ -30,22 +30,23 @@ The existing PUT replaces the complete payload, so all BasicChart writes use one
 
 ## Initial BasicChart settings
 
-| Group | Setting | Values/default |
-|---|---|---|
-| Cursor | Crosshair | Free, Snap to close (default), Snap to OHLC, Off |
-| Grid | Horizontal lines | On (default), Off |
-| Grid | Vertical lines | On (default), Off |
-
+| Group  | Setting          | Values/default                                                           |
+| ------ | ---------------- | ------------------------------------------------------------------------ |
+| Cursor | Crosshair        | Free, Snap to close (default), Snap to OHLC, Off                         |
+| Volume | Display          | Off, Overlay (default), Pane; historical non-zero data required          |
+| Labels | Highest / Lowest | On (default), Off; see [visible extrema](basic-chart-visible-extrema.md) |
+| Grid   | Horizontal lines | On, Off (default)                                                        |
+| Grid   | Vertical lines   | On, Off (default)                                                        |
 
 Settings popovers and their nested Select machines use explicit widget-scoped IDs. Select dropdown positioning is memoized and uses a direct trigger ref with fixed positioning, avoiding generated-ID anchor lookup across portal/widget instances.
 
-Settings use native chart/series options without recreating series or resetting the viewport. Regular last-price lines/labels and custom extended-session annotations keep their default visibility. Previously saved `lastPriceLine` and `lastPriceLabel` toggles are ignored. Theme, interval and chart-type changes preserve the exposed preferences.
+Cursor/grid settings use native chart/series options without recreating price series or resetting the viewport. The Highest / Lowest switch attaches a native price-series primitive without touching data, scales, or the viewport. The volume display select owns a lazy native histogram, either on a hidden independent overlay scale or in a separate pane, and preserves the local logical range; see [historical volume](basic-chart-historical-volume.md). Regular last-price lines/labels and custom extended-session annotations keep their default visibility. Previously saved `lastPriceLine` and `lastPriceLabel` toggles are ignored. Theme, interval and chart-type changes preserve the exposed preferences.
 
 The floating summary and pinned status tooltip remain. The previous ChartDetailsPopover implementation is not mounted; its existing source is retained for the deferred Debug work.
 
 ## Deferred
 
-Volume investigation and volume pane; indicators and their separate entry point; drawings; global preference inheritance; applying defaults across widget instances; custom settings editors; Debug content/global gate; migration of all other widgets.
+Indicators and their separate entry point; drawings; global preference inheritance; applying defaults across widget instances; custom settings editors; Debug content/global gate; migration of all other widgets.
 
 ## Validation
 

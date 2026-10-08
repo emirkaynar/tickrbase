@@ -76,7 +76,7 @@ export function MarketStatusOverlay({ symbol, name, exchange, quote, tooltip, de
         <div class={styles.marketOverlay} key={symbol}>
             <div class={styles.identityRow}>
                 <Tooltip content={name}>
-                    <span class={styles.instrumentName} tabIndex={0}>{name.toLowerCase()}</span>
+                    <span class={styles.instrumentName} tabIndex={0}>{name}</span>
                 </Tooltip>
                 {exchange && <span class={styles.exchange}>· {exchange}</span>}
                 {(tooltip.session || notices.length > 0) && (

@@ -32,7 +32,6 @@
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-    text-transform: capitalize;
     font-weight: var(--font-weight-semibold);
     pointer-events: auto;
 }
@@ -72,6 +71,7 @@
     height: 6px;
     border-radius: var(--radius-full);
     background: var(--session-color);
+    margin-left: var(--space-0-5);
 }
 
 .delayMarker {
@@ -123,8 +123,16 @@
 }
 
 .warningSegment {
-    color: var(--color-warning);
-    background: color-mix(in srgb, var(--color-warning) 14%, var(--color-bg-elevated));
+    color: var(--color-danger);
+    background: color-mix(in srgb, var(--color-danger) 14%, var(--color-bg-elevated));
+}
+
+.warningSegment svg {
+    margin-right: var(--space-0-5);
+}
+
+.statusPill:hover .warningSegment {
+    background: color-mix(in srgb, var(--color-danger) 22%, var(--color-bg-elevated));
 }
 
 @keyframes countdown-pulse {

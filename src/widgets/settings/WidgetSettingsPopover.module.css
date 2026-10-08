@@ -107,7 +107,7 @@
 
 .tabTrigger {
     flex-shrink: 0;
-    padding: var(--space-1) 0;
+    padding: var(--space-0-5) 0;
     border: none;
     border-bottom: 1px solid transparent;
     background: transparent;
@@ -137,7 +137,7 @@
 
 .group {
     background: var(--color-mica-surface-light);
-    padding: var(--space-2);
+    padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-md);
 }
 

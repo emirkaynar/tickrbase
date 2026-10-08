@@ -41,7 +41,7 @@ export class QuotePriceLabel {
 
     update(quote: Quote): void {
         const colors = getChartColors();
-        const color = !quote ? "" : quote.kind === "pre" ? colors.blue : quote.kind === "post" ? colors.amber : colors.accent;
+        const color = !quote ? "" : quote.kind === "pre" ? colors.amber : quote.kind === "post" ? colors.blue : colors.accent;
         if (quote?.price === this.quote?.price && quote?.kind === this.quote?.kind && color === this.color) return;
         this.quote = quote;
         this.color = color;
