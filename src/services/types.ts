@@ -19,7 +19,30 @@ export type PriceResponse = {
     last_updated: string;
 };
 
+export type DataCoverage = {
+    intervals?: string[];
+    sessions: string[];
+    overnight_history: boolean | null;
+    delay_seconds: number | null;
+};
+
+export type SessionWindow = { kind: "regular" | "pre" | "post" | "overnight"; start: number; end: number };
+export type MarketSession = { trading_date: string; regular_open: number; regular_close: number; windows: SessionWindow[] };
+export type MarketContext = {
+    ticker: string;
+    exchange: string | null;
+    instrument_type: string | null;
+    exchange_timezone: string | null;
+    sessions: MarketSession[];
+    calendar_coverage: { from: number; to: number } | null;
+    server_time: number;
+};
+
 export type HistoryResponse = {
+    source?: string;
+    sessions?: "regular" | "extended";
+    coverage?: DataCoverage;
+    snapshot_time?: number | null;
     ticker: string;
     interval: string;
     candles: Bar[];
@@ -224,6 +247,10 @@ export type LookupResponse = {
 export type QuoteFieldGroup = "session" | "volume" | "quote";
 
 export type QuoteSnapshot = {
+    source?: string;
+    source_timestamp?: number | null;
+    timestamp_origin?: "source" | "receipt" | "unknown";
+    delay_seconds?: number | null;
     symbol: string;
     currency?: string | null;
     current_price: number | null;

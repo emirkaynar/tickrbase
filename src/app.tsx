@@ -28,7 +28,7 @@ export function App() {
     const { route, navigate } = useRouter();
     const { theme, toggleTheme } = useTheme();
     const auth = useAuth();
-    const layout = useLayout(!!auth.user);
+    const layout = useLayout(!!auth.user, auth.user?.id);
     const portfolioState = usePortfolioState(!!auth.user);
 
     const [paletteOpen, setPaletteOpen] = useState(false);

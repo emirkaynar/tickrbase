@@ -31,10 +31,25 @@
     color: var(--color-text-subtle);
 }
 
+.input:disabled,
+.trigger:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .input:focus {
     border-color: var(--color-primary);
     box-shadow: 0 0 0 2px
         color-mix(in oklab, var(--color-primary) 25%, transparent);
+}
+
+.input[aria-invalid="true"] {
+    border-color: var(--color-danger);
+}
+
+.input[aria-invalid="true"]:focus {
+    box-shadow: 0 0 0 2px
+        color-mix(in oklab, var(--color-danger) 25%, transparent);
 }
 
 .indicators {

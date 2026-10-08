@@ -33,6 +33,9 @@
         "vite": "^7.3.1",
         "vitest": "^3.0.5"
     },
+    "overrides": {
+        "@prefresh/core": "1.5.11"
+    },
     "allowScripts": {
         "esbuild@0.28.1": true
     }

@@ -11,6 +11,18 @@ import {
 import { calculateGridConstraints, findFittingSize } from "./constraints";
 
 import { prefetchSettings } from "../services/settings";
+import {
+    activateWidgetCache,
+    cacheWidgetState,
+    clearWidgetCaches,
+    getWidgetCacheToken,
+    getWidgetCacheSessionToken,
+    isWidgetCacheSessionCurrent,
+    removeWidgetCaches,
+    syncWidgetCacheIds,
+} from "../widgets/widgetCache";
+
+export { getWidgetStateFromCache } from "../widgets/widgetCache";
 
 export type ScreenItem = { id: string; name: string; order: number; createdAt: number };
 
@@ -20,16 +32,6 @@ export type BackendLayoutPayload = {
     widgets: WidgetInstance[];
 };
 
-const widgetStateCache = new Map<string, any>();
-
-export function getWidgetStateFromCache(widgetId: string): any {
-    if (widgetStateCache.has(widgetId)) {
-        const val = widgetStateCache.get(widgetId);
-        widgetStateCache.delete(widgetId);
-        return val;
-    }
-    return undefined;
-}
 
 const ALL_HANDLES: LayoutItem["resizeHandles"] = [
     "s",
@@ -57,7 +59,9 @@ function defaultScreenNameFrom(records: { name: string }[]): string {
     return `Screen ${max + 1}`;
 }
 
-export function useLayout(isAuthenticated: boolean = true) {
+export function useLayout(isAuthenticated: boolean = true, userId?: number) {
+    const owner = isAuthenticated ? userId ?? "authenticated" : null;
+    const loadedOwner = useRef<typeof owner>(null);
     const [screens, setScreens] = useState<ScreenItem[]>([]);
     const [activeScreenId, setActiveScreenId] = useState("");
     const [allWidgets, setAllWidgets] = useState<WidgetInstance[]>([]);
@@ -68,9 +72,13 @@ export function useLayout(isAuthenticated: boolean = true) {
     stateRef.current = { screens, activeScreenId, allWidgets };
 
     // Initial load from backend API
-    const loadLayout = useCallback(async () => {
+    const loadLayout = useCallback(async (signal: AbortSignal, owner: number | "authenticated") => {
+        const session = getWidgetCacheSessionToken();
+        const active = () => !signal.aborted && isWidgetCacheSessionCurrent(session);
         try {
-            const data = await api.get<BackendLayoutPayload>("/user/layout");
+            const data = await api.get<BackendLayoutPayload>("/user/layout", signal);
+            if (!active()) return;
+            loadedOwner.current = owner;
             setScreens(data.screens || []);
             setActiveScreenId(data.activeScreenId || (data.screens && data.screens[0]?.id) || "");
             const normalizedWidgets = (data.widgets || []).map((w) => {
@@ -84,6 +92,7 @@ export function useLayout(isAuthenticated: boolean = true) {
                     y: Math.min(w.y || 0, Math.max(0, 24 - hClamped)),
                 };
             });
+            syncWidgetCacheIds(normalizedWidgets.map((widget) => widget.id));
             setAllWidgets(normalizedWidgets);
             setReady(true);
 
@@ -92,10 +101,11 @@ export function useLayout(isAuthenticated: boolean = true) {
             void Promise.all([
                 prefetchSettings(),
                 ...widgetIds.map(async (wId) => {
+                    const token = getWidgetCacheToken(wId);
                     try {
-                        const saved = await api.get<any>(`/user/widgets/${wId}/state`);
-                        if (saved) {
-                            widgetStateCache.set(wId, saved);
+                        const saved = await api.get<any>(`/user/widgets/${wId}/state`, signal);
+                        if (saved && active()) {
+                            cacheWidgetState(wId, saved, token);
                         }
                     } catch {
                         // ignore prefetch errors
@@ -103,21 +113,29 @@ export function useLayout(isAuthenticated: boolean = true) {
                 }),
             ]);
         } catch (err) {
+            if (!active()) return;
+            loadedOwner.current = owner;
             console.error("Failed to load layout from backend:", err);
             setReady(true);
         }
     }, []);
 
     useEffect(() => {
-        if (!isAuthenticated) {
-            setScreens([]);
-            setActiveScreenId("");
-            setAllWidgets([]);
-            setReady(false);
-            return;
-        }
-        void loadLayout();
-    }, [isAuthenticated, loadLayout]);
+        clearWidgetCaches();
+        setScreens([]);
+        setActiveScreenId("");
+        setAllWidgets([]);
+        setReady(false);
+        loadedOwner.current = null;
+        if (owner === null) return;
+
+        const controller = new AbortController();
+        void loadLayout(controller.signal, owner);
+        return () => {
+            controller.abort();
+            clearWidgetCaches();
+        };
+    }, [owner, loadLayout]);
 
     // Save full layout to backend
     const saveLayoutToBackend = useCallback(async (
@@ -138,8 +156,9 @@ export function useLayout(isAuthenticated: boolean = true) {
 
     const debouncedSave = useDebounce(saveLayoutToBackend, 600);
 
-    // Get widgets for active screen
-    const activeWidgets = allWidgets.filter((w) => w.screenId === activeScreenId);
+    // Do not expose a previous user's layout while the new session is loading.
+    const available = ready && owner !== null && loadedOwner.current === owner;
+    const activeWidgets = available ? allWidgets.filter((w) => w.screenId === activeScreenId) : [];
 
     const onLayoutChange = useCallback(
         (items: Layout) => {
@@ -236,6 +255,9 @@ export function useLayout(isAuthenticated: boolean = true) {
 
             const survivor = screens.filter((s) => s.id !== screenId).map((s, i) => ({ ...s, order: i }));
             const remainingWidgets = allWidgets.filter((w) => w.screenId !== screenId);
+            for (const widget of allWidgets) {
+                if (widget.screenId === screenId) removeWidgetCaches(widget.id);
+            }
 
             const nextActiveId = activeScreenId === screenId
                 ? (survivor[Math.min(idx, survivor.length - 1)] ?? survivor[0]).id
@@ -308,6 +330,7 @@ export function useLayout(isAuthenticated: boolean = true) {
                 h: fitting.size.h,
             });
 
+            activateWidgetCache(record.id);
             const nextWidgets = [...allWidgets, record];
             setAllWidgets(nextWidgets);
             void saveLayoutToBackend(screens, activeScreenId, nextWidgets);
@@ -319,6 +342,7 @@ export function useLayout(isAuthenticated: boolean = true) {
 
     const removeWidget = useCallback(
         async (id: string) => {
+            removeWidgetCaches(id);
             const nextWidgets = allWidgets.filter((w) => w.id !== id);
             setAllWidgets(nextWidgets);
             void saveLayoutToBackend(screens, activeScreenId, nextWidgets);
@@ -327,8 +351,8 @@ export function useLayout(isAuthenticated: boolean = true) {
     );
 
     return {
-        screens,
-        activeScreenId,
+        screens: available ? screens : [],
+        activeScreenId: available ? activeScreenId : "",
         widgets: activeWidgets,
         layout,
         onLayoutChange,
@@ -341,7 +365,7 @@ export function useLayout(isAuthenticated: boolean = true) {
         moveScreen,
         addWidget,
         removeWidget,
-        ready,
+        ready: available,
     } as const;
 }
 

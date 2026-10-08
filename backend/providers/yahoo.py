@@ -49,6 +49,20 @@ def _coerce_float(value: object) -> float | None:
 
 
 class YahooFinanceProvider(DataProvider):
+    source_id = "yahoo"
+
+    def history_range(self, interval: str) -> str | None:
+        from ..core.config import YAHOO_MAX_RANGE
+        return YAHOO_MAX_RANGE.get(interval)
+
+    def history_capabilities(self, sessions: str = "regular") -> dict:
+        from ..core.config import YAHOO_MAX_RANGE
+        return {"intervals": list(YAHOO_MAX_RANGE), "sessions": ["regular", "pre", "post"] if sessions == "extended" else ["regular"], "overnight_history": False, "delay_seconds": None}
+
+    def get_market_metadata(self, ticker: str) -> dict:
+        info = self.get_company_info(ticker)
+        return {"exchange": info.get("exchange"), "instrument_type": info.get("quoteType"), "timezone": info.get("exchangeTimezoneName")}
+
     def get_price(self, ticker: str) -> tuple[float, int]:
         import yfinance as yf
 
@@ -78,6 +92,7 @@ class YahooFinanceProvider(DataProvider):
         period: str | None = None,
         start: int | None = None,
         end: int | None = None,
+        sessions: str = "regular",
     ) -> list[Candle]:
         import yfinance as yf
 
@@ -88,6 +103,7 @@ class YahooFinanceProvider(DataProvider):
             "interval": interval,
             "auto_adjust": False,
             "actions": False,
+            "prepost": sessions == "extended",
         }
         if start is not None:
             kwargs["start"] = datetime.fromtimestamp(start, tz=timezone.utc)

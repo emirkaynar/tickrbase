@@ -1,22 +1,25 @@
 import { useEffect, useRef, useState, useCallback } from "preact/hooks";
 import type { IChartApi, ISeriesApi, UTCTimestamp } from "lightweight-charts";
-import { PriceScaleMode } from "lightweight-charts";
+import { PriceScaleMode, LineSeries } from "lightweight-charts";
 import { api } from "../../services/api";
-import { fetchHistory } from "../../services/history";
-import { livePricesClient } from "../../services/livePrices";
-import type { Bar, Interval, ScaleMode } from "../../services/types";
+import type { Bar, Interval, ScaleMode, MarketContext } from "../../services/types";
 import { INTERVALS } from "../../services/types";
 
 import type { ChartType } from "../../services/types";
-import { getSettingValue } from "../../services/settings";
-import { getWidgetStateFromCache } from "../../grid/useLayout";
+import { useUserTimezone } from "../../services/useUserTimezone";
+import { useChartData } from "./useChartData";
+import { SessionLines } from "./sessionLines";
+import { observationGaps, gapWhitespace } from "./observationGaps";
+import { intervalSeconds } from "./barStore";
+import { candleContext, regularBars, sessionBoundaries } from "./sessionPolicy";
+import { getWidgetCacheToken, getWidgetStateFromCache, isWidgetCacheCurrent, registerWidgetCache } from "../widgetCache";
 
 /** Module-level maps survive RGL remount cycles during drag */
-const everLoaded = new Set<string>();
-const lastState = new Map<
+const everLoaded = registerWidgetCache("loadedCharts", new Set<string>());
+const lastState = registerWidgetCache("chartBars", new Map<
     string,
     { bars: Bar[]; interval: Interval; symbol: string }
->();
+>());
 
 type ChartRefs = {
     chartRef: { current: IChartApi | null };
@@ -25,6 +28,7 @@ type ChartRefs = {
 };
 
 type UseChartStateReturn = {
+    data: ReturnType<typeof useChartData>;
     status: "loading" | "ok" | "error";
     errorMsg: string;
     warning: string;
@@ -37,7 +41,6 @@ type UseChartStateReturn = {
     setSymbol: (s: string) => void;
     selectInterval: (i: Interval) => void;
     setChartType: (c: ChartType) => void;
-    setTimezone: (t: string) => void;
     setScaleMode: (m: ScaleMode) => void;
     applyScaleFormatting: () => void;
     reapplyCurrentBars: () => void;
@@ -49,79 +52,18 @@ type UseChartStateReturn = {
     ) => { bars: Bar[]; interval: Interval; symbol: string } | undefined;
 };
 
-function getPeriod(_interval: Interval): string {
-    return "max";
-}
-
-function getPollMs(interval: Interval): number {
-    return ["1m", "5m", "15m"].includes(interval) ? 60_000 : 300_000;
-}
-
-function intervalSeconds(interval: Interval): number | null {
-    if (interval === "1m") return 60;
-    if (interval === "5m") return 300;
-    if (interval === "15m") return 900;
-    if (interval === "30m") return 1800;
-    if (interval === "1h") return 3600;
-    return null;
-}
-
-function bucketStart(timeSec: number, interval: Interval): number {
-    if (interval === "1m") return Math.floor(timeSec / 60) * 60;
-    if (interval === "5m") return Math.floor(timeSec / 300) * 300;
-    if (interval === "15m") return Math.floor(timeSec / 900) * 900;
-    if (interval === "30m") return Math.floor(timeSec / 1800) * 1800;
-    if (interval === "1h") return Math.floor(timeSec / 3600) * 3600;
-
-    const dt = new Date(timeSec * 1000);
-    if (interval === "1d") {
-        return Math.floor(
-            Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), dt.getUTCDate()) /
-                1000,
-        );
-    }
-    if (interval === "1wk") {
-        const day = dt.getUTCDay();
-        const offsetToMonday = (day + 6) % 7;
-        const monday = new Date(
-            Date.UTC(
-                dt.getUTCFullYear(),
-                dt.getUTCMonth(),
-                dt.getUTCDate() - offsetToMonday,
-            ),
-        );
-        return Math.floor(monday.getTime() / 1000);
-    }
-    return Math.floor(
-        Date.UTC(dt.getUTCFullYear(), dt.getUTCMonth(), 1) / 1000,
-    );
-}
-
-function alignedBucketStart(
-    timeSec: number,
-    interval: Interval,
-    anchorTime: number | null,
-): number {
-    const step = intervalSeconds(interval);
-    if (step === null || anchorTime === null) {
-        return bucketStart(timeSec, interval);
-    }
-    const offset = ((anchorTime % step) + step) % step;
-    return Math.floor((timeSec - offset) / step) * step + offset;
-}
-
 export function useChartState(
     id: string,
     refs: ChartRefs,
 ): UseChartStateReturn {
     const { chartRef, seriesRef, intervalRef } = refs;
 
+    const cacheToken = getWidgetCacheToken(id);
     const _prev = lastState.get(id);
-    const lastBarTimeRef = useRef<number | null>(null);
-    const lastLiveTickMsRef = useRef<number>(Date.now());
-    const latestBarRef = useRef<Bar | null>(
-        _prev?.bars?.length ? _prev.bars[_prev.bars.length - 1] : null,
-    );
+    const contextRef = useRef<MarketContext | null>(null);
+    const boundarySeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
+    const gapCountRef = useRef(-1);
+    const primitiveRef = useRef<{ series: ISeriesApi<any>; primitive: SessionLines } | null>(null);
     const chartStateRef = useRef<{ from: number; to: number } | null>(null);
 
     const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
@@ -132,7 +74,7 @@ export function useChartState(
         _prev?.interval ?? "1d",
     );
     const [chartType, setChartType] = useState<ChartType>("candlestick");
-    const [timezone, setTimezone] = useState<string>("Europe/Istanbul");
+    const timezone = useUserTimezone();
     const [scaleMode, setScaleMode] = useState<ScaleMode>("normal");
     const [stateReady, setStateReady] = useState(false);
 
@@ -213,6 +155,10 @@ export function useChartState(
 
     // Restore persisted state from backend API on mount
     useEffect(() => {
+        if (!isWidgetCacheCurrent(id, cacheToken)) return;
+        let cancelled = false;
+        const controller = new AbortController();
+        const active = () => !cancelled && isWidgetCacheCurrent(id, cacheToken);
         const applyState = (saved: any) => {
             if (saved) {
                 if (
@@ -229,11 +175,6 @@ export function useChartState(
                 if (restoredChartType) {
                     setChartType(restoredChartType as ChartType);
                     chartTypeRef.current = restoredChartType as ChartType;
-                }
-                const restoredTimezone =
-                    saved.state?.timezone || saved.timezone;
-                if (restoredTimezone) {
-                    setTimezone(restoredTimezone);
                 }
                 if (saved.state?.timeScale) {
                     chartStateRef.current = saved.state.timeScale;
@@ -254,40 +195,29 @@ export function useChartState(
         }
 
         void api
-            .get<any>(`/user/widgets/${id}/state`)
+            .get<any>(`/user/widgets/${id}/state`, controller.signal)
             .then((saved) => {
+                if (!active()) return;
                 applyState(saved);
                 setStateReady(true);
             })
             .catch(() => {
-                setStateReady(true);
+                if (active()) setStateReady(true);
             });
-    }, [id]);
-
-    // Load fallback global timezone setting if not explicitly set per widget
-    useEffect(() => {
-        let cancelled = false;
-        void getSettingValue<string>("basicChart.defaultTimezone")
-            .then((globalTz) => {
-                if (!cancelled && globalTz && !timezone) {
-                    setTimezone(globalTz);
-                }
-            })
-            .catch(() => {});
         return () => {
             cancelled = true;
+            controller.abort();
         };
-    }, []);
+    }, [id, cacheToken]);
 
-    // Persist symbol+interval+chartType+timezone+priceScale changes
+    // Persist chart preferences; display timezone belongs to user settings.
     useEffect(() => {
-        if (!stateReady) return;
+        if (!stateReady || !isWidgetCacheCurrent(id, cacheToken)) return;
         void api.put(`/user/widgets/${id}/state`, {
             symbol,
             interval,
             state: {
                 chartType,
-                timezone,
                 priceScale: {
                     mode: scaleMode,
                 },
@@ -296,7 +226,7 @@ export function useChartState(
                     : undefined,
             },
         });
-    }, [id, symbol, interval, chartType, timezone, scaleMode, stateReady]);
+    }, [id, symbol, interval, chartType, scaleMode, stateReady, cacheToken]);
 
     function calculateHeikinAshi(bars: Bar[]): Bar[] {
         if (!bars.length) return [];
@@ -355,11 +285,47 @@ export function useChartState(
     }
 
     const applyBars = useCallback(
-        (bars: Bar[], fit: boolean) => {
+        (bars: Bar[], fit: boolean, context: MarketContext | null = contextRef.current, live = false) => {
+            if (!isWidgetCacheCurrent(id, cacheToken)) return;
             const series = seriesRef.current;
             if (!series) return;
             intervalRef.current = interval;
-            series.setData(formatSeriesData(bars, chartTypeRef.current));
+            const chart = chartRef.current;
+            const range = chart?.timeScale().getVisibleRange();
+            const logical = chart?.timeScale().getVisibleLogicalRange();
+            const nearLatest = !logical || logical.to >= series.data().length - 2;
+            contextRef.current = context;
+            const intraday = intervalSeconds(interval) !== null;
+            if (intraday) bars = regularBars(bars, context);
+            if (chart && !boundarySeriesRef.current) {
+                boundarySeriesRef.current = chart.addSeries(LineSeries, { visible: false, lastValueVisible: false, priceLineVisible: false });
+            }
+            if (primitiveRef.current?.series !== series) {
+                const primitive = new SessionLines();
+                series.attachPrimitive(primitive);
+                primitiveRef.current = { series, primitive };
+            }
+            const gaps = observationGaps(bars, interval, candleContext(context));
+            const gapChanged = gapCountRef.current !== gaps.length;
+            gapCountRef.current = gaps.length;
+            primitiveRef.current.primitive.setContext(intraday ? context : null, gaps);
+            const boundaries = intraday ? sessionBoundaries(bars, context) : [];
+            if (!live || gapChanged) boundarySeriesRef.current?.setData([...new Set([...boundaries, ...gapWhitespace(gaps, interval), ...gaps.map(gap => gap.end)])].sort((a, b) => a - b).map(time => ({ time: time as UTCTimestamp })));
+            if (live && !gapChanged && chartTypeRef.current !== "heikin_ashi" && bars.length && series.data().length) {
+                series.update(formatSeriesPoint(bars[bars.length - 1], chartTypeRef.current));
+            } else {
+                const points = formatSeriesData(bars, chartTypeRef.current);
+                if (["line", "area", "baseline"].includes(chartTypeRef.current)) {
+                    // Per-point colors govern the segment leaving that point.
+                    // Hide the segment crossing an observed gap without inventing prices.
+                    for (let i = 0; i < bars.length - 1; i++) {
+                        if (gaps.some(gap => gap.start >= bars[i].time && gap.end <= bars[i + 1].time)) {
+                            Object.assign(points[i], { color: "transparent", lineColor: "transparent", topColor: "transparent", bottomColor: "transparent", topLineColor: "transparent", bottomLineColor: "transparent", topFillColor1: "transparent", topFillColor2: "transparent", bottomFillColor1: "transparent", bottomFillColor2: "transparent" });
+                        }
+                    }
+                }
+                series.setData(points);
+            }
             if (chartTypeRef.current === "baseline" && bars.length) {
                 const basePrice =
                     prevCloseRef.current ??
@@ -374,28 +340,29 @@ export function useChartState(
                 timeVisible: !["1d", "1wk", "1mo"].includes(interval),
                 secondsVisible: false,
             });
-            if (fit) {
-                chartRef.current?.timeScale();
-            } else if (chartStateRef.current) {
-                chartRef.current
-                    ?.timeScale()
-                    .setVisibleRange(chartStateRef.current as never);
+            if (fit && chartStateRef.current && bars.length) {
+                chart?.timeScale().setVisibleRange(chartStateRef.current as never);
+            } else if (fit && bars.length && !range) {
+                chart?.timeScale().fitContent();
+            } else if (!fit && range && !nearLatest) {
+                chart?.timeScale().setVisibleRange(range);
             }
             lastState.set(id, { bars, interval, symbol });
-            latestBarRef.current = bars.length ? bars[bars.length - 1] : null;
-            lastBarTimeRef.current = latestBarRef.current?.time ?? null;
+
             everLoaded.add(id);
             setStatus("ok");
         },
-        [id, symbol, interval, chartRef, seriesRef, intervalRef],
+        [id, symbol, interval, chartRef, seriesRef, intervalRef, cacheToken],
     );
 
     const reapplyCurrentBars = useCallback(() => {
         const state = lastState.get(id);
-        if (state?.bars?.length) {
+        if (state && state.symbol === symbol && state.interval === interval) {
             applyBars(state.bars, false);
+        } else {
+            applyBars([], false, null);
         }
-    }, [id, applyBars]);
+    }, [id, symbol, interval, applyBars]);
 
     const captureRange = useCallback(() => {
         if (!chartRef.current) return;
@@ -405,240 +372,14 @@ export function useChartState(
             : null;
     }, [chartRef]);
 
-    const saveChartState = useCallback(async () => {
-        if (!chartRef.current) return;
-        try {
-            const range = chartRef.current.timeScale().getVisibleRange();
-            chartStateRef.current = range
-                ? { from: range.from as number, to: range.to as number }
-                : null;
-            await api.put(`/user/widgets/${id}/state`, {
-                symbol,
-                interval,
-                state: {
-                    chartType: chartTypeRef.current,
-                    timezone,
-                    priceScale: {
-                        mode: scaleMode,
-                    },
-                    timeScale: chartStateRef.current,
-                },
-            });
-        } catch {
-            /* ignore */
-        }
-    }, [id, symbol, interval, timezone, scaleMode, chartRef]);
-
-    // Data load + polling
-    useEffect(() => {
-        const series = seriesRef.current;
-        if (!series || !stateReady) return;
-
-        let cancelled = false;
-        const ctrl = new AbortController();
-
-        const initialLoad = async () => {
-            try {
-                setStatus("loading");
-                const data = await fetchHistory(
-                    symbol,
-                    interval,
-                    getPeriod(interval),
-                    undefined,
-                    ctrl.signal,
-                );
-                if (cancelled) return;
-                if (!data.candles.length) {
-                    setStatus("ok");
-                    return;
-                }
-                const bars: Bar[] = data.candles;
-                applyBars(bars, true);
-                setWarning("");
-            } catch (err) {
-                if (cancelled) return;
-                setErrorMsg(
-                    err instanceof Error ? err.message : "Unknown error",
-                );
-                setStatus("error");
-            }
-        };
-
-        const deltaPoll = async () => {
-            if (!everLoaded.has(id) || lastBarTimeRef.current === null) return;
-            await saveChartState();
-            try {
-                const data = await fetchHistory(
-                    symbol,
-                    interval,
-                    getPeriod(interval),
-                    lastBarTimeRef.current,
-                    ctrl.signal,
-                );
-                if (cancelled || !data.candles.length) return;
-                let latestTime = latestBarRef.current?.time ?? null;
-                let lastApplied: Bar | null = null;
-                for (const candle of data.candles) {
-                    if (latestTime !== null && candle.time < latestTime) {
-                        continue;
-                    }
-                    series.update(
-                        formatSeriesPoint(candle, chartTypeRef.current),
-                    );
-                    latestTime = candle.time;
-                    lastApplied = candle;
-                }
-                if (!lastApplied) return;
-                lastBarTimeRef.current = lastApplied.time;
-                latestBarRef.current = lastApplied;
-                setWarning("");
-            } catch (err) {
-                if (cancelled) return;
-                setWarning(
-                    err instanceof Error ? err.message : "Network error",
-                );
-            }
-        };
-
-        void initialLoad();
-        const pollId = setInterval(deltaPoll, getPollMs(interval));
-
-        return () => {
-            cancelled = true;
-            ctrl.abort();
-            clearInterval(pollId);
-        };
-    }, [
-        symbol,
-        interval,
-        stateReady,
-        id,
-        seriesRef,
-        applyBars,
-        saveChartState,
-    ]);
-
-    // Live websocket ticks - update current candle or append next bucket.
-    useEffect(() => {
-        if (!stateReady) return;
-
-        const unsubscribe = livePricesClient.onTick((tick) => {
-            if (tick.symbol !== symbol) return;
-            const series = seriesRef.current;
-            if (!series) return;
-
-            lastLiveTickMsRef.current = Date.now();
-            const intervalNow = intervalRef.current;
-            const prev = latestBarRef.current;
-            const tickTimeSec = Math.floor(tick.ts / 1000);
-            const bucket = alignedBucketStart(
-                tickTimeSec,
-                intervalNow,
-                prev?.time ?? null,
-            );
-            const step = intervalSeconds(intervalNow);
-
-            const nextBar: Bar =
-                prev && (step === null || bucket <= prev.time)
-                    ? {
-                          ...prev,
-                          high: Math.max(prev.high, tick.price),
-                          low: Math.min(prev.low, tick.price),
-                          close: tick.price,
-                      }
-                    : prev && bucket > prev.time
-                      ? {
-                            time: bucket,
-                            open: prev.close,
-                            high: tick.price,
-                            low: tick.price,
-                            close: tick.price,
-                        }
-                      : {
-                            time: bucket,
-                            open: tick.price,
-                            high: tick.price,
-                            low: tick.price,
-                            close: tick.price,
-                        };
-
-            if (prev && nextBar.time < prev.time) {
-                return;
-            }
-
-            series.update(formatSeriesPoint(nextBar, chartTypeRef.current));
-            latestBarRef.current = nextBar;
-            lastBarTimeRef.current = nextBar.time;
-            setWarning("");
-        });
-
-        return unsubscribe;
-    }, [stateReady, symbol, seriesRef, intervalRef]);
-
-    // If no live tick arrives for 60s, force a since-backfill pull as recovery.
-    useEffect(() => {
-        if (!stateReady) return;
-
-        let cancelled = false;
-        const ctrl = new AbortController();
-
-        const timer = setInterval(() => {
-            if (cancelled) return;
-            if (!everLoaded.has(id) || lastBarTimeRef.current === null) return;
-
-            const silenceMs = Date.now() - lastLiveTickMsRef.current;
-            if (silenceMs < 60_000) return;
-
-            void fetchHistory(
-                symbol,
-                intervalRef.current,
-                getPeriod(intervalRef.current),
-                lastBarTimeRef.current,
-                ctrl.signal,
-            )
-                .then((data) => {
-                    if (cancelled || !data.candles.length) return;
-                    const series = seriesRef.current;
-                    if (!series) return;
-                    let latestTime = latestBarRef.current?.time ?? null;
-                    let lastApplied: Bar | null = null;
-                    for (const candle of data.candles) {
-                        if (latestTime !== null && candle.time < latestTime) {
-                            continue;
-                        }
-                        series.update(
-                            formatSeriesPoint(candle, chartTypeRef.current),
-                        );
-                        latestTime = candle.time;
-                        lastApplied = candle;
-                    }
-                    if (!lastApplied) return;
-                    latestBarRef.current = lastApplied;
-                    lastBarTimeRef.current = lastApplied.time;
-                    setWarning("");
-                    lastLiveTickMsRef.current = Date.now();
-                })
-                .catch((err) => {
-                    if (cancelled) return;
-                    if (
-                        err instanceof DOMException &&
-                        err.name === "AbortError"
-                    )
-                        return;
-                    setWarning(
-                        err instanceof Error ? err.message : "Network error",
-                    );
-                });
-        }, 10_000);
-
-        return () => {
-            cancelled = true;
-            ctrl.abort();
-            clearInterval(timer);
-        };
-    }, [id, symbol, stateReady, seriesRef, intervalRef]);
+    const onDataStatus = useCallback((next: "loading" | "ok" | "error", message?: string) => {
+        setStatus(next);
+        setErrorMsg(message ?? "");
+    }, []);
+    const data = useChartData(id, symbol, interval, stateReady, applyBars, onDataStatus, setWarning);
 
     return {
+        data,
         status,
         errorMsg,
         warning,
@@ -651,7 +392,6 @@ export function useChartState(
         setSymbol,
         selectInterval,
         setChartType,
-        setTimezone,
         setScaleMode,
         applyScaleFormatting,
         reapplyCurrentBars,

@@ -113,6 +113,15 @@ async def save_settings(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    if "general.timezone" in payload.settings:
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+        value = payload.settings["general.timezone"]
+        try:
+            if not isinstance(value, str):
+                raise ValueError()
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise HTTPException(status_code=422, detail="Invalid IANA timezone")
     await user_data_service.save_user_settings(db, current_user.id, payload.settings)
     return MessageResponse(ok=True)
 

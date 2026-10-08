@@ -213,6 +213,61 @@
     width: 100%;
 }
 
+.settingItem--select {
+    flex-wrap: wrap;
+    gap: var(--space-3) var(--space-6);
+}
+
+.settingInfo--select {
+    min-width: 0;
+    flex: 1 1 16rem;
+}
+
+.settingItem--select .settingControl {
+    flex: 0 1 20rem;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.selectControl {
+    width: 100%;
+    min-width: 0;
+}
+
+.selectControl input {
+    min-width: 0;
+    height: auto;
+    min-height: 2.5rem;
+    padding: var(--space-2) var(--space-8) var(--space-2) var(--space-3);
+    font-family: inherit;
+    font-weight: var(--font-weight-medium);
+    text-transform: none;
+    letter-spacing: normal;
+    background: var(--color-bg-surface);
+}
+
+.selectStatus,
+.selectError {
+    margin-top: var(--space-2);
+    font-size: var(--font-size-sm);
+    overflow-wrap: anywhere;
+}
+
+.selectStatus {
+    color: var(--color-text-muted);
+}
+
+.selectError {
+    color: var(--color-danger);
+}
+
+@media (max-width: 768px) {
+    .settingItem--select .settingControl {
+        flex-basis: 100%;
+    }
+}
+
 .readOnlyValue {
     font-size: 0.875rem;
     color: var(--color-text-muted);

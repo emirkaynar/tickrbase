@@ -8,7 +8,7 @@ A modular BIST (Turkish Stock Market) investment dashboard featuring a Python ba
 ✅ **Symbol Selection & Lookup** - Full BIST ticker lookup backed by TradingView scanner data  
 ✅ **Multiple Timeframe Intervals** - Intraday (1m, 5m, 15m, 30m, 1h) & Daily/Long-term (1d, 1wk, 1mo)  
 ✅ **Persistent Layout & Screens** - Multi-screen grid layout saved directly to PostgreSQL  
-✅ **Chart State Persistence** - Symbol, interval, chart type, timezone, and visible range stored per widget  
+✅ **Chart State Persistence** - Symbol, interval, chart type and visible range stored per widget; display timezone follows user settings
 ✅ **PostgreSQL History Caching** - PostgreSQL OHLC cache stores full history, serving delta refreshes efficiently  
 ✅ **Redis Caching & WebSocket Ticks** - Redis pub/sub for real-time live price streaming and search caching  
 ✅ **Watchlists & Settings** - User watchlist management with customizable column preferences  
@@ -30,7 +30,7 @@ docker compose -f docker-compose.dev.yml up -d
 pip install -r backend/requirements.txt
 
 # Run database migrations
-alembic upgrade head
+python -m alembic -c backend/alembic.ini upgrade head
 
 # Start FastAPI dev server
 python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8001
@@ -74,3 +74,41 @@ tickrbase/
 ## License
 
 MIT
+
+## BasicChart market data
+
+Set the display timezone under Settings / General / Timezone. All BasicCharts
+follow this user preference immediately; sessions continue to use exchange time.
+Legacy per-widget timezone values are ignored.
+
+US equity and ETF charts show regular-session candles. Pre-market, post-market,
+and overnight websocket quotes update one active price-axis label without adding
+candles or time-axis points. Before the open, candles end at the previous trading
+session; after the close, they end at the latest completed session. The label
+expires at a phase transition and includes stale status after 60 seconds. Automatic
+scaling includes the quote near the latest candles; manual scaling and historical
+views keep their existing range. Other markets request extended sessions where
+supported. The status chip
+separates scheduled sessions, source quote age, connection health, and history
+coverage. Quotes older than 60 seconds during a supported scheduled session are
+marked stale; a delayed-feed label requires source metadata. Missing source
+timestamps remain unknown. No-observation shading does not imply trades occurred,
+and closed periods are not treated as missing candles.
+
+History caches are partitioned by source and session mode. Existing rows migrate
+to `yahoo / regular`; extended history initializes separately. Apply migration
+`007_history_sources` before running the updated backend against an existing DB:
+
+```powershell
+.\backend\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+.\backend\.venv\Scripts\python.exe -m alembic -c backend/alembic.ini upgrade head
+```
+
+Calendar support covers US equities, BIST, London, Xetra, and Paris using
+`exchange_calendars` plus documented venue rules. The reviewed horizon ends on
+December 31, 2026; later dates show an unknown session until reviewed. Overnight
+activity outside a verified window is explicitly unverified. Yahoo overnight
+history is unavailable; accepted regular-session live bars and the latest quote survive chart remounts in memory,
+but are not stored server-side. Additional providers should normalize timestamps,
+exchange identifiers, coverage capabilities, and source identity at the backend
+adapter boundary. Provider connection settings and credentials are deferred.

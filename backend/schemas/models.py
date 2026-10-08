@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 
 class UserCreate(BaseModel):
@@ -43,7 +43,47 @@ class PriceResponse(BaseModel):
     last_updated: str
 
 
+class DataCoverage(BaseModel):
+    intervals: list[str] = Field(default_factory=list)
+    sessions: list[str] = Field(default_factory=list)
+    overnight_history: bool | None = None
+    delay_seconds: int | None = None
+
+
+class SessionWindow(BaseModel):
+    kind: str
+    start: int
+    end: int
+
+
+class MarketSession(BaseModel):
+    trading_date: str
+    regular_open: int
+    regular_close: int
+    windows: list[SessionWindow]
+
+
+class CalendarCoverage(BaseModel):
+    from_: int = Field(alias="from")
+    to: int
+
+
+class MarketContextResponse(BaseModel):
+    ticker: str
+    exchange: str | None = None
+    instrument_type: str | None = None
+    exchange_timezone: str | None = None
+    sessions: list[MarketSession] = Field(default_factory=list)
+    calendar_coverage: CalendarCoverage | None = None
+    server_time: int
+
+
 class HistoryResponse(BaseModel):
+    source: str = "unknown"
+    sessions: str = "regular"
+    coverage: DataCoverage = Field(default_factory=DataCoverage)
+    snapshot_time: int | None = None
+
     ticker: str
     interval: str
     candles: list[Candle]
@@ -92,6 +132,11 @@ class LookupResponse(BaseModel):
 
 
 class QuoteSnapshot(BaseModel):
+    source: str = "unknown"
+    source_timestamp: int | None = None
+    timestamp_origin: str = "unknown"
+    delay_seconds: int | None = None
+
     symbol: str
     currency: str | None = None
     current_price: float | None = None

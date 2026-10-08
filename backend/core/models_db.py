@@ -201,9 +201,11 @@ class UserPortfolioGoal(Base):
 
 
 class OHLC(Base):
+    source = Column(String(50), nullable=False, default="yahoo", server_default="yahoo")
+    sessions = Column(String(20), nullable=False, default="regular", server_default="regular")
     __tablename__ = "ohlc"
     __table_args__ = (
-        PrimaryKeyConstraint("ticker", "interval", "time"),
+        PrimaryKeyConstraint("source", "sessions", "ticker", "interval", "time"),
     )
 
     ticker = Column(String(50), nullable=False)
@@ -217,9 +219,11 @@ class OHLC(Base):
 
 
 class HistoryMeta(Base):
+    source = Column(String(50), nullable=False, default="yahoo", server_default="yahoo")
+    sessions = Column(String(20), nullable=False, default="regular", server_default="regular")
     __tablename__ = "history_meta"
     __table_args__ = (
-        PrimaryKeyConstraint("ticker", "interval"),
+        PrimaryKeyConstraint("source", "sessions", "ticker", "interval"),
     )
 
     ticker = Column(String(50), nullable=False)

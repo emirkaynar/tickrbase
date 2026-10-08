@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,21 +9,22 @@ from ..core.config import (
     DEFAULT_PERIOD,
     QUOTES_DEFAULT_GROUPS,
     QUOTES_MAX_SYMBOLS_PER_REQUEST,
-    YAHOO_MAX_RANGE,
+    INTERVAL_SECONDS,
 )
 from ..core.database import get_db
 from ..core.history_cache import get_history
 from ..core.models_db import User
 from ..providers import get_provider
-from ..providers.base import DataProvider
 from ..schemas.models import (
     HistoryResponse,
+    MarketContextResponse,
     LookupResponse,
     OverviewResponse,
     PriceResponse,
     QuotesResponse,
     SymbolsResponse,
 )
+from ..services.market_context import build_market_context
 from ..services import logos as logos_service
 from ..services import lookup as lookup_service
 from ..services import overview as overview_service
@@ -82,19 +83,24 @@ async def get_history_route(
     interval: str = DEFAULT_INTERVAL,
     period: str = DEFAULT_PERIOD,
     since: Optional[int] = None,
+    sessions: Literal["regular", "extended"] = "regular",
 ):
-    if interval not in YAHOO_MAX_RANGE:
+    if interval not in INTERVAL_SECONDS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported interval"
         )
     provider = get_provider(current_user.tier)
     try:
         candles, stale, last_updated = await get_history(
-            db, provider, ticker, interval, period, since=since
+            db, provider, ticker, interval, period, since=since, sessions=sessions
         )
         return {
             "ticker": ticker,
             "interval": interval,
+            "source": provider.source_id,
+            "sessions": sessions,
+            "coverage": provider.history_capabilities(sessions),
+            "snapshot_time": last_updated * 1000,
             "candles": candles,
             "stale": stale,
             "last_updated": prices_service.iso_timestamp(last_updated),
@@ -162,7 +168,7 @@ async def get_quotes(
 
     return {
         "symbols": normalized_symbols,
-        "quotes": quotes,
+        "quotes": [{**quote, "source": provider.source_id} for quote in quotes],
         "stale": stale,
         "last_updated": prices_service.iso_timestamp(fetched_at),
     }
@@ -222,3 +228,25 @@ async def get_overview_route(
         return payload
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+
+@router.get("/market-context/{ticker}", response_model=MarketContextResponse)
+async def get_market_context(
+    ticker: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    start: int = Query(..., ge=0),
+    end: int = Query(..., ge=0),
+    redis=Depends(get_redis),
+):
+    if end <= start or end - start > 366 * 86400:
+        raise HTTPException(status_code=400, detail="Date range must be positive and at most 366 days")
+    import asyncio
+    import json
+    provider = get_provider(current_user.tier)
+    normalized = provider.normalize_symbol(ticker)
+    key = f"market-metadata:{provider.source_id}:{normalized}"
+    cached = await redis.get(key)
+    metadata = json.loads(cached) if cached else await provider.get_market_metadata_async(normalized)
+    if not cached and metadata.get("exchange"):
+        await redis.set(key, json.dumps(metadata), ex=86400)
+    return await asyncio.to_thread(build_market_context, normalized, metadata, start, end)

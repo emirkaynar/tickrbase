@@ -10,6 +10,23 @@ if TYPE_CHECKING:
 
 
 class DataProvider(ABC):
+    source_id = "unknown"
+
+    def normalize_symbol(self, ticker: str) -> str:
+        return ticker.strip().upper()
+
+    def history_capabilities(self, sessions: str = "regular") -> dict:
+        return {"sessions": ["regular"], "overnight_history": None, "delay_seconds": None}
+
+    def history_range(self, interval: str) -> str | None:
+        return None
+
+    def get_market_metadata(self, ticker: str) -> dict:
+        return {}
+
+    async def get_market_metadata_async(self, ticker: str) -> dict:
+        return await asyncio.to_thread(self.get_market_metadata, ticker)
+
     @abstractmethod
     def get_price(self, ticker: str) -> tuple[float, int]:
         """Fetch current price for a symbol. Returns (price, timestamp_seconds)."""
@@ -26,6 +43,7 @@ class DataProvider(ABC):
         period: str | None = None,
         start: int | None = None,
         end: int | None = None,
+        sessions: str = "regular",
     ) -> list[Candle]:
         """Fetch historical candles for a symbol."""
         pass
@@ -37,9 +55,10 @@ class DataProvider(ABC):
         period: str | None = None,
         start: int | None = None,
         end: int | None = None,
+        sessions: str = "regular",
     ) -> list[Candle]:
         return await asyncio.to_thread(
-            self.get_history, ticker, interval, period, start, end
+            self.get_history, ticker, interval, period, start, end, sessions
         )
 
     @abstractmethod

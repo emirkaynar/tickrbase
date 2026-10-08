@@ -4,7 +4,9 @@ import { createChart } from "lightweight-charts";
 import { Select, TickerSelector, Tooltip } from "../../ui";
 import type { SelectItem } from "../../ui";
 import { Shell } from "../Shell";
+import { MarketStatusOverlay } from "./MarketStatusOverlay";
 import { useChartState } from "./useChartState";
+import { useExtendedPriceLabel } from "./useExtendedPriceLabel";
 import { createChartConfig, getSeriesColors } from "./chartConfig";
 import { addChartSeries } from "./seriesFactory";
 import { registerWidget } from "../registry";
@@ -43,6 +45,7 @@ function BasicChart({ id, onRemove }: Props) {
     const prevCloseRef = useRef<number | null>(null);
 
     const {
+        data,
         symbol,
         setSymbol,
         interval,
@@ -61,6 +64,9 @@ function BasicChart({ id, onRemove }: Props) {
         setScaleMode,
         applyScaleFormatting,
     } = useChartState(id, { chartRef, seriesRef, intervalRef });
+
+    const latestTickRef = useRef(data.lastTick);
+    latestTickRef.current = data.lastTick;
 
     const isIntraday = !["1d", "1wk", "1mo"].includes(interval);
 
@@ -90,7 +96,7 @@ function BasicChart({ id, onRemove }: Props) {
                     prevCloseRef.current = quote.previous_close;
                     setPrevClose(quote.previous_close);
                     setCurrency(quote.currency ?? null);
-                    if (quote.current_price !== null) {
+                    if (quote.current_price !== null && latestTickRef.current?.symbol !== symbol) {
                         setPrice(quote.current_price);
                         setChangePercent(
                             calcChangePercent(
@@ -109,22 +115,13 @@ function BasicChart({ id, onRemove }: Props) {
         };
     }, [symbol, stateReady, setPrevClose]);
 
-    // Live price tick updates for ticker selector trigger
+    // Header follows the same accepted source/timestamp stream as the candles.
     useEffect(() => {
-        if (!stateReady) return;
-
-        const unsubscribe = livePricesClient.onTick((tick) => {
-            if (tick.symbol !== symbol) return;
-            setPrice(tick.price);
-            if (prevCloseRef.current !== null) {
-                setChangePercent(
-                    calcChangePercent(tick.price, prevCloseRef.current),
-                );
-            }
-        });
-
-        return unsubscribe;
-    }, [symbol, stateReady]);
+        const tick = data.lastTick;
+        if (!tick || tick.symbol !== symbol) return;
+        setPrice(tick.price);
+        if (prevCloseRef.current !== null) setChangePercent(calcChangePercent(tick.price, prevCloseRef.current));
+    }, [data.lastTick, symbol]);
 
     // Create chart once container is ready
     useEffect(() => {
@@ -132,7 +129,7 @@ function BasicChart({ id, onRemove }: Props) {
         if (!container) return;
 
         const chart = createChart(container, {
-            ...createChartConfig(isIntraday, timezone),
+            ...createChartConfig(isIntraday, timezone, data.marketContext?.exchange_timezone ?? "UTC"),
             width: container.clientWidth,
             height: container.clientHeight,
         });
@@ -153,9 +150,9 @@ function BasicChart({ id, onRemove }: Props) {
     // Update chart config when intraday flag or timezone changes
     useEffect(() => {
         if (!chartRef.current) return;
-        chartRef.current.applyOptions(createChartConfig(isIntraday, timezone));
+        chartRef.current.applyOptions(createChartConfig(isIntraday, timezone, data.marketContext?.exchange_timezone ?? "UTC"));
         chartRef.current.applyOptions({ autoSize: false });
-    }, [isIntraday, timezone]);
+    }, [isIntraday, timezone, data.marketContext?.exchange_timezone]);
 
     // ResizeObserver — syncs chart canvas to its DOM container
     useEffect(() => {
@@ -188,7 +185,7 @@ function BasicChart({ id, onRemove }: Props) {
         const observer = new MutationObserver(() => {
             if (!chartRef.current || !seriesRef.current) return;
             chartRef.current.applyOptions(
-                createChartConfig(isIntraday, timezone),
+                createChartConfig(isIntraday, timezone, data.marketContext?.exchange_timezone ?? "UTC"),
             );
             seriesRef.current.applyOptions(getSeriesColors(chartType));
         });
@@ -197,7 +194,7 @@ function BasicChart({ id, onRemove }: Props) {
             attributeFilter: ["data-theme"],
         });
         return () => observer.disconnect();
-    }, [isIntraday, timezone, chartType]);
+    }, [isIntraday, timezone, chartType, data.marketContext?.exchange_timezone]);
 
     // Re-create series if chartType changes and re-apply existing data
     useEffect(() => {
@@ -211,6 +208,8 @@ function BasicChart({ id, onRemove }: Props) {
         reapplyCurrentBars();
         applyScaleFormatting();
     }, [chartType, captureRange, reapplyCurrentBars, applyScaleFormatting]);
+
+    useExtendedPriceLabel(chartRef, seriesRef, symbol, interval, chartType, scaleMode, data);
 
     const handleSymbolSelect = useCallback(
         (value: string) => {
@@ -313,6 +312,7 @@ function BasicChart({ id, onRemove }: Props) {
             onRemove={onRemove}
         >
             <div class={styles.chartContainer} ref={containerRef}>
+                <MarketStatusOverlay id={id} data={data} timezone={timezone} warning={warning} intraday={isIntraday} />
                 <div class={styles.axisCorner}>
                     <Tooltip content="Logarithmic Scale">
                         <button
@@ -358,7 +358,6 @@ function BasicChart({ id, onRemove }: Props) {
                     </Tooltip>
                 </div>
             </div>
-            {warning && <span class={styles.warning}>{warning}</span>}
         </Shell>
     );
 }
@@ -370,40 +369,6 @@ registerWidget({
     defaultSize: { w: 8, h: 9 },
     minSize: { w: 6, h: 6 },
     component: BasicChart,
-    settingSections: [
-        {
-            category: "Widgets",
-            subcategoryId: "basic-chart",
-            subcategoryLabel: "Basic Chart",
-            subcategoryIcon: "ChartLine",
-            settings: [
-                {
-                    id: "basicChart.defaultInterval",
-                    type: "string",
-                    label: "Default Interval #todo",
-                    description:
-                        "Default time interval for new charts. Can be overridden per chart using the interval selector in the widget header.",
-                    defaultValue: "1d",
-                },
-                {
-                    id: "defaultChartSymbol",
-                    type: "string",
-                    label: "Default Symbol #todo",
-                    description:
-                        "Default ticker symbol for new charts. Can be overridden per chart using the ticker selector in the widget header.",
-                    defaultValue: "XU100.IS",
-                },
-                {
-                    id: "crosshairMode",
-                    type: "integer",
-                    label: "Crosshair Mode #todo",
-                    description:
-                        "Determines how the crosshair behaves on the chart. 0 = normal, 1 = magnet (snaps to nearest data point), 2 = free (does not snap).",
-                    defaultValue: 1,
-                },
-            ],
-        },
-    ],
 });
 
 export { BasicChart };

@@ -2,7 +2,7 @@ import { type DeepPartial, type ChartOptions, type Time, CrosshairMode } from "l
 import { getChartColors, getFonts } from "../../styles/tokens";
 import type { ChartType } from "../../services/types";
 
-function tzFmt(unixSec: number, opts: Intl.DateTimeFormatOptions, timezone: string = "Europe/Istanbul"): string {
+function tzFmt(unixSec: number, opts: Intl.DateTimeFormatOptions, timezone: string = "UTC"): string {
     return new Intl.DateTimeFormat("en-GB", {
         timeZone: timezone,
         ...opts,
@@ -11,7 +11,8 @@ function tzFmt(unixSec: number, opts: Intl.DateTimeFormatOptions, timezone: stri
 
 export function createChartConfig(
     isIntraday: boolean,
-    timezone: string = "Europe/Istanbul",
+    timezone: string = "UTC",
+    exchangeTimezone: string = "UTC",
 ): DeepPartial<ChartOptions> {
     const c = getChartColors();
     const f = getFonts();
@@ -60,9 +61,9 @@ export function createChartConfig(
                         hour12: false,
                     }, timezone);
                 }
-                if (markType === 0) return tzFmt(unixSec, { year: "numeric" }, timezone);
-                if (markType === 1) return tzFmt(unixSec, { month: "short" }, timezone);
-                return tzFmt(unixSec, { month: "short", day: "numeric" }, timezone);
+                if (markType === 0) return tzFmt(unixSec, { year: "numeric" }, exchangeTimezone);
+                if (markType === 1) return tzFmt(unixSec, { month: "short" }, exchangeTimezone);
+                return tzFmt(unixSec, { month: "short", day: "numeric" }, exchangeTimezone);
             },
         },
         localization: {
@@ -80,7 +81,7 @@ export function createChartConfig(
                           year: "numeric",
                           month: "short",
                           day: "numeric",
-                      }, timezone),
+                      }, exchangeTimezone),
         },
     };
 }

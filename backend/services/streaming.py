@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import WebSocket
 
 import json
+import math
 
 from ..core.config import (
     PRICE_TTL_SECONDS,
@@ -37,12 +38,12 @@ def _coerce_float(val: Any) -> float | None:
         return None
     try:
         f = float(val)
-        return f if f == f else None
+        return f if math.isfinite(f) else None
     except (ValueError, TypeError):
         return None
 
 
-def _extract_tick(data: dict[str, Any]) -> tuple[str, float, int] | None:
+def _extract_tick(data: dict[str, Any]) -> tuple[str, float, int, str] | None:
     if not isinstance(data, dict):
         return None
 
@@ -65,14 +66,16 @@ def _extract_tick(data: dict[str, Any]) -> tuple[str, float, int] | None:
     if raw_ts is not None:
         try:
             val = int(raw_ts)
-            ts = val * 1000 if val < 1_000_000_000_000 else val
+            if val > 0:
+                ts = val * 1000 if val < 1_000_000_000_000 else val
         except (ValueError, TypeError):
             pass
 
+    origin = "source" if ts is not None else "receipt"
     if ts is None:
         ts = _now_ms()
 
-    return symbol, price, ts
+    return symbol, price, ts, origin
 
 
 class LivePriceStreamHub:
@@ -212,13 +215,16 @@ class LivePriceStreamHub:
             await self.send_control(client_id, payload)
 
     async def _broadcast_tick(
-        self, symbol: str, price: float, ts: int, raw: dict[str, Any] | None = None
+        self, symbol: str, price: float, ts: int, raw: dict[str, Any] | None = None, timestamp_origin: str = "unknown"
     ) -> None:
         payload: dict[str, Any] = {
             "type": "tick",
             "symbol": symbol,
             "price": price,
             "ts": ts,
+            "source": "yahoo",
+            "received_at": _now_ms(),
+            "timestamp_origin": timestamp_origin,
         }
         if raw is not None:
             payload["raw"] = raw
@@ -270,15 +276,15 @@ class LivePriceStreamHub:
                 await asyncio.sleep(1.0)
                 continue
 
-            tick_queue: asyncio.Queue[tuple[str, float, int, dict[str, Any] | None]] = asyncio.Queue()
+            tick_queue: asyncio.Queue[tuple[str, float, int, dict[str, Any] | None, str]] = asyncio.Queue()
 
             def on_message(msg: Any, *args: Any) -> None:
                 data = msg if isinstance(msg, dict) else (args[0] if args and isinstance(args[0], dict) else None)
                 if isinstance(data, dict):
                     extracted = _extract_tick(data)
                     if extracted:
-                        sym, price, ts = extracted
-                        tick_queue.put_nowait((sym, price, ts, data))
+                        sym, price, ts, origin = extracted
+                        tick_queue.put_nowait((sym, price, ts, data, origin))
 
             ws = AsyncWebSocket(verbose=False)
             listen_task: asyncio.Task[None] | None = None
@@ -293,10 +299,10 @@ class LivePriceStreamHub:
                         break
 
                     try:
-                        sym, price, ts, raw = await asyncio.wait_for(
+                        sym, price, ts, raw, origin = await asyncio.wait_for(
                             tick_queue.get(), timeout=1.0
                         )
-                        await self._broadcast_tick(sym, price, ts, raw)
+                        await self._broadcast_tick(sym, price, ts, raw, origin)
                         tick_queue.task_done()
                     except asyncio.TimeoutError:
                         pass

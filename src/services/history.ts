@@ -7,8 +7,9 @@ export function fetchHistory(
     period?: string,
     since?: number,
     signal?: AbortSignal,
+    sessions: "regular" | "extended" = "regular",
 ): Promise<HistoryResponse> {
-    const params = new URLSearchParams({ interval });
+    const params = new URLSearchParams({ interval, sessions });
     if (period) params.set("period", period);
     if (since !== undefined) params.set("since", String(since));
     return api.get<HistoryResponse>(

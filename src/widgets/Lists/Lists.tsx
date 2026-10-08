@@ -59,6 +59,7 @@ import {
     formatVolume,
 } from "../../utils";
 import styles from "./Lists.module.css";
+import { listenForScroll, prunePulseCells, startQuotePolling } from "./lifecycle";
 
 type Props = { id: string; onRemove: () => void };
 
@@ -516,23 +517,20 @@ function Watchlist({ id, onRemove }: Props) {
             }
         }
 
-        for (const key of Object.keys(pulseCellElementByKeyRef.current)) {
-            if (activePulseKeys.has(key)) continue;
-
-            const element = pulseCellElementByKeyRef.current[key];
-            if (element) {
+        prunePulseCells(
+            pulseCellElementByKeyRef.current,
+            pulseCellRefCallbackByKeyRef.current,
+            pendingPulseByKeyRef.current,
+            activePulseKeys,
+            (element) => {
                 element.removeEventListener(
                     "animationend",
                     handlePulseAnimationEnd,
                 );
                 element.classList.remove(styles.cellPulseActive);
                 element.classList.remove(styles.cellPulseBase);
-            }
-
-            delete pulseCellElementByKeyRef.current[key];
-            delete pulseCellRefCallbackByKeyRef.current[key];
-            delete pendingPulseByKeyRef.current[key];
-        }
+            },
+        );
 
         for (const ticker of Object.keys(rowCacheByTickerRef.current)) {
             if (nextSymbols.has(ticker)) continue;
@@ -721,27 +719,12 @@ function Watchlist({ id, onRemove }: Props) {
         const scrollViewport = root.querySelector(`.${styles.scrollViewport}`);
         if (!scrollViewport) return;
 
-        const handleScroll = () => {
-            isScrollingRef.current = true;
-            if (scrollTimeoutRef.current !== null) {
-                window.clearTimeout(scrollTimeoutRef.current);
-            }
-            scrollTimeoutRef.current = window.setTimeout(() => {
-                isScrollingRef.current = false;
-                scrollTimeoutRef.current = null;
-                flushPendingPrices();
-            }, 150);
-        };
-
-        scrollViewport.addEventListener("scroll", handleScroll, {
-            passive: true,
-        });
-        return () => {
-            scrollViewport.removeEventListener("scroll", handleScroll);
-            if (scrollTimeoutRef.current !== null) {
-                window.clearTimeout(scrollTimeoutRef.current);
-            }
-        };
+        return listenForScroll(
+            scrollViewport,
+            isScrollingRef,
+            scrollTimeoutRef,
+            flushPendingPrices,
+        );
     }, [flushPendingPrices]);
 
     useEffect(() => {
@@ -1548,17 +1531,9 @@ function Watchlist({ id, onRemove }: Props) {
         const quoteSymbols = listSymbols;
         const quoteGroups = requestedQuoteGroups;
 
-        let cancelled = false;
-        const controller = new AbortController();
-
-        const loadQuotes = async () => {
-            try {
-                const payload = await fetchQuotes(
-                    quoteSymbols,
-                    quoteGroups,
-                    controller.signal,
-                );
-                if (cancelled || controller.signal.aborted) return;
+        return startQuotePolling(
+            (signal) => fetchQuotes(quoteSymbols, quoteGroups, signal),
+            (payload) => {
                 if (isWidgetInteractingRef.current) return;
 
                 const nextMap: Record<string, QuoteSnapshot> = {};
@@ -1606,22 +1581,9 @@ function Watchlist({ id, onRemove }: Props) {
                 for (const key of pulseKeys) {
                     queueCellPulse(key);
                 }
-            } catch {
-                if (controller.signal.aborted) return;
-            }
-        };
-
-        void loadQuotes();
-
-        const timer = window.setInterval(() => {
-            void loadQuotes();
-        }, SNAPSHOT_REFRESH_MS);
-
-        return () => {
-            cancelled = true;
-            controller.abort();
-            window.clearInterval(timer);
-        };
+            },
+            SNAPSHOT_REFRESH_MS,
+        );
     }, [
         activeListId,
         isPageVisible,
@@ -1964,24 +1926,6 @@ registerWidget({
     defaultSize: { w: 5, h: 24 },
     minSize: { w: 4, h: 6 },
     component: Watchlist,
-    settingSections: [
-        {
-            category: "Widgets",
-            subcategoryId: "lists",
-            subcategoryLabel: "Lists",
-            subcategoryIcon: "List",
-            settings: [
-                {
-                    id: "watchlist.disablePulse",
-                    type: "boolean",
-                    label: "Disable Pulse Animations",
-                    description:
-                        "Disable real-time price change pulse animations and related calculations for better performance.",
-                    defaultValue: false,
-                },
-            ],
-        },
-    ],
 });
 
 export { Watchlist };

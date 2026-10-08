@@ -5,6 +5,10 @@ export type LiveTick = {
     price: number;
     ts: number;
     raw?: unknown;
+    source?: string;
+    received_at?: number;
+    timestamp_origin?: "source" | "receipt" | "unknown";
+    delay_seconds?: number | null;
 };
 
 export type LiveStatus =
@@ -75,6 +79,19 @@ class LivePricesClient {
     private lastSentReplaceKey = "";
     private symbolsByWidget = new Map<string, Set<string>>();
     private debug = false;
+    private clockOffsetMs: number | null = null;
+    private pingTimer: number | null = null;
+    private pendingPings = new Map<string, { local: number; monotonic: number }>();
+
+    getClockOffset(): number | null { return this.clockOffsetMs; }
+    now(): number { return Date.now() + (this.clockOffsetMs ?? 0); }
+
+    private stopHeartbeat(): void {
+        if (this.pingTimer !== null) window.clearInterval(this.pingTimer);
+        this.pingTimer = null;
+        this.pendingPings.clear();
+    }
+
     private readonly tickListeners = new Set<TickListener>();
     private readonly statusListeners = new Set<StatusListener>();
 
@@ -89,6 +106,7 @@ class LivePricesClient {
     }
 
     disconnect(): void {
+        this.stopHeartbeat();
         this.shouldRun = false;
         if (this.reconnectTimer !== null) {
             window.clearTimeout(this.reconnectTimer);
@@ -184,10 +202,11 @@ class LivePricesClient {
     }
 
     ping(): void {
-        this.send({
-            type: "ping",
-            requestId: this.nextRequestId("ping"),
-        });
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        const requestId = this.nextRequestId("ping");
+        this.pendingPings.clear();
+        this.pendingPings.set(requestId, { local: Date.now(), monotonic: performance.now() });
+        this.send({ type: "ping", requestId });
     }
 
     private openSocket(isReconnect: boolean): void {
@@ -201,6 +220,10 @@ class LivePricesClient {
         ws.onopen = () => {
             this.reconnectDelayMs = 1000;
             this.setStatus("open");
+            this.stopHeartbeat();
+            this.clockOffsetMs = null;
+            this.ping();
+            this.pingTimer = window.setInterval(() => this.ping(), 30_000);
             this.lastSentReplaceKey = "";
             this.scheduleReplace({ immediate: true, force: true });
         };
@@ -215,6 +238,17 @@ class LivePricesClient {
             if (!data || typeof data !== "object") return;
 
             const payload = data as Record<string, unknown>;
+            if (payload.type === "pong") {
+                const sent = this.pendingPings.get(String(payload.requestId));
+                const server = Number(payload.ts);
+                if (sent && Number.isFinite(server)) {
+                    const elapsed = performance.now() - sent.monotonic;
+                    const clockMoved = Math.abs(Date.now() - sent.local - elapsed) > 1000;
+                    if (elapsed < 5000 && !clockMoved) this.clockOffsetMs = server - (sent.local + elapsed / 2);
+                    this.pendingPings.delete(String(payload.requestId));
+                }
+                return;
+            }
             if (payload.type === "tick") {
                 const symbol = String(payload.symbol ?? "");
                 const price = Number(payload.price);
@@ -222,7 +256,7 @@ class LivePricesClient {
                 if (
                     !symbol ||
                     !Number.isFinite(price) ||
-                    !Number.isFinite(ts)
+                    !Number.isFinite(ts) || price <= 0 || ts <= 0
                 ) {
                     return;
                 }
@@ -230,6 +264,10 @@ class LivePricesClient {
                     symbol: normalize(symbol),
                     price,
                     ts,
+                    source: typeof payload.source === "string" ? payload.source : "unknown",
+                    timestamp_origin: payload.timestamp_origin === "source" || payload.timestamp_origin === "receipt" ? payload.timestamp_origin : "unknown",
+                    received_at: Number.isFinite(Number(payload.received_at)) ? Number(payload.received_at) : undefined,
+                    delay_seconds: typeof payload.delay_seconds === "number" && payload.delay_seconds >= 0 ? payload.delay_seconds : null,
                 };
                 if ("raw" in payload) tick.raw = payload.raw;
                 for (const listener of this.tickListeners) listener(tick);
@@ -246,6 +284,7 @@ class LivePricesClient {
         };
 
         ws.onclose = () => {
+            this.stopHeartbeat();
             if (this.ws === ws) this.ws = null;
             if (!this.shouldRun) {
                 this.setStatus("closed");

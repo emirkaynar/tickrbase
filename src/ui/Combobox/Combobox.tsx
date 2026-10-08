@@ -17,6 +17,11 @@ type Props = {
     placeholder?: string;
     limit?: number;
     className?: string;
+    disabled?: boolean;
+    "aria-label"?: string;
+    "aria-labelledby"?: string;
+    "aria-describedby"?: string;
+    invalid?: boolean;
 };
 
 export function Combobox({
@@ -26,6 +31,11 @@ export function Combobox({
     placeholder,
     limit = 10,
     className,
+    disabled,
+    "aria-label": ariaLabel,
+    "aria-labelledby": ariaLabelledBy,
+    "aria-describedby": ariaDescribedBy,
+    invalid,
 }: Props) {
     const { contains } = useFilter({ sensitivity: "base" });
     const { collection, filter, set } = useListCollection({
@@ -59,10 +69,12 @@ export function Combobox({
     return (
         <ArkCombobox.Root
             collection={collection}
+            disabled={disabled}
+            invalid={invalid}
             value={[value]}
             inputValue={inputValue}
             onValueChange={(d) => {
-                if (d.value[0]) {
+                if (d.value[0] !== undefined) {
                     onChange(d.value[0]);
                     didSelectRef.current = true;
                 }
@@ -90,9 +102,16 @@ export function Combobox({
                 <ArkCombobox.Input
                     className={styles.input}
                     placeholder={placeholder}
+                    aria-label={ariaLabel}
+                    aria-labelledby={ariaLabelledBy}
+                    aria-describedby={ariaDescribedBy}
+                    aria-invalid={invalid}
                 />
                 <div className={styles.indicators}>
-                    <ArkCombobox.Trigger className={styles.trigger}>
+                    <ArkCombobox.Trigger
+                        className={styles.trigger}
+                        aria-label={ariaLabel ? `Show options for ${ariaLabel}` : "Show options"}
+                    >
                         <ChevronsUpDownIcon />
                     </ArkCombobox.Trigger>
                 </div>

@@ -1,16 +1,31 @@
-export type SettingType = "boolean" | "integer" | "string";
+export type SettingType = "boolean" | "integer" | "string" | "select";
 
 export type SettingValue = boolean | number | string;
 
-export interface SettingItemDefinition {
+export type SettingOption = { label: string; value: string };
+export type SettingOptions =
+  | readonly SettingOption[]
+  | (() => readonly SettingOption[]);
+
+export type SettingItemDefinition = {
   id: string; // Global unique ID, e.g. 'watchlist.disablePulse'
-  type: SettingType;
   label: string;
   description: string;
-  defaultValue: SettingValue;
-}
+} & (
+  | { type: "boolean"; defaultValue: boolean }
+  | { type: "integer"; defaultValue: number }
+  | { type: "string"; defaultValue: string }
+  | {
+      type: "select";
+      defaultValue: string;
+      options: SettingOptions;
+      placeholder?: string;
+      // Overrides membership validation for valid values outside the option list.
+      validate?: (value: string) => string | null;
+    }
+);
 
-export interface SettingDefinition extends SettingItemDefinition {
+export type SettingDefinition = SettingItemDefinition & {
   category: string; // Top-level grouping key, e.g. 'general'
   subcategoryId: string; // Stable nested grouping key, e.g. 'lists'
   subcategoryLabel: string; // Nested tab label, e.g. 'Lists'
@@ -23,6 +38,40 @@ export interface SettingSectionDefinition {
   subcategoryLabel: string;
   subcategoryIcon?: string;
   settings: SettingItemDefinition[];
+}
+
+export function getSettingOptions(
+  def: Extract<SettingDefinition, { type: "select" }>,
+): readonly SettingOption[] {
+  return typeof def.options === "function" ? def.options() : def.options;
+}
+
+export function isValidTimezone(value: string): boolean {
+  if (!value) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+let timezoneOptions: readonly SettingOption[] | undefined;
+
+function getTimezoneOptions(): readonly SettingOption[] {
+  if (timezoneOptions) return timezoneOptions;
+
+  let zones: string[];
+  try {
+    zones = Intl.supportedValuesOf("timeZone");
+  } catch {
+    zones = [Intl.DateTimeFormat().resolvedOptions().timeZone];
+  }
+  timezoneOptions = [...new Set(["UTC", ...zones])].map(value => ({
+    value,
+    label: value.replaceAll("_", " "),
+  }));
+  return timezoneOptions;
 }
 
 const settingsMap = new Map<string, SettingDefinition>();
@@ -180,10 +229,13 @@ registerSettingSections([
     settings: [
       {
         id: "general.timezone",
-        type: "string",
-        label: "Timezone #todo",
-        description: "Select your preferred timezone.",
+        type: "select",
+        label: "Display timezone",
+        description: "Timezone used for chart times and market status. Exchange schedules remain in their native timezone.",
         defaultValue: "UTC",
+        options: getTimezoneOptions,
+        placeholder: "Search timezones…",
+        validate: value => isValidTimezone(value) ? null : "Invalid IANA timezone",
       },
     ],
   },
@@ -231,6 +283,86 @@ registerSettingSections([
         defaultValue: "https://s3.tradingview.com/external-embedding",
       },
     ],
-    
-  }
+  },
+  {
+    category: "Widgets",
+    subcategoryId: "basic-chart",
+    subcategoryLabel: "Basic Chart",
+    subcategoryIcon: "ChartLine",
+    settings: [
+      {
+        id: "basicChart.defaultInterval",
+        type: "string",
+        label: "Default Interval #todo",
+        description: "Default time interval for new charts. Can be overridden per chart using the interval selector in the widget header.",
+        defaultValue: "1d",
+      },
+      {
+        id: "defaultChartSymbol",
+        type: "string",
+        label: "Default Symbol #todo",
+        description: "Default ticker symbol for new charts. Can be overridden per chart using the ticker selector in the widget header.",
+        defaultValue: "XU100.IS",
+      },
+      {
+        id: "crosshairMode",
+        type: "integer",
+        label: "Crosshair Mode #todo",
+        description: "Determines how the crosshair behaves on the chart. 0 = normal, 1 = magnet (snaps to nearest data point), 2 = free (does not snap).",
+        defaultValue: 1,
+      },
+    ],
+  },
+  {
+    category: "Widgets",
+    subcategoryId: "advanced-chart",
+    subcategoryLabel: "Advanced Chart",
+    subcategoryIcon: "ChartCandlestick",
+    settings: [
+      {
+        id: "advancedChart.defaultSymbol",
+        type: "string",
+        label: "Default Symbol",
+        description: "The default symbol to show when no symbol is set.",
+        defaultValue: "NVDA",
+      },
+    ],
+  },
+  {
+    category: "Widgets",
+    subcategoryId: "economic-calendar",
+    subcategoryLabel: "Economic Calendar",
+    subcategoryIcon: "Calendar",
+    settings: [
+      {
+        id: "economicCalendar.defaultCountryFilter",
+        type: "string",
+        label: "Default Country",
+        description: "Comma-separated list of country codes to show in the calendar by default. See TradingView documentation for valid codes.",
+        defaultValue: "ar,au,br,ca,cn,fr,de,in,id,it,jp,kr,mx,ru,sa,za,tr,gb,us,eu",
+      },
+      {
+        id: "economicCalendar.defaultImportanceFilter",
+        type: "boolean",
+        label: "Default Importance",
+        description: "Show only economic events with the selected importance level by default.",
+        defaultValue: false,
+      },
+    ],
+  },
+  {
+    category: "Widgets",
+    subcategoryId: "lists",
+    subcategoryLabel: "Lists",
+    subcategoryIcon: "List",
+    settings: [
+      {
+        id: "watchlist.disablePulse",
+        type: "boolean",
+        label: "Disable Pulse Animations",
+        description: "Disable real-time price change pulse animations and related calculations for better performance.",
+        defaultValue: false,
+      },
+    ],
+  },
 ]);

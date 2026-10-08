@@ -1,5 +1,6 @@
 import { api } from "./api";
-import { getSettingDefinition, type SettingValue } from "../settings/registry";
+import { getSettingDefinition, getSettingOptions, type SettingValue } from "../settings/registry";
+export { isValidTimezone } from "../settings/registry";
 
 type SettingsResponse = {
     settings: Record<string, SettingValue>;
@@ -14,6 +15,15 @@ let settingsCache: {
 };
 
 const CACHE_TTL_MS = 30_000;
+const settingListeners = new Map<string, Set<(value: SettingValue) => void>>();
+
+
+export function subscribeSetting(id: string, listener: (value: SettingValue) => void): () => void {
+    const listeners = settingListeners.get(id) ?? new Set();
+    listeners.add(listener);
+    settingListeners.set(id, listeners);
+    return () => { listeners.delete(listener); if (!listeners.size) settingListeners.delete(id); };
+}
 
 export async function prefetchSettings(): Promise<void> {
     try {
@@ -84,14 +94,28 @@ export async function setSettingValue(id: string, value: SettingValue): Promise<
         }
     }
 
+    if (def.type === "select") {
+            if (typeof value !== "string") {
+                throw new Error(`Invalid type for setting ${id}: expected string, got ${actualType}`);
+            }
+            const error = def.validate
+                ? def.validate(value)
+                : getSettingOptions(def).some(option => option.value === value)
+                    ? null
+                    : `Invalid option for setting ${id}`;
+            if (error !== null) throw new Error(error);
+        }
+
     await api.put("/user/settings", {
         settings: { [id]: value },
     });
 
+    if (!settingsCache.data) settingsCache.data = {};
     if (settingsCache.data) {
         settingsCache.data[id] = value;
         settingsCache.fetchedAt = Date.now();
     }
+    for (const listener of settingListeners.get(id) ?? []) listener(value);
 }
 
 /**

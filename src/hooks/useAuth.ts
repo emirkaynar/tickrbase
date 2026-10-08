@@ -1,19 +1,27 @@
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { api, type UserMe, ApiError } from "../services/api";
+import { clearWidgetCaches } from "../widgets/widgetCache";
 
 export function useAuth() {
     const [user, setUser] = useState<UserMe | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
+    const currentUserId = useRef<number | null>(null);
+    const updateUser = useCallback((next: UserMe | null) => {
+        const nextId = next?.id ?? null;
+        if (currentUserId.current !== nextId) clearWidgetCaches();
+        currentUserId.current = nextId;
+        setUser(next);
+    }, []);
 
     const checkAuth = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
             const data = await api.get<UserMe>("/auth/me");
-            setUser(data);
+            updateUser(data);
         } catch (err) {
-            setUser(null);
+            updateUser(null);
             if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
                 // Unauthenticated - expected when user has no cookie
                 setError(null);
@@ -23,7 +31,7 @@ export function useAuth() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [updateUser]);
 
     useEffect(() => {
         void checkAuth();
@@ -34,7 +42,7 @@ export function useAuth() {
         setError(null);
         try {
             const data = await api.post<UserMe>("/auth/login", { email, password });
-            setUser(data);
+            updateUser(data);
             return true;
         } catch (err) {
             if (err instanceof ApiError) {
@@ -55,7 +63,7 @@ export function useAuth() {
         setError(null);
         try {
             const data = await api.post<UserMe>("/auth/register", { email, password });
-            setUser(data);
+            updateUser(data);
             return true;
         } catch (err) {
             if (err instanceof ApiError) {
@@ -78,7 +86,7 @@ export function useAuth() {
         } catch {
             // Ignore logout errors
         } finally {
-            setUser(null);
+            updateUser(null);
             setLoading(false);
         }
     };
