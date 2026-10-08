@@ -1,6 +1,16 @@
-import { type DeepPartial, type ChartOptions, type Time, CrosshairMode } from "lightweight-charts";
+import { type DeepPartial, type ChartOptions, type Time, type IChartApi, type ISeriesApi, CrosshairMode, PriceScaleMode } from "lightweight-charts";
 import { getChartColors, getFonts } from "../../styles/tokens";
-import type { ChartType } from "../../services/types";
+import type { ChartType, ScaleMode } from "../../services/types";
+
+export function applyChartScale(chart: IChartApi, series: ISeriesApi<any> | null, mode: ScaleMode): void {
+    series?.applyOptions({
+        priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+    });
+    chart.priceScale("right").applyOptions({
+        mode: mode === "percentage" ? PriceScaleMode.Percentage
+            : mode === "logarithmic" ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
+    });
+}
 
 function tzFmt(unixSec: number, opts: Intl.DateTimeFormatOptions, timezone: string = "UTC"): string {
     return new Intl.DateTimeFormat("en-GB", {

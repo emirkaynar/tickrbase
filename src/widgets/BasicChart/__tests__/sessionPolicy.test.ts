@@ -44,7 +44,9 @@ describe("US regular candle policy", () => {
     it("does not add pre-market gaps or future session boundaries", () => {
         const bars = [bar(close - 60), bar(open + 86400)];
         expect(observationGaps(bars, "1m", candleContext(context))).toEqual([]);
-        expect(sessionBoundaries([bar(open), bar(close - 60)], context)).toEqual([open, close]);
+        expect(sessionBoundaries([bar(open), bar(close - 60)], context)).toEqual([open]);
+                expect(sessionBoundaries(bars, context)).toEqual([close, open + 86400]);
+                expect(sessionBoundaries([], context)).toEqual([]);
     });
 });
 
@@ -82,6 +84,6 @@ describe("active extended quote", () => {
         const coverage = { sessions: ["regular" as const], overnight_history: false, delay_seconds: null };
         const status = marketStatus(context, tick(open - 120), coverage, (open - 30) * 1000);
         expect(status.stale).toBe(true);
-        expect(status.delayed).toBe(false);
+        expect(status.delayed).toBe(true);
     });
 });

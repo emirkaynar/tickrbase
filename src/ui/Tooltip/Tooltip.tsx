@@ -1,4 +1,5 @@
 import type { ComponentChildren } from "preact";
+import { useMemo } from "preact/hooks";
 import { Tooltip as ArkTooltip } from "@ark-ui/react/tooltip";
 import { Portal } from "@ark-ui/react/portal";
 import styles from "./Tooltip.module.css";
@@ -7,9 +8,14 @@ type Props = {
     content: ComponentChildren;
     variant?: "default" | "long" | "popover";
     children: ComponentChildren;
+    getAnchorElement?: () => HTMLElement | null;
 };
 
-export function Tooltip({ content, children, variant }: Props) {
+export function Tooltip({ content, children, variant, getAnchorElement }: Props) {
+    const positioning = useMemo(() => ({
+        placement: "top" as const,
+        ...(getAnchorElement ? { getAnchorElement } : {}),
+    }), [getAnchorElement]);
     const variantClass =
         variant === "long"
             ? styles.long
@@ -25,7 +31,7 @@ export function Tooltip({ content, children, variant }: Props) {
         );
 
     return (
-        <ArkTooltip.Root openDelay={400} closeDelay={0} positioning={{ placement: "top" }}>
+        <ArkTooltip.Root openDelay={400} closeDelay={0} positioning={positioning}>
             <ArkTooltip.Trigger className={styles.trigger} asChild>
                 {triggerElement}
             </ArkTooltip.Trigger>

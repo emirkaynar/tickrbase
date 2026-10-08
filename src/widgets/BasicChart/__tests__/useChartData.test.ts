@@ -3,14 +3,19 @@ import type { LiveTick } from "../../../services/livePrices";
 import { fetchHistory } from "../../../services/history";
 import { fetchMarketContext } from "../../../services/marketContext";
 import { activateWidgetCache, clearWidgetCaches, removeWidgetCaches } from "../../widgetCache";
-import { useChartData } from "../useChartData";
+import { useChartData } from "../hooks/useChartData";
 
 const harness = vi.hoisted(() => ({
     effects: [] as Array<() => (() => void) | undefined>,
     ticks: new Set<(tick: LiveTick) => void>(),
+    snapshot: undefined as unknown,
+    setSnapshot: vi.fn(),
 }));
 vi.mock("preact/hooks", () => ({
-    useState: (initial: unknown) => [initial, vi.fn()],
+    useState: (initial: unknown) => [harness.snapshot ?? initial, (value: unknown) => {
+        harness.snapshot = value;
+        harness.setSnapshot(value);
+    }],
     useRef: (initial: unknown) => ({ current: initial }),
     useEffect: (effect: () => (() => void) | undefined) => harness.effects.push(effect),
 }));
@@ -53,6 +58,7 @@ describe("chart data cache lifecycle", () => {
         clearWidgetCaches();
         harness.effects.length = 0;
         harness.ticks.clear();
+        harness.snapshot = undefined;
         vi.stubGlobal("window", { setInterval: vi.fn(() => 1), clearInterval: vi.fn() });
         vi.stubGlobal("document", { visibilityState: "visible", addEventListener: vi.fn(), removeEventListener: vi.fn() });
         vi.mocked(fetchHistory).mockResolvedValue(history);
@@ -61,6 +67,68 @@ describe("chart data cache lifecycle", () => {
     afterEach(() => {
         for (const cleanup of cleanups.splice(0)) cleanup();
         vi.unstubAllGlobals();
+    });
+
+    it("returns an unowned empty snapshot before effects run", () => {
+        const snapshot = useChartData("unowned", "TEST", "1m", false, vi.fn(), vi.fn(), vi.fn());
+        expect(snapshot.dataSymbol).toBeNull();
+        expect(snapshot.marketContext).toBeNull();
+        expect(snapshot.coverage).toBeNull();
+    });
+
+    it("tags empty, loaded and live snapshots with their owning symbol", async () => {
+        const id = "snapshot-owner";
+        activateWidgetCache(id);
+        await mount(id);
+        expect(harness.setSnapshot.mock.calls[0][0]).toMatchObject({ dataSymbol: "TEST", marketContext: null, coverage: null });
+        expect(harness.setSnapshot.mock.lastCall?.[0]).toMatchObject({ dataSymbol: "TEST", marketContext: context, source: "test" });
+        const tick: LiveTick = { symbol: "TEST", ts: 125_000, price: 12, source: "test", timestamp_origin: "source" };
+        for (const listener of harness.ticks) listener(tick);
+        const snapshot = useChartData(id, "TEST", "1m", true, vi.fn(), vi.fn(), vi.fn());
+        expect(snapshot.dataSymbol).toBe("TEST");
+        expect(snapshot.lastTick).toEqual(tick);
+    });
+
+    it("preserves the previous owner until a symbol-change effect commits", async () => {
+        const id = "changed-owner";
+        activateWidgetCache(id);
+        const first = await mount(id);
+        first.cleanup();
+        const beforeEffect = useChartData(id, "OTHER", "1m", true, vi.fn(), vi.fn(), vi.fn());
+        expect(beforeEffect.dataSymbol).toBe("TEST");
+        expect(beforeEffect.marketContext).toEqual(context);
+        const cleanup = harness.effects.pop()!()!;
+        cleanups.push(cleanup);
+        expect(harness.setSnapshot.mock.lastCall?.[0]).toMatchObject({ dataSymbol: "OTHER", marketContext: null, coverage: null });
+        await settle();
+        expect(harness.setSnapshot.mock.lastCall?.[0].dataSymbol).toBe("OTHER");
+    });
+
+    it("tags a restored cached snapshot with its owning symbol", async () => {
+        const id = "cached-owner";
+        activateWidgetCache(id);
+        const first = await mount(id);
+        first.cleanup();
+        harness.snapshot = undefined;
+        harness.setSnapshot.mockClear();
+        await mount(id);
+        expect(harness.setSnapshot.mock.calls[0][0]).toMatchObject({ dataSymbol: "TEST", marketContext: context, source: "test" });
+    });
+
+    it("clears the previous ticker warning before committing a new ticker snapshot", async () => {
+        const id = "warning-ownership";
+        activateWidgetCache(id);
+        const onWarning = vi.fn();
+        const onBars = vi.fn();
+        useChartData(id, "NEW", "1m", true, onBars, vi.fn(), onWarning);
+        expect(onWarning).not.toHaveBeenCalled();
+        const cleanup = harness.effects.pop()!()!;
+        cleanups.push(cleanup);
+        // The harness queues effects; starting this effect must clear the warning
+        // before dataSymbol allows the new summary to show history notices.
+        expect(onWarning.mock.calls[0]).toEqual([""]);
+        expect(onWarning.mock.invocationCallOrder[0]).toBeLessThan(harness.setSnapshot.mock.invocationCallOrder[0]);
+        await settle();
     });
 
     it("restores bars after a temporary unmount", async () => {

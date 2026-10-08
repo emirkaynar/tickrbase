@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState, useCallback } from "preact/hooks";
 import type { IChartApi, ISeriesApi, UTCTimestamp } from "lightweight-charts";
-import { PriceScaleMode, LineSeries } from "lightweight-charts";
-import { api } from "../../services/api";
-import type { Bar, Interval, ScaleMode, MarketContext } from "../../services/types";
-import { INTERVALS } from "../../services/types";
+import { LineSeries } from "lightweight-charts";
+import { applyChartScale } from "../chartConfig";
+import { api } from "../../../services/api";
+import type { Bar, Interval, ScaleMode, MarketContext } from "../../../services/types";
+import { INTERVALS } from "../../../services/types";
 
-import type { ChartType } from "../../services/types";
-import { useUserTimezone } from "../../services/useUserTimezone";
+import type { ChartType } from "../../../services/types";
+import { useUserTimezone } from "../../../services/useUserTimezone";
 import { useChartData } from "./useChartData";
-import { SessionLines } from "./sessionLines";
-import { observationGaps, gapWhitespace } from "./observationGaps";
-import { intervalSeconds } from "./barStore";
-import { candleContext, regularBars, sessionBoundaries } from "./sessionPolicy";
-import { getWidgetCacheToken, getWidgetStateFromCache, isWidgetCacheCurrent, registerWidgetCache } from "../widgetCache";
+import { SessionLines } from "../sessionLines";
+import { observationGaps, gapWhitespace } from "../observationGaps";
+import { intervalSeconds } from "../barStore";
+import { candleContext, regularBars, sessionBoundaries } from "../sessionPolicy";
+import { getWidgetCacheToken, getWidgetStateFromCache, isWidgetCacheCurrent, registerWidgetCache } from "../../widgetCache";
 
 /** Module-level maps survive RGL remount cycles during drag */
 const everLoaded = registerWidgetCache("loadedCharts", new Set<string>());
@@ -63,6 +64,7 @@ export function useChartState(
     const contextRef = useRef<MarketContext | null>(null);
     const boundarySeriesRef = useRef<ISeriesApi<"Line"> | null>(null);
     const gapCountRef = useRef(-1);
+    const boundaryTimesRef = useRef<number[]>([]);
     const primitiveRef = useRef<{ series: ISeriesApi<any>; primitive: SessionLines } | null>(null);
     const chartStateRef = useRef<{ from: number; to: number } | null>(null);
 
@@ -80,64 +82,17 @@ export function useChartState(
 
     const chartTypeRef = useRef<ChartType>(chartType);
     const prevCloseRef = useRef<number | null>(null);
+    const scaleModeRef = useRef(scaleMode);
+    scaleModeRef.current = scaleMode;
     useEffect(() => {
         chartTypeRef.current = chartType;
     }, [chartType]);
 
     const applyScaleFormatting = useCallback(() => {
         const chart = chartRef.current;
-        const series = seriesRef.current;
         if (!chart) return;
-
-        if (scaleMode === "logarithmic") {
-            chart.priceScale("right").applyOptions({
-                mode: PriceScaleMode.Logarithmic,
-            });
-            if (series) {
-                series.applyOptions({
-                    priceFormat: {
-                        type: "price",
-                        precision: 2,
-                        minMove: 0.01,
-                    },
-                });
-            }
-        } else if (scaleMode === "percentage") {
-            chart.priceScale("right").applyOptions({
-                mode: PriceScaleMode.Normal,
-            });
-            if (series) {
-                const basePrice = prevCloseRef.current;
-                series.applyOptions({
-                    priceFormat: {
-                        type: "custom",
-                        formatter: (price: number) => {
-                            if (!basePrice || basePrice === 0)
-                                return price.toFixed(2);
-                            const pct =
-                                ((price - basePrice) / basePrice) * 100;
-                            const formatted = pct.toFixed(2);
-                            return `${pct > 0 ? "+" : ""}${formatted}%`;
-                        },
-                        minMove: 0.01,
-                    },
-                });
-            }
-        } else {
-            chart.priceScale("right").applyOptions({
-                mode: PriceScaleMode.Normal,
-            });
-            if (series) {
-                series.applyOptions({
-                    priceFormat: {
-                        type: "price",
-                        precision: 2,
-                        minMove: 0.01,
-                    },
-                });
-            }
-        }
-    }, [scaleMode, chartRef, seriesRef]);
+        applyChartScale(chart, seriesRef.current, scaleModeRef.current);
+    }, [chartRef, seriesRef]);
 
     useEffect(() => {
         applyScaleFormatting();
@@ -150,8 +105,7 @@ export function useChartState(
                 baseValue: { type: "price", price: val },
             });
         }
-        applyScaleFormatting();
-    }, [seriesRef, applyScaleFormatting]);
+    }, [seriesRef]);
 
     // Restore persisted state from backend API on mount
     useEffect(() => {
@@ -308,9 +262,11 @@ export function useChartState(
             const gaps = observationGaps(bars, interval, candleContext(context));
             const gapChanged = gapCountRef.current !== gaps.length;
             gapCountRef.current = gaps.length;
-            primitiveRef.current.primitive.setContext(intraday ? context : null, gaps);
+            primitiveRef.current.primitive.setContext(intraday ? context : null, gaps, bars.at(-1)?.time ?? null);
             const boundaries = intraday ? sessionBoundaries(bars, context) : [];
-            if (!live || gapChanged) boundarySeriesRef.current?.setData([...new Set([...boundaries, ...gapWhitespace(gaps, interval), ...gaps.map(gap => gap.end)])].sort((a, b) => a - b).map(time => ({ time: time as UTCTimestamp })));
+            const boundariesChanged = boundaries.length !== boundaryTimesRef.current.length || boundaries.some((time, index) => time !== boundaryTimesRef.current[index]);
+            boundaryTimesRef.current = boundaries;
+            if (!live || gapChanged || boundariesChanged) boundarySeriesRef.current?.setData([...new Set([...boundaries, ...gapWhitespace(gaps, interval), ...gaps.map(gap => gap.end)])].sort((a, b) => a - b).map(time => ({ time: time as UTCTimestamp })));
             if (live && !gapChanged && chartTypeRef.current !== "heikin_ashi" && bars.length && series.data().length) {
                 series.update(formatSeriesPoint(bars[bars.length - 1], chartTypeRef.current));
             } else {

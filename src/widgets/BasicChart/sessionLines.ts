@@ -7,8 +7,8 @@ import { getChartColors } from "../../styles/tokens";
 export class SessionLines implements ISeriesPrimitive<Time> {
     private chart: IChartApi | null = null;
     private requestUpdate: (() => void) | null = null;
-    private boundaries: { time: number; open: boolean }[] = [];
-    private positions: { x: number; open: boolean }[] = [];
+    private boundaries: { time: number }[] = [];
+    private positions: { x: number }[] = [];
     private gaps: ObservationGap[] = [];
     private gapPositions: { left: number; right: number }[] = [];
     private renderer: IPrimitivePaneRenderer = {
@@ -18,12 +18,13 @@ export class SessionLines implements ISeriesPrimitive<Time> {
     private draw(target: Parameters<IPrimitivePaneRenderer["draw"]>[0]): void {
         target.useMediaCoordinateSpace(({ context, mediaSize }) => {
             context.save();
-            context.strokeStyle = getChartColors().textSubtle;
-            context.globalAlpha = 0.45;
+            const colors = getChartColors();
+            context.globalAlpha = 0.8;
             context.lineWidth = 1;
-            for (const { x, open } of this.positions) {
+            for (const { x } of this.positions) {
                 if (x < 0 || x > mediaSize.width) continue;
-                context.setLineDash(open ? [4, 4] : [1, 4]);
+                context.strokeStyle = colors.amber;
+                context.setLineDash([1, 4]);
                 context.beginPath();
                 context.moveTo(Math.round(x) + 0.5, 0);
                 context.lineTo(Math.round(x) + 0.5, mediaSize.height);
@@ -38,7 +39,7 @@ export class SessionLines implements ISeriesPrimitive<Time> {
             context.fillStyle = getChartColors().textMuted;
             context.font = "10px monospace";
             for (const { left, right } of this.gapPositions) {
-                if (right - left > 100) context.fillText("No observations", Math.max(0, left) + 4, mediaSize.height - 8);
+                if (right - left > 100) context.fillText("No data", Math.max(0, left) + 4, mediaSize.height - 8);
             }
             context.restore();
         });
@@ -46,9 +47,11 @@ export class SessionLines implements ISeriesPrimitive<Time> {
     private view: IPrimitivePaneView = { zOrder: () => "bottom", renderer: () => this.renderer };
     attached({ chart, requestUpdate }: SeriesAttachedParameter<Time>): void { this.chart = chart; this.requestUpdate = requestUpdate; }
     detached(): void { this.chart = null; this.requestUpdate = null; }
-    setContext(context: MarketContext | null, gaps: ObservationGap[] = []): void {
+    setContext(context: MarketContext | null, gaps: ObservationGap[], latestBarTime: number | null): void {
         this.gaps = gaps;
-        this.boundaries = context?.sessions.flatMap(s => [{ time: s.regular_open, open: true }, { time: s.regular_close, open: false }]) ?? [];
+        this.boundaries = latestBarTime === null ? [] : context?.sessions
+                    .filter(s => s.regular_close <= latestBarTime)
+                    .map(s => ({ time: s.regular_close })) ?? [];
         this.requestUpdate?.();
     }
     updateAllViews(): void {
@@ -59,7 +62,7 @@ export class SessionLines implements ISeriesPrimitive<Time> {
         });
         this.positions = this.boundaries.flatMap(b => {
             const x = this.chart?.timeScale().timeToCoordinate(b.time as UTCTimestamp);
-            return x == null ? [] : [{ x, open: b.open }];
+            return x == null ? [] : [{ x }];
         });
     }
     paneViews(): readonly IPrimitivePaneView[] { return [this.view]; }

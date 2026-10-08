@@ -29,49 +29,49 @@ const DEFAULT_POPULAR_TICKERS: TickerSelectorItem[] = [
     {
         symbol: "THYAO.IS",
         company_name: "Türk Hava Yolları",
-        exchange: "BIST",
+        exchange: "IST",
         instrument_type: "stock",
     },
     {
         symbol: "ASELS.IS",
         company_name: "Aselsan Elektronik",
-        exchange: "BIST",
+        exchange: "IST",
         instrument_type: "stock",
     },
     {
         symbol: "GARAN.IS",
         company_name: "Garanti BBVA",
-        exchange: "BIST",
+        exchange: "IST",
         instrument_type: "stock",
     },
     {
         symbol: "EREGL.IS",
         company_name: "Ereğli Demir Çelik",
-        exchange: "BIST",
+        exchange: "IST",
         instrument_type: "stock",
     },
     {
         symbol: "TUPRS.IS",
         company_name: "Tüpraş",
-        exchange: "BIST",
+        exchange: "IST",
         instrument_type: "stock",
     },
     {
         symbol: "KCHOL.IS",
         company_name: "Koç Holding",
-        exchange: "BIST",
+        exchange: "IST",
         instrument_type: "stock",
     },
     {
         symbol: "AKBNK.IS",
         company_name: "Akbank",
-        exchange: "BIST",
+        exchange: "IST",
         instrument_type: "stock",
     },
     {
         symbol: "SISE.IS",
         company_name: "Şişecam",
-        exchange: "BIST",
+        exchange: "IST",
         instrument_type: "stock",
     },
 ];
@@ -245,7 +245,7 @@ export function TickerSelector({
             className={[styles.root, className].filter(Boolean).join(" ")}
         >
             <Combobox.Control className={styles.control}>
-                <Combobox.Trigger asChild>
+                <Combobox.Trigger asChild tabIndex={0}>
                     {trigger ? (
                         trigger
                     ) : (

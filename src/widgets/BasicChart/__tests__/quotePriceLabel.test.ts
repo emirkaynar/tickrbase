@@ -26,16 +26,23 @@ function fixture() {
 }
 
 describe("extended price-axis label", () => {
-    it("creates one axis-only label, updates it, then removes it at a phase transition", () => {
+    it("creates one axis label with a horizontal guide, updates it, then removes it at a phase transition", () => {
         const { label, series, line } = fixture();
         label.update(quote);
         expect(series.createPriceLine).toHaveBeenCalledOnce();
-        expect(series.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({ price: 120, title: "PRE", axisLabelVisible: true, lineVisible: false }));
+        expect(series.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({ price: 120, title: "Pre", axisLabelVisible: true, lineVisible: true }));
         label.update({ price: 121, kind: "post", stale: true });
         expect(series.createPriceLine).toHaveBeenCalledOnce();
-        expect(line.applyOptions).toHaveBeenCalledWith(expect.objectContaining({ price: 121, title: "POST · STALE" }));
+        expect(line.applyOptions).toHaveBeenCalledWith(expect.objectContaining({ price: 121, title: "Post" }));
         label.update(null);
         expect(series.removePriceLine).toHaveBeenCalledWith(line);
+    });
+    it("does not update label text or color when only staleness changes", () => {
+        const { label, series, line } = fixture();
+        label.update(quote);
+        label.update({ ...quote, stale: true });
+        expect(series.createPriceLine).toHaveBeenCalledOnce();
+        expect(line.applyOptions).not.toHaveBeenCalled();
     });
     it("includes the quote near the latest candles and excludes it when panning into history", () => {
         const { label, scale, panAway } = fixture();

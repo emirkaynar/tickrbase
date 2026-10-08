@@ -12,12 +12,13 @@ export function includeQuoteInScale(info: AutoscaleInfo | null, quote: Quote, ne
     } };
 }
 
-/** A price-axis annotation only; it never contributes a time-axis data point. */
+/** A price-axis annotation and horizontal guide; never a time-axis data point. */
 export class QuotePriceLabel {
     private chart: IChartApi;
     private series: ISeriesApi<any>;
     private line: IPriceLine | null = null;
     private quote: Quote = null;
+    private color = "";
     private previousAutoscale: AutoscaleInfoProvider | undefined;
     private autoscale: AutoscaleInfoProvider;
 
@@ -37,13 +38,16 @@ export class QuotePriceLabel {
     }
 
     update(quote: Quote): void {
-        if (quote?.price === this.quote?.price && quote?.kind === this.quote?.kind && quote?.stale === this.quote?.stale) return;
+        const colors = getChartColors();
+        const color = !quote ? "" : quote.kind === "pre" ? colors.blue : quote.kind === "post" ? colors.amber : colors.accent;
+        if (quote?.price === this.quote?.price && quote?.kind === this.quote?.kind && color === this.color) return;
         this.quote = quote;
+        this.color = color;
         if (quote) {
-            const colors = getChartColors();
+            const title = quote.kind === "pre" ? "Pre" : quote.kind === "post" ? "Post" : "Overnight";
             const options = {
-                price: quote.price, title: `${quote.kind.toUpperCase()}${quote.stale ? " · STALE" : ""}`,
-                lineVisible: false, axisLabelVisible: true, color: quote.stale ? colors.warning : colors.primary,
+                price: quote.price, title,
+                lineVisible: true, axisLabelVisible: true, color,
             };
             if (this.line) this.line.applyOptions(options);
             else this.line = this.series.createPriceLine(options);

@@ -1,20 +1,22 @@
-import { useEffect, useRef, useState, useCallback } from "preact/hooks";
+import { useEffect, useRef, useCallback } from "preact/hooks";
+import { ChevronDown } from "lucide-react";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
 import { createChart } from "lightweight-charts";
 import { Select, TickerSelector, Tooltip } from "../../ui";
 import type { SelectItem } from "../../ui";
 import { Shell } from "../Shell";
-import { MarketStatusOverlay } from "./MarketStatusOverlay";
-import { useChartState } from "./useChartState";
-import { useExtendedPriceLabel } from "./useExtendedPriceLabel";
+import { ChartDetailsPopover } from "./components/ChartDetailsPopover";
+import { useChartQuote } from "./hooks/useChartQuote";
+import { useInstrumentIdentity } from "./hooks/useInstrumentIdentity";
+import { useChartState } from "./hooks/useChartState";
+import { useExtendedPriceLabel } from "./hooks/useExtendedPriceLabel";
 import { createChartConfig, getSeriesColors } from "./chartConfig";
 import { addChartSeries } from "./seriesFactory";
 import { registerWidget } from "../registry";
 import { INTERVALS, INTERVAL_CONFIG } from "../../services/types";
 import type { ChartType, Interval } from "../../services/types";
 import { livePricesClient } from "../../services/livePrices";
-import { fetchQuotes, calcChangePercent } from "../../services/quotes";
-import { formatPercentChange, formatCurrency } from "../../utils";
+
 import styles from "./BasicChart.module.css";
 
 type Props = { id: string; onRemove: () => void };
@@ -39,10 +41,7 @@ function BasicChart({ id, onRemove }: Props) {
     const seriesRef = useRef<ISeriesApi<any> | null>(null);
     const intervalRef = useRef<Interval>("1d");
 
-    const [price, setPrice] = useState<number | null>(null);
-    const [currency, setCurrency] = useState<string | null>(null);
-    const [changePercent, setChangePercent] = useState<number | null>(null);
-    const prevCloseRef = useRef<number | null>(null);
+
 
     const {
         data,
@@ -65,8 +64,8 @@ function BasicChart({ id, onRemove }: Props) {
         applyScaleFormatting,
     } = useChartState(id, { chartRef, seriesRef, intervalRef });
 
-    const latestTickRef = useRef(data.lastTick);
-    latestTickRef.current = data.lastTick;
+    const quote = useChartQuote(symbol, stateReady, data.lastTick, setPrevClose);
+    const identity = useInstrumentIdentity(symbol, stateReady);
 
     const isIntraday = !["1d", "1wk", "1mo"].includes(interval);
 
@@ -76,52 +75,7 @@ function BasicChart({ id, onRemove }: Props) {
         livePricesClient.updateSymbol(id, symbol);
     }, [id, symbol, stateReady]);
 
-    // Fetch quote snapshot for previous close & calculate changePercent
-    useEffect(() => {
-        if (!stateReady) return;
 
-        let cancelled = false;
-        setPrice(null);
-        setCurrency(null);
-        setChangePercent(null);
-        prevCloseRef.current = null;
-        setPrevClose(null);
-
-        const ctrl = new AbortController();
-        fetchQuotes([symbol], ["session"], ctrl.signal)
-            .then((res) => {
-                if (cancelled) return;
-                const quote = res.quotes[0];
-                if (quote) {
-                    prevCloseRef.current = quote.previous_close;
-                    setPrevClose(quote.previous_close);
-                    setCurrency(quote.currency ?? null);
-                    if (quote.current_price !== null && latestTickRef.current?.symbol !== symbol) {
-                        setPrice(quote.current_price);
-                        setChangePercent(
-                            calcChangePercent(
-                                quote.current_price,
-                                quote.previous_close,
-                            ),
-                        );
-                    }
-                }
-            })
-            .catch(() => {});
-
-        return () => {
-            cancelled = true;
-            ctrl.abort();
-        };
-    }, [symbol, stateReady, setPrevClose]);
-
-    // Header follows the same accepted source/timestamp stream as the candles.
-    useEffect(() => {
-        const tick = data.lastTick;
-        if (!tick || tick.symbol !== symbol) return;
-        setPrice(tick.price);
-        if (prevCloseRef.current !== null) setChangePercent(calcChangePercent(tick.price, prevCloseRef.current));
-    }, [data.lastTick, symbol]);
 
     // Create chart once container is ready
     useEffect(() => {
@@ -196,20 +150,24 @@ function BasicChart({ id, onRemove }: Props) {
         return () => observer.disconnect();
     }, [isIntraday, timezone, chartType, data.marketContext?.exchange_timezone]);
 
-    // Re-create series if chartType changes and re-apply existing data
+    const seriesLifecycleRef = useRef({ captureRange, reapplyCurrentBars, applyScaleFormatting });
+    seriesLifecycleRef.current = { captureRange, reapplyCurrentBars, applyScaleFormatting };
+
+    // Only chart-type changes require a new series; scale and data updates do not.
     useEffect(() => {
         const chart = chartRef.current;
         if (!chart) return;
-        captureRange();
+        const lifecycle = seriesLifecycleRef.current;
+        lifecycle.captureRange();
         if (seriesRef.current) {
             chart.removeSeries(seriesRef.current);
         }
         seriesRef.current = addChartSeries(chart, chartType);
-        reapplyCurrentBars();
-        applyScaleFormatting();
-    }, [chartType, captureRange, reapplyCurrentBars, applyScaleFormatting]);
+        lifecycle.reapplyCurrentBars();
+        lifecycle.applyScaleFormatting();
+    }, [chartType]);
 
-    useExtendedPriceLabel(chartRef, seriesRef, symbol, interval, chartType, scaleMode, data);
+    useExtendedPriceLabel(chartRef, seriesRef, symbol, interval, chartType, data);
 
     const handleSymbolSelect = useCallback(
         (value: string) => {
@@ -247,118 +205,105 @@ function BasicChart({ id, onRemove }: Props) {
         [setChartType],
     );
 
-    const isPos = changePercent != null && changePercent > 0;
-    const isNeg = changePercent != null && changePercent < 0;
-
     const tickerTrigger = (
-        <button type="button" class={styles.tickerTrigger}>
+        <button type="button" class={styles.tickerTrigger} aria-label={`Change ticker, current symbol ${symbol}`}>
             <span class={styles.triggerSymbol}>{symbol}</span>
-            {price != null && (
-                <span class={styles.priceValue}>
-                    {formatCurrency(price, symbol, {
-                        currency: currency ?? undefined,
-                        compact: false,
-                    })}
-                </span>
-            )}
-            {changePercent !== null && (
-                <span
-                    class={
-                        isPos
-                            ? styles.changePositive
-                            : isNeg
-                              ? styles.changeNegative
-                              : styles.changeNeutral
-                    }
-                >
-                    {formatPercentChange(changePercent)}
-                </span>
-            )}
+            <ChevronDown size={12} aria-hidden="true" />
         </button>
     );
 
     return (
-        <Shell
-            id={id}
-            className={styles.root}
-            headerLeft={
-                <>
-                    <TickerSelector
-                        value={symbol}
-                        placeholder="Ticker..."
-                        onChange={handleSymbolSelect}
-                        trigger={tickerTrigger}
-                    />
-                </>
-            }
-            headerRight={
-                <>
-                    <Select
-                        items={INTERVAL_ITEMS}
-                        value={interval}
-                        onChange={handleIntervalSelect}
-                        variant="widget"
-                    />
-                    <Select
-                        items={CHART_TYPE_ITEMS}
-                        value={chartType}
-                        onChange={handleChartTypeSelect}
-                        variant="widget"
-                    />
-                </>
-            }
-            loading={!stateReady || status === "loading"}
-            error={status === "error" ? errorMsg : null}
-            onRemove={onRemove}
+        <ChartDetailsPopover
+            id={id} symbol={symbol} identity={identity} data={data} quote={quote}
+            timezone={timezone} warning={status === "error" ? errorMsg : warning} intraday={isIntraday}
         >
-            <div class={styles.chartContainer} ref={containerRef}>
-                <MarketStatusOverlay id={id} data={data} timezone={timezone} warning={warning} intraday={isIntraday} />
-                <div class={styles.axisCorner}>
-                    <Tooltip content="Logarithmic Scale">
-                        <button
-                            type="button"
-                            class={[
-                                styles.scaleBtn,
-                                scaleMode === "logarithmic"
-                                    ? styles.scaleBtnActive
-                                    : "",
-                            ].join(" ")}
-                            onClick={() =>
-                                setScaleMode(
-                                    scaleMode === "logarithmic"
-                                        ? "normal"
-                                        : "logarithmic",
-                                )
-                            }
-                            aria-label="Toggle Logarithmic Scale"
-                        >
-                            LOG
-                        </button>
-                    </Tooltip>
-                    <Tooltip content="Percentage Scale">
-                        <button
-                            type="button"
-                            class={[
-                                styles.scaleBtn,
-                                scaleMode === "percentage"
-                                    ? styles.scaleBtnActive
-                                    : "",
-                            ].join(" ")}
-                            onClick={() =>
-                                setScaleMode(
-                                    scaleMode === "percentage"
-                                        ? "normal"
-                                        : "percentage",
-                                )
-                            }
-                            aria-label="Toggle Percentage Scale"
-                        >
-                            %
-                        </button>
-                    </Tooltip>
-                </div>
-            </div>
-        </Shell>
+            {(overlay, options) => (
+                <Shell
+                    id={id}
+                    className={styles.root}
+                    headerLeft={
+                        <>
+                            <TickerSelector
+                                value={symbol}
+                                placeholder="Ticker..."
+                                onChange={handleSymbolSelect}
+                                trigger={tickerTrigger}
+                            />
+                        </>
+                    }
+                    headerRight={
+                        <>
+                            <Select
+                                items={INTERVAL_ITEMS}
+                                value={interval}
+                                onChange={handleIntervalSelect}
+                                variant="widget"
+                            />
+                            <Select
+                                items={CHART_TYPE_ITEMS}
+                                value={chartType}
+                                onChange={handleChartTypeSelect}
+                                variant="widget"
+                            />
+                            {options}
+                        </>
+                    }
+                    loading={(!stateReady || status === "loading") && !quote.ready}
+                    error={status === "error" && !quote.ready ? errorMsg : null}
+                    onRemove={onRemove}
+                >
+                    <div class={styles.chartContainer} ref={containerRef}>
+                        {overlay}
+                        <div class={styles.axisCorner}>
+                            <Tooltip content="Logarithmic Scale">
+                                <button
+                                    type="button"
+                                    class={[
+                                        styles.scaleBtn,
+                                        scaleMode === "logarithmic"
+                                            ? styles.scaleBtnActive
+                                            : "",
+                                    ].join(" ")}
+                                    onClick={() =>
+                                        setScaleMode(
+                                            scaleMode === "logarithmic"
+                                                ? "normal"
+                                                : "logarithmic",
+                                        )
+                                    }
+                                    aria-label="Toggle Logarithmic Scale"
+                                >
+                                    LOG
+                                </button>
+                            </Tooltip>
+                            <Tooltip content="Percentage Scale">
+                                <button
+                                    type="button"
+                                    class={[
+                                        styles.scaleBtn,
+                                        scaleMode === "percentage"
+                                            ? styles.scaleBtnActive
+                                            : "",
+                                    ].join(" ")}
+                                    onClick={() =>
+                                        setScaleMode(
+                                            scaleMode === "percentage"
+                                                ? "normal"
+                                                : "percentage",
+                                        )
+                                    }
+                                    aria-label="Toggle percentage scale relative to the first visible value"
+                                    aria-pressed={scaleMode === "percentage"}
+                                >
+                                    %
+                                </button>
+                            </Tooltip>
+                        </div>
+                    </div>
+                </Shell>
+            )}
+
+        </ChartDetailsPopover>
     );
 }
 

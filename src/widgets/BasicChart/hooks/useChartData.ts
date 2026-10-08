@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from "preact/hooks";
-import { fetchHistory } from "../../services/history";
-import { fetchMarketContext } from "../../services/marketContext";
-import { livePricesClient } from "../../services/livePrices";
-import type { LiveTick } from "../../services/livePrices";
-import type { Bar, DataCoverage, Interval, MarketContext } from "../../services/types";
-import { BarStore, intervalSeconds } from "./barStore";
-import { historySessions, regularOnly } from "./sessionPolicy";
-import { getWidgetCacheToken, isWidgetCacheCurrent, registerWidgetCache } from "../widgetCache";
+import { fetchHistory } from "../../../services/history";
+import { fetchMarketContext } from "../../../services/marketContext";
+import { livePricesClient } from "../../../services/livePrices";
+import type { LiveTick } from "../../../services/livePrices";
+import type { Bar, DataCoverage, Interval, MarketContext } from "../../../services/types";
+import { BarStore, intervalSeconds } from "../barStore";
+import { historySessions, regularOnly } from "../sessionPolicy";
+import { getWidgetCacheToken, isWidgetCacheCurrent, registerWidgetCache } from "../../widgetCache";
 
 type Snapshot = {
+    dataSymbol: string | null;
     marketContext: MarketContext | null;
     coverage: DataCoverage | null;
     source: string | null;
@@ -16,7 +17,7 @@ type Snapshot = {
     historyStale: boolean;
     historyUpdated: string | null;
 };
-const emptySnapshot: Snapshot = { marketContext: null, coverage: null, source: null, lastTick: null, historyStale: false, historyUpdated: null };
+const emptySnapshot: Snapshot = { dataSymbol: null, marketContext: null, coverage: null, source: null, lastTick: null, historyStale: false, historyUpdated: null };
 const retained = registerWidgetCache("chartData", new Map<string, { symbol: string; interval: Interval; store: BarStore; snapshot: Snapshot }>());
 
 export function useChartData(id: string, symbol: string, interval: Interval, ready: boolean,
@@ -40,14 +41,15 @@ export function useChartData(id: string, symbol: string, interval: Interval, rea
         const previous = retained.get(id);
         const cached = previous?.symbol === symbol && previous.interval === interval ? previous : null;
         const store = cached?.store ?? new BarStore(interval);
-        let current: Snapshot = cached?.snapshot ?? { ...emptySnapshot };
+        let current: Snapshot = { ...(cached?.snapshot ?? emptySnapshot), dataSymbol: symbol };
         let calendarStart = current.marketContext?.sessions[0]?.regular_open ?? livePricesClient.now() / 1000 - 350 * 86400;
         let buffered: LiveTick[] = [];
         const commit = () => {
             if (!active()) return;
             retained.set(id, { symbol, interval, store, snapshot: current });
-            setSnapshot(current);
+            setSnapshot({ ...current, dataSymbol: symbol });
         };
+        onWarning("");
         commit();
         onBars(cached?.store.bars(current.marketContext) ?? [], true, current.marketContext, false);
         const refresh = async () => {

@@ -33,6 +33,17 @@
     }
 }
 
+.options:hover,
+.options[data-state="open"] {
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+}
+
+.options:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+}
+
 .drag svg {
     width: 11px;
     height: 11px;

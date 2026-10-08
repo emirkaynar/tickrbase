@@ -41,7 +41,7 @@ describe("session lines", () => {
         expect(instances.map(instance => instance.paneViews().length)).toEqual([1, 1, 1]);
     });
 
-    it("draws session boundaries and observation gaps through the renderer", () => {
+    it("draws only session-close boundaries and observation gaps through the renderer", () => {
         const lines = new SessionLines();
         const requestUpdate = vi.fn();
         lines.attached({
@@ -52,9 +52,12 @@ describe("session lines", () => {
             ticker: "TEST", exchange: "XNYS", instrument_type: "EQUITY",
             exchange_timezone: "America/New_York", server_time: 0,
             calendar_coverage: { from: 0, to: 1000 },
-            sessions: [{ trading_date: "test", regular_open: 10, regular_close: 300, windows: [] }],
+            sessions: [
+                            { trading_date: "test", regular_open: 10, regular_close: 300, windows: [] },
+                            { trading_date: "next", regular_open: 320, regular_close: 380, windows: [] },
+                        ],
         };
-        lines.setContext(context, [{ start: 50, end: 200 }]);
+        lines.setContext(context, [{ start: 50, end: 200 }], 350);
         lines.updateAllViews();
         const canvas = {
             save: vi.fn(), restore: vi.fn(), setLineDash: vi.fn(), beginPath: vi.fn(),
@@ -68,10 +71,10 @@ describe("session lines", () => {
         lines.paneViews()[0].renderer()!.draw(target as unknown as Parameters<IPrimitivePaneRenderer["draw"]>[0]);
         expect(requestUpdate).toHaveBeenCalledOnce();
         expect(target.useMediaCoordinateSpace).toHaveBeenCalledOnce();
-        expect(canvas.setLineDash.mock.calls).toEqual([[[4, 4]], [[1, 4]]]);
-        expect(canvas.moveTo.mock.calls).toEqual([[10.5, 0], [300.5, 0]]);
-        expect(canvas.lineTo.mock.calls).toEqual([[10.5, 100], [300.5, 100]]);
-        expect(canvas.stroke).toHaveBeenCalledTimes(2);
+        expect(canvas.setLineDash.mock.calls).toEqual([[[1, 4]]]);
+        expect(canvas.moveTo.mock.calls).toEqual([[300.5, 0]]);
+        expect(canvas.lineTo.mock.calls).toEqual([[300.5, 100]]);
+        expect(canvas.stroke).toHaveBeenCalledOnce();
         expect(canvas.fillRect).toHaveBeenCalledWith(50, 0, 150, 100);
         expect(canvas.fillText).toHaveBeenCalledWith("No observations", 54, 92);
         expect(canvas.save).toHaveBeenCalledOnce();

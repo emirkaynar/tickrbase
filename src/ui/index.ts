@@ -37,6 +37,7 @@ export type { AppToastInput } from "./Toast/Toast";
 export { Tooltip } from "./Tooltip/Tooltip";
 export {
     WidgetDragButton,
+    WidgetOptionsButton,
     WidgetRemoveButton,
 } from "./WidgetActions/WidgetActions";
 export { FxBadge } from "./Table/decorators/FxBadge";

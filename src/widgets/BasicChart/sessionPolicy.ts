@@ -33,9 +33,9 @@ export function candleContext(context: MarketContext | null): MarketContext | nu
 export function sessionBoundaries(bars: Bar[], context: MarketContext | null): number[] {
     if (!bars.length || !context) return [];
     const first = bars[0].time, last = bars.at(-1)!.time;
-    // Only represented sessions can add whitespace, including their closing boundary.
+    // Boundary whitespace must stay inside the observed candle range.
     return context.sessions.filter(session => session.regular_open <= last && session.regular_close > first)
-        .flatMap(session => [session.regular_open, session.regular_close]).filter(time => time >= first);
+        .flatMap(session => [session.regular_open, session.regular_close]).filter(time => time >= first && time <= last);
 }
 
 function phaseAt(context: MarketContext, time: number): { kind: "pre" | "post" | "overnight" | "regular"; key: string } | null {

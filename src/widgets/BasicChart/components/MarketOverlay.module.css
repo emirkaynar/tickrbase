@@ -1,0 +1,303 @@
+.marketOverlay {
+    position: absolute;
+    top: var(--space-1);
+    left: var(--space-1);
+    z-index: 5;
+    max-width: calc(100% - 6rem);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-1);
+    color: var(--color-text);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-md);
+    background: color-mix(in srgb, var(--color-bg-elevated) 94%, transparent);
+    pointer-events: none;
+    animation: summary-in var(--transition-base);
+}
+
+.identityRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    max-width: 100%;
+    min-width: 0;
+    min-height: 16px;
+    font-size: var(--font-size-sm);
+}
+
+.instrumentName {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    text-transform: capitalize;
+    font-weight: var(--font-weight-semibold);
+    pointer-events: auto;
+}
+
+.exchange {
+    flex-shrink: 0;
+    white-space: nowrap;
+    color: var(--color-text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.statusPill {
+    --session-color: var(--color-muted);
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: stretch;
+    justify-content: center;
+    min-width: 22px;
+    height: 16px;
+    padding: 0;
+    overflow: hidden;
+    border: none;
+    border-radius: var(--radius-full);
+    background: var(--color-bg-elevated);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.statusPill[data-session="regular"], .tooltipSessionRow[data-session="regular"], .countdownSegment[data-next-session="regular"], .tooltipCountdownRow[data-next-session="regular"] { --session-color: var(--color-success); }
+.statusPill[data-session="pre"], .tooltipSessionRow[data-session="pre"], .countdownSegment[data-next-session="pre"], .tooltipCountdownRow[data-next-session="pre"] { --session-color: var(--color-amber); }
+.statusPill[data-session="post"], .tooltipSessionRow[data-session="post"], .countdownSegment[data-next-session="post"], .tooltipCountdownRow[data-next-session="post"] { --session-color: var(--color-blue); }
+.statusPill[data-session="overnight"], .tooltipSessionRow[data-session="overnight"], .countdownSegment[data-next-session="overnight"], .tooltipCountdownRow[data-next-session="overnight"] { --session-color: var(--color-accent); }
+
+.sessionDot {
+    width: 6px;
+    height: 6px;
+    border-radius: var(--radius-full);
+    background: var(--session-color);
+}
+
+.delayMarker {
+    background: color-mix(in srgb, var(--color-warning) 14%, var(--color-bg-elevated));
+    color: var(--color-warning);
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
+}
+
+.sessionSegment, .countdownSegment, .delayMarker, .warningSegment {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 var(--space-1-5);
+}
+
+.statusPill:hover { background: var(--color-bg-surface); }
+
+.statusPill[data-segmented="true"] .sessionSegment {
+    background: color-mix(in srgb, var(--session-color) 14%, var(--color-bg-elevated));
+}
+
+.statusPill[data-segmented="true"]:hover .sessionSegment {
+    background: color-mix(in srgb, var(--session-color) 22%, var(--color-bg-elevated));
+}
+
+.statusPill:hover .delayMarker {
+    background: color-mix(in srgb, var(--color-warning) 22%, var(--color-bg-elevated));
+}
+
+.statusPill[data-dot-only="true"],
+.statusPill[data-dot-only="true"]:hover {
+    border-color: transparent;
+    background: transparent;
+}
+
+.countdownSegment {
+    --session-color: var(--color-danger);
+    color: var(--session-color);
+    background: color-mix(in srgb, var(--session-color) 14%, var(--color-bg-elevated));
+    font-family: var(--font-mono);
+    font-size: var(--font-size-xs);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    line-height: 1;
+    animation: countdown-pulse 4s ease-in-out infinite;
+}
+
+.warningSegment {
+    color: var(--color-warning);
+    background: color-mix(in srgb, var(--color-warning) 14%, var(--color-bg-elevated));
+}
+
+@keyframes countdown-pulse {
+    0%, 100% { background: color-mix(in srgb, var(--session-color) 10%, var(--color-bg-elevated)); }
+    50% { background: color-mix(in srgb, var(--session-color) 25%, var(--color-bg-elevated)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .countdownSegment { animation: none; }
+}
+
+.pillWarning { color: var(--color-warning); }
+
+.closeButton {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--color-warning);
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.closeButton:hover { background: var(--color-bg-surface); }
+.closeButton { color: var(--color-text-muted); }
+
+.statusPill:focus-visible, .instrumentName:focus-visible,
+.closeButton:focus-visible, .marketRefresh:focus-visible, .diagnostics summary:focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+}
+
+.priceRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-2);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+}
+
+.priceValue { font-size: var(--font-size-lg); font-weight: var(--font-weight-semibold); }
+.unavailablePrice { color: var(--color-text-muted); font-size: var(--font-size-xs); }
+.changePositive, .changeNegative, .changeNeutral { font-size: var(--font-size-sm); white-space: nowrap; }
+.changePositive { color: var(--color-bull); }
+.changeNegative { color: var(--color-bear); }
+.changeNeutral { color: var(--color-text-muted); }
+
+.sessionTooltip { display: flex; flex-direction: column; gap: var(--space-2); max-width: min(26rem, calc(100vw - 2rem)); }
+
+.tooltipRow {
+    --session-color: var(--color-text-muted);
+    display: grid;
+    grid-template-columns: 1.5em minmax(0, 1fr);
+    align-items: start;
+    gap: var(--space-1-5);
+    color: var(--color-text);
+    line-height: 1.5;
+}
+
+.tooltipMarker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    height: 1.5em;
+    border-radius: var(--radius-full);
+    background: color-mix(in srgb, var(--session-color) 14%, transparent);
+    color: var(--session-color);
+    font-weight: var(--font-weight-semibold);
+    line-height: 1;
+    align-self: start;
+}
+
+.tooltipDelayGlyph {
+    display: block;
+    line-height: 1;
+    transform: translateY(0.05em);
+}
+
+.tooltipMarker > svg {
+    display: block;
+    width: 12px;
+    height: 12px;
+    flex-shrink: 0;
+}
+
+.tooltipRowText {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.tooltipRowText strong {
+    color: var(--session-color);
+    font-size: inherit;
+    line-height: inherit;
+}
+
+.tooltipSubtitle {
+    color: var(--color-text);
+    font-size: var(--font-size-xs);
+    line-height: 1.5;
+}
+.tooltipDelayRow, .tooltipWarningRow { --session-color: var(--color-warning); }
+.tooltipDelayRow[data-unknown="true"] { --session-color: var(--color-text-muted); }
+.tooltipCountdownRow { --session-color: var(--color-danger); }
+
+
+.popoverPositioner { z-index: var(--z-popover, var(--z-dropdown)); }
+.marketDetails {
+    width: min(24rem, calc(100vw - 2rem));
+    max-width: var(--available-width);
+    max-height: min(36rem, var(--available-height));
+    overflow: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg-elevated);
+    color: var(--color-text);
+    box-shadow: var(--shadow-md);
+    font-size: var(--font-size-xs);
+    outline: none;
+}
+.marketDetails[data-state="closed"] { display: none; }
+
+.detailsHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--color-border);
+}
+.detailsTitle { font-size: var(--font-size-sm); font-weight: var(--font-weight-semibold); }
+.detailsSymbol { padding-top: var(--space-1); font-family: var(--font-mono); color: var(--color-text-muted); }
+.detailsSection { padding: var(--space-3); }
+.detailsSection h3 { margin: 0 0 var(--space-3); font-size: var(--font-size-xs); font-weight: var(--font-weight-semibold); }
+.marketDetails dl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr);
+    column-gap: var(--space-3);
+    row-gap: var(--space-2);
+    margin: 0;
+}
+.marketDetails dt { color: var(--color-text-muted); }
+.marketDetails dd { margin: 0; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.detailsNotices { margin: 0 var(--space-3) var(--space-3); padding-left: var(--space-4); color: var(--color-warning); }
+.detailsNotices li + li { margin-top: var(--space-1); }
+.diagnostics { padding: var(--space-3); border-top: 1px solid var(--color-border); }
+.diagnostics summary { cursor: pointer; font-weight: var(--font-weight-semibold); }
+.diagnostics[open] summary { margin-bottom: var(--space-3); }
+.sessionLegend { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0 var(--space-3) var(--space-3); color: var(--color-text-muted); }
+.detailsFooter { padding: var(--space-3); border-top: 1px solid var(--color-border); }
+.marketRefresh {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1-5);
+    padding: var(--space-1-5) var(--space-2);
+    font: inherit;
+    background: var(--color-bg-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+.marketRefresh:hover { border-color: var(--color-text-muted); }
+
+@keyframes summary-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .marketOverlay { animation: none; } }
