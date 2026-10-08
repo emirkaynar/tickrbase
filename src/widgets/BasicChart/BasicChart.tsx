@@ -5,12 +5,14 @@ import { createChart } from "lightweight-charts";
 import { Select, TickerSelector, Tooltip } from "../../ui";
 import type { SelectItem } from "../../ui";
 import { Shell } from "../Shell";
-import { ChartDetailsPopover } from "./components/ChartDetailsPopover";
+import { ChartMarketOverlay } from "./components/ChartMarketOverlay";
+import { applyGraphicSettings } from "./settings/graphicSettings";
 import { useChartQuote } from "./hooks/useChartQuote";
 import { useInstrumentIdentity } from "./hooks/useInstrumentIdentity";
 import { useChartState } from "./hooks/useChartState";
 import { useExtendedPriceLabel } from "./hooks/useExtendedPriceLabel";
 import { createChartConfig, getSeriesColors } from "./chartConfig";
+
 import { addChartSeries } from "./seriesFactory";
 import { registerWidget } from "../registry";
 import { INTERVALS, INTERVAL_CONFIG } from "../../services/types";
@@ -40,6 +42,7 @@ function BasicChart({ id, onRemove }: Props) {
     const chartRef = useRef<IChartApi | null>(null);
     const seriesRef = useRef<ISeriesApi<any> | null>(null);
     const intervalRef = useRef<Interval>("1d");
+    const seriesTypeRef = useRef<ChartType | null>(null);
 
 
 
@@ -57,11 +60,13 @@ function BasicChart({ id, onRemove }: Props) {
         warning,
         stateReady,
         reapplyCurrentBars,
-        captureRange,
+        initializeRange,
         setPrevClose,
         scaleMode,
         setScaleMode,
         applyScaleFormatting,
+        settings,
+        graphicSettings,
     } = useChartState(id, { chartRef, seriesRef, intervalRef });
 
     const quote = useChartQuote(symbol, stateReady, data.lastTick, setPrevClose);
@@ -82,19 +87,28 @@ function BasicChart({ id, onRemove }: Props) {
         const container = containerRef.current;
         if (!container) return;
 
+        const config = createChartConfig(isIntraday, timezone, data.marketContext?.exchange_timezone ?? "UTC");
         const chart = createChart(container, {
-            ...createChartConfig(isIntraday, timezone, data.marketContext?.exchange_timezone ?? "UTC"),
+            ...config,
             width: container.clientWidth,
             height: container.clientHeight,
+
         });
 
         const series = addChartSeries(chart, chartType);
         chartRef.current = chart;
         seriesRef.current = series;
+        seriesTypeRef.current = chartType;
+
+        reapplyCurrentBars();
+        applyScaleFormatting();
+        applyGraphicSettings(chart, series, graphicSettings);
 
         return () => {
+
             chartRef.current = null;
             seriesRef.current = null;
+            seriesTypeRef.current = null;
             chart.remove();
             livePricesClient.removeWidget(id);
         };
@@ -106,7 +120,8 @@ function BasicChart({ id, onRemove }: Props) {
         if (!chartRef.current) return;
         chartRef.current.applyOptions(createChartConfig(isIntraday, timezone, data.marketContext?.exchange_timezone ?? "UTC"));
         chartRef.current.applyOptions({ autoSize: false });
-    }, [isIntraday, timezone, data.marketContext?.exchange_timezone]);
+        applyGraphicSettings(chartRef.current, seriesRef.current, graphicSettings);
+    }, [isIntraday, timezone, data.marketContext?.exchange_timezone, graphicSettings]);
 
     // ResizeObserver — syncs chart canvas to its DOM container
     useEffect(() => {
@@ -123,7 +138,7 @@ function BasicChart({ id, onRemove }: Props) {
                     container.clientWidth,
                     container.clientHeight,
                 );
-                chartRef.current.timeScale();
+                initializeRange();
             });
         });
 
@@ -132,7 +147,7 @@ function BasicChart({ id, onRemove }: Props) {
             ro.disconnect();
             if (rafId !== null) cancelAnimationFrame(rafId);
         };
-    }, []);
+    }, [initializeRange]);
 
     // Re-apply colors when theme changes (data-theme attribute mutation)
     useEffect(() => {
@@ -142,41 +157,45 @@ function BasicChart({ id, onRemove }: Props) {
                 createChartConfig(isIntraday, timezone, data.marketContext?.exchange_timezone ?? "UTC"),
             );
             seriesRef.current.applyOptions(getSeriesColors(chartType));
+            applyGraphicSettings(chartRef.current, seriesRef.current, graphicSettings);
         });
         observer.observe(document.documentElement, {
             attributes: true,
             attributeFilter: ["data-theme"],
         });
         return () => observer.disconnect();
-    }, [isIntraday, timezone, chartType, data.marketContext?.exchange_timezone]);
+    }, [isIntraday, timezone, chartType, data.marketContext?.exchange_timezone, graphicSettings]);
 
-    const seriesLifecycleRef = useRef({ captureRange, reapplyCurrentBars, applyScaleFormatting });
-    seriesLifecycleRef.current = { captureRange, reapplyCurrentBars, applyScaleFormatting };
+    const seriesLifecycleRef = useRef({ reapplyCurrentBars, applyScaleFormatting, graphicSettings });
+    seriesLifecycleRef.current = { reapplyCurrentBars, applyScaleFormatting, graphicSettings };
 
     // Only chart-type changes require a new series; scale and data updates do not.
     useEffect(() => {
         const chart = chartRef.current;
-        if (!chart) return;
+        if (!chart || seriesTypeRef.current === chartType) return;
         const lifecycle = seriesLifecycleRef.current;
-        lifecycle.captureRange();
+        const visibleRange = chart.timeScale().getVisibleLogicalRange();
         if (seriesRef.current) {
             chart.removeSeries(seriesRef.current);
         }
         seriesRef.current = addChartSeries(chart, chartType);
+        seriesTypeRef.current = chartType;
         lifecycle.reapplyCurrentBars();
+        if (visibleRange) chart.timeScale().setVisibleLogicalRange(visibleRange);
         lifecycle.applyScaleFormatting();
+        applyGraphicSettings(chart, seriesRef.current, lifecycle.graphicSettings);
     }, [chartType]);
 
     useExtendedPriceLabel(chartRef, seriesRef, symbol, interval, chartType, data);
 
     const handleSymbolSelect = useCallback(
         (value: string) => {
-            if (value) {
+            if (value && settings.ready) {
                 setSymbol(value);
                 livePricesClient.updateSymbol(id, value);
             }
         },
-        [setSymbol, id],
+        [setSymbol, id, settings.ready],
     );
 
     const handleIntervalSelect = useCallback(
@@ -206,21 +225,17 @@ function BasicChart({ id, onRemove }: Props) {
     );
 
     const tickerTrigger = (
-        <button type="button" class={styles.tickerTrigger} aria-label={`Change ticker, current symbol ${symbol}`}>
+        <button type="button" class={styles.tickerTrigger} disabled={!settings.ready} aria-label={`Change ticker, current symbol ${symbol}`}>
             <span class={styles.triggerSymbol}>{symbol}</span>
             <ChevronDown size={12} aria-hidden="true" />
         </button>
     );
 
     return (
-        <ChartDetailsPopover
-            id={id} symbol={symbol} identity={identity} data={data} quote={quote}
-            timezone={timezone} warning={status === "error" ? errorMsg : warning} intraday={isIntraday}
-        >
-            {(overlay, options) => (
                 <Shell
                     id={id}
                     className={styles.root}
+                    settings={settings}
                     headerLeft={
                         <>
                             <TickerSelector
@@ -236,16 +251,18 @@ function BasicChart({ id, onRemove }: Props) {
                             <Select
                                 items={INTERVAL_ITEMS}
                                 value={interval}
+                                disabled={!settings.ready}
                                 onChange={handleIntervalSelect}
                                 variant="widget"
                             />
                             <Select
                                 items={CHART_TYPE_ITEMS}
                                 value={chartType}
+                                disabled={!settings.ready}
                                 onChange={handleChartTypeSelect}
                                 variant="widget"
                             />
-                            {options}
+
                         </>
                     }
                     loading={(!stateReady || status === "loading") && !quote.ready}
@@ -253,11 +270,15 @@ function BasicChart({ id, onRemove }: Props) {
                     onRemove={onRemove}
                 >
                     <div class={styles.chartContainer} ref={containerRef}>
-                        {overlay}
+                        <ChartMarketOverlay
+                            symbol={symbol} identity={identity} data={data} quote={quote}
+                            warning={status === "error" ? errorMsg : warning}
+                        />
                         <div class={styles.axisCorner}>
                             <Tooltip content="Logarithmic Scale">
                                 <button
                                     type="button"
+                                    disabled={!settings.ready}
                                     class={[
                                         styles.scaleBtn,
                                         scaleMode === "logarithmic"
@@ -279,6 +300,7 @@ function BasicChart({ id, onRemove }: Props) {
                             <Tooltip content="Percentage Scale">
                                 <button
                                     type="button"
+                                    disabled={!settings.ready}
                                     class={[
                                         styles.scaleBtn,
                                         scaleMode === "percentage"
@@ -301,9 +323,6 @@ function BasicChart({ id, onRemove }: Props) {
                         </div>
                     </div>
                 </Shell>
-            )}
-
-        </ChartDetailsPopover>
     );
 }
 

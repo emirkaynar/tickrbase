@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { Tabs as ArkTabs } from "@ark-ui/react/tabs";
-import { Switch as ArkSwitch } from "@ark-ui/react/switch";
+
 import { Editable as ArkEditable } from "@ark-ui/react/editable";
 import { ScrollArea as ArkScrollArea } from "@ark-ui/react";
 import * as LucideIcons from "lucide-react";
@@ -13,6 +13,7 @@ import {
 } from "../../settings/registry";
 import { getSettingValue, setSettingValue } from "../../services/settings";
 import { Combobox, type ComboboxItem } from "../../ui/Combobox/Combobox";
+import { Switch } from "../../ui/Switch/Switch";
 import styles from "./SettingsPage.module.css";
 
 type LucideIconName = keyof typeof LucideIcons;
@@ -101,18 +102,14 @@ export function SettingsPage() {
   const renderSettingControl = (def: SettingDefinition) => {
     if (def.type === "boolean") {
       return (
-        <ArkSwitch.Root
-          className={styles.switchRoot}
+        <Switch
           checked={values[def.id] === true}
-          onCheckedChange={(details) => {
-            void handleBooleanChange(def.id, details.checked);
+          aria-labelledby={`setting-${def.id}-label`}
+          aria-describedby={def.description ? `setting-${def.id}-description` : undefined}
+          onChange={(checked) => {
+            void handleBooleanChange(def.id, checked);
           }}
-        >
-          <ArkSwitch.HiddenInput />
-          <ArkSwitch.Control className={styles.switchControl}>
-            <ArkSwitch.Thumb className={styles.switchThumb} />
-          </ArkSwitch.Control>
-        </ArkSwitch.Root>
+        />
       );
     }
     if (def.type === "select") {

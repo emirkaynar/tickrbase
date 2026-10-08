@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Combobox } from "../../ui/Combobox/Combobox";
+import { Switch } from "../../ui/Switch/Switch";
 import { createHookHarness, deferred, nodes, settle, text } from "../../ui/Combobox/testHarness";
 import { getAllSettings, getSettingOptions, type SettingDefinition } from "../../settings/registry";
 import { getSettingValue, setSettingValue } from "../../services/settings";
@@ -158,14 +159,14 @@ describe("registry-driven select settings", () => {
         const editable = byType("editable-root");
         editable.props.onValueChange({ value: "first" });
         editable.props.onValueChange({ value: "second" });
-        byType("switch-root").props.onCheckedChange({ checked: true });
+        nodes(render()).find(node => node.type === Switch)!.props.onChange(true);
         byType("input").props.onChange({ currentTarget: { value: "42" } });
         expect(setSettingValue).toHaveBeenCalledWith("custom.text", "first");
         expect(setSettingValue).toHaveBeenCalledWith("custom.text", "second");
         expect(setSettingValue).toHaveBeenCalledWith("custom.enabled", true);
         expect(setSettingValue).toHaveBeenCalledWith("custom.count", 42);
         expect(byType("editable-root").props.disabled).toBeUndefined();
-        expect(byType("switch-root").props.disabled).toBeUndefined();
+        expect(nodes(render()).find(node => node.type === Switch)!.props.disabled).toBeUndefined();
         expect(byType("input").props.disabled).toBeUndefined();
         expect(getSettingOptions).not.toHaveBeenCalled();
     });

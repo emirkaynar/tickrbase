@@ -6,18 +6,22 @@ import type { useChartData } from "./useChartData";
 import { extendedQuote } from "../sessionPolicy";
 import { QuotePriceLabel } from "../quotePriceLabel";
 
+
 export function useExtendedPriceLabel(
     chartRef: { current: IChartApi | null }, seriesRef: { current: ISeriesApi<any> | null },
     symbol: string, interval: Interval, chartType: ChartType, data: ReturnType<typeof useChartData>,
+
 ) {
     const dataRef = useRef(data);
     dataRef.current = data;
+
     const refreshRef = useRef<(() => void) | null>(null);
     useEffect(() => {
         const chart = chartRef.current, series = seriesRef.current;
         if (!chart || !series) return;
         const label = new QuotePriceLabel(chart, series);
         const refresh = () => {
+
             const snapshot = dataRef.current;
             const tick = snapshot.lastTick;
             label.update(snapshot.marketContext?.ticker === symbol && tick?.source === snapshot.source

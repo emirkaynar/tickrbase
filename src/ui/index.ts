@@ -17,6 +17,8 @@ export type {
 export { MiniBaselineChart } from "./MiniBaselineChart/MiniBaselineChart";
 export type { BaselineDataPoint } from "./MiniBaselineChart/MiniBaselineChart";
 export { Skeleton } from "./Skeleton/Skeleton";
+export { Switch } from "./Switch/Switch";
+export type { SwitchProps } from "./Switch/Switch";
 export { Table } from "./Table/Table";
 export type {
     TableColumnDef,

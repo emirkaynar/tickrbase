@@ -33,10 +33,11 @@ describe("extended price-axis label", () => {
         expect(series.createPriceLine).toHaveBeenCalledWith(expect.objectContaining({ price: 120, title: "Pre", axisLabelVisible: true, lineVisible: true }));
         label.update({ price: 121, kind: "post", stale: true });
         expect(series.createPriceLine).toHaveBeenCalledOnce();
-        expect(line.applyOptions).toHaveBeenCalledWith(expect.objectContaining({ price: 121, title: "Post" }));
+        expect(line.applyOptions).toHaveBeenCalledWith(expect.objectContaining({ price: 121, title: "Post", axisLabelVisible: true, lineVisible: true }));
         label.update(null);
         expect(series.removePriceLine).toHaveBeenCalledWith(line);
     });
+
     it("does not update label text or color when only staleness changes", () => {
         const { label, series, line } = fixture();
         label.update(quote);

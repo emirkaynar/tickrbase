@@ -1,4 +1,4 @@
-type CacheName = "prefetchedState" | "consumedState" | "chartData" | "chartBars" | "loadedCharts";
+type CacheName = "prefetchedState" | "consumedState" | "chartData" | "chartBars" | "loadedCharts" | "widgetState";
 type WidgetCache = Map<string, unknown> | Set<string>;
 export type WidgetCacheToken = object | undefined;
 

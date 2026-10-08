@@ -2,6 +2,19 @@ import { type DeepPartial, type ChartOptions, type Time, type IChartApi, type IS
 import { getChartColors, getFonts } from "../../styles/tokens";
 import type { ChartType, ScaleMode } from "../../services/types";
 
+export function setInitialChartRange(chart: IChartApi, series: ISeriesApi<any>): boolean {
+    const points = series.data();
+    const latest = points.at(-1);
+    const first = points.at(-100) ?? points[0];
+    const scale = chart.timeScale();
+    if (!latest || !first || scale.width() <= 0) return false;
+    const from = scale.timeToIndex(first.time);
+    const to = scale.timeToIndex(latest.time);
+    if (from === null || to === null) return false;
+    scale.setVisibleLogicalRange({ from: from - Math.max(0, 100 - points.length), to: to + 5 });
+    return true;
+}
+
 export function applyChartScale(chart: IChartApi, series: ISeriesApi<any> | null, mode: ScaleMode): void {
     series?.applyOptions({
         priceFormat: { type: "price", precision: 2, minMove: 0.01 },
@@ -47,10 +60,10 @@ export function createChartConfig(
                 labelBackgroundColor: c.bgSurface,
             },
         },
-        rightPriceScale: { borderColor: c.border },
-        leftPriceScale: { borderColor: c.border },
+        rightPriceScale: { borderColor: c.transparent },
+        leftPriceScale: { borderColor: c.transparent },
         timeScale: {
-            borderColor: c.border,
+            borderColor: c.transparent,
             timeVisible: isIntraday,
             secondsVisible: false,
             tickMarkFormatter: (unixSec: number, markType: number) => {

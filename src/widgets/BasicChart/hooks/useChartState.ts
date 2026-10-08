@@ -1,8 +1,14 @@
-import { useEffect, useRef, useState, useCallback } from "preact/hooks";
+import { useEffect, useRef, useState, useCallback, useMemo } from "preact/hooks";
 import type { IChartApi, ISeriesApi, UTCTimestamp } from "lightweight-charts";
 import { LineSeries } from "lightweight-charts";
-import { applyChartScale } from "../chartConfig";
-import { api } from "../../../services/api";
+import { applyChartScale, setInitialChartRange } from "../chartConfig";
+import { useWidgetState } from "../../settings/useWidgetState";
+import { stateRecord } from "../../settings/widgetStateStore";
+
+import type { WidgetSettingsProps } from "../../settings/types";
+import { defaultWidgetSettings, isWidgetSettingValue, widgetSettingItems } from "../../settings/definitions";
+import { graphicSettingsDefinition, resolveGraphicSettings } from "../settings/graphicSettings";
+import type { GraphicSettings } from "../settings/graphicSettings";
 import type { Bar, Interval, ScaleMode, MarketContext } from "../../../services/types";
 import { INTERVALS } from "../../../services/types";
 
@@ -13,7 +19,7 @@ import { SessionLines } from "../sessionLines";
 import { observationGaps, gapWhitespace } from "../observationGaps";
 import { intervalSeconds } from "../barStore";
 import { candleContext, regularBars, sessionBoundaries } from "../sessionPolicy";
-import { getWidgetCacheToken, getWidgetStateFromCache, isWidgetCacheCurrent, registerWidgetCache } from "../../widgetCache";
+import { getWidgetCacheToken, isWidgetCacheCurrent, registerWidgetCache } from "../../widgetCache";
 
 /** Module-level maps survive RGL remount cycles during drag */
 const everLoaded = registerWidgetCache("loadedCharts", new Set<string>());
@@ -39,13 +45,15 @@ type UseChartStateReturn = {
     timezone: string;
     scaleMode: ScaleMode;
     stateReady: boolean;
+    settings: WidgetSettingsProps;
+    graphicSettings: GraphicSettings;
     setSymbol: (s: string) => void;
     selectInterval: (i: Interval) => void;
     setChartType: (c: ChartType) => void;
     setScaleMode: (m: ScaleMode) => void;
     applyScaleFormatting: () => void;
     reapplyCurrentBars: () => void;
-    captureRange: () => void;
+    initializeRange: () => void;
     setPrevClose: (val: number | null) => void;
     everLoadedRef: typeof everLoaded;
     getLastState: (
@@ -66,19 +74,58 @@ export function useChartState(
     const gapCountRef = useRef(-1);
     const boundaryTimesRef = useRef<number[]>([]);
     const primitiveRef = useRef<{ series: ISeriesApi<any>; primitive: SessionLines } | null>(null);
-    const chartStateRef = useRef<{ from: number; to: number } | null>(null);
+    const initialRangeRef = useRef<{ chart: IChartApi; symbol: string; interval: Interval } | null>(null);
 
     const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
     const [errorMsg, setErrorMsg] = useState("");
     const [warning, setWarning] = useState("");
-    const [symbol, setSymbol] = useState(_prev?.symbol ?? "XU100.IS");
-    const [interval, selectInterval] = useState<Interval>(
-        _prev?.interval ?? "1d",
-    );
-    const [chartType, setChartType] = useState<ChartType>("candlestick");
+    const persisted = useWidgetState(id);
+    const saved = persisted.document;
+
+    const symbol = saved.symbol || _prev?.symbol || "XU100.IS";
+    const interval = INTERVALS.includes(saved.interval as Interval) ? saved.interval as Interval : _prev?.interval ?? "1d";
+    const savedChartType = saved.state.chartType;
+    const chartType: ChartType = ["candlestick", "heikin_ashi", "line", "area", "bar", "baseline"].includes(String(savedChartType))
+        ? savedChartType as ChartType : "candlestick";
     const timezone = useUserTimezone();
-    const [scaleMode, setScaleMode] = useState<ScaleMode>("normal");
-    const [stateReady, setStateReady] = useState(false);
+    const savedScaleMode = stateRecord(saved.state.priceScale).mode;
+    const scaleMode: ScaleMode = savedScaleMode === "percentage" || savedScaleMode === "logarithmic" ? savedScaleMode : "normal";
+    // A failed preference load can still display data, but the owner blocks all writes until retry succeeds.
+    const stateReady = persisted.ready || persisted.status === "error";
+    const graphicSettings = useMemo(() => resolveGraphicSettings(stateRecord(saved.state.settings)), [saved.state.settings]);
+    const initializeRange = useCallback(() => {
+        const chart = chartRef.current, series = seriesRef.current;
+        const cached = lastState.get(id);
+        const initialized = initialRangeRef.current;
+        if (!chart || !series || cached?.symbol !== symbol || cached.interval !== interval
+            || (initialized?.chart === chart && initialized.symbol === symbol && initialized.interval === interval)) return;
+        if (setInitialChartRange(chart, series)) initialRangeRef.current = { chart, symbol, interval };
+    }, [id, symbol, interval, chartRef, seriesRef]);
+    const setSymbol = useCallback((symbol: string) => persisted.update(document => ({ ...document, symbol })), [persisted.update]);
+    const selectInterval = useCallback((interval: Interval) => persisted.update(document => ({ ...document, interval })), [persisted.update]);
+    const setChartType = useCallback((chartType: ChartType) => persisted.update(document => ({
+        ...document, state: { ...document.state, chartType },
+    })), [persisted.update]);
+    const setScaleMode = useCallback((mode: ScaleMode) => {
+        persisted.update(document => ({
+            ...document,
+            state: { ...document.state, priceScale: { ...stateRecord(document.state.priceScale), mode } },
+        }));
+    }, [persisted.update]);
+    const settings: WidgetSettingsProps = {
+        definition: graphicSettingsDefinition, values: graphicSettings,
+        ready: persisted.ready, status: persisted.status, error: persisted.error, onRetry: () => { void persisted.retry(); },
+        onChange: (key, value) => {
+            const definition = widgetSettingItems(graphicSettingsDefinition).find(item => item.id === key);
+            if (!definition || !isWidgetSettingValue(definition, value)) return;
+            persisted.update(document => ({ ...document, state: {
+                ...document.state, settings: { ...stateRecord(document.state.settings), [key]: value },
+            } }));
+        },
+        onReset: () => persisted.update(document => ({ ...document, state: {
+            ...document.state, settings: { ...stateRecord(document.state.settings), ...defaultWidgetSettings(graphicSettingsDefinition) },
+        } })),
+    };
 
     const chartTypeRef = useRef<ChartType>(chartType);
     const prevCloseRef = useRef<number | null>(null);
@@ -107,80 +154,6 @@ export function useChartState(
         }
     }, [seriesRef]);
 
-    // Restore persisted state from backend API on mount
-    useEffect(() => {
-        if (!isWidgetCacheCurrent(id, cacheToken)) return;
-        let cancelled = false;
-        const controller = new AbortController();
-        const active = () => !cancelled && isWidgetCacheCurrent(id, cacheToken);
-        const applyState = (saved: any) => {
-            if (saved) {
-                if (
-                    saved.interval &&
-                    INTERVALS.includes(saved.interval as Interval)
-                ) {
-                    selectInterval(saved.interval as Interval);
-                }
-                if (saved.symbol) {
-                    setSymbol(saved.symbol);
-                }
-                const restoredChartType =
-                    saved.state?.chartType || saved.chartType;
-                if (restoredChartType) {
-                    setChartType(restoredChartType as ChartType);
-                    chartTypeRef.current = restoredChartType as ChartType;
-                }
-                if (saved.state?.timeScale) {
-                    chartStateRef.current = saved.state.timeScale;
-                }
-                if (saved.state?.priceScale) {
-                    if (saved.state.priceScale.mode) {
-                        setScaleMode(saved.state.priceScale.mode as ScaleMode);
-                    }
-                }
-            }
-        };
-
-        const cached = getWidgetStateFromCache(id);
-        if (cached) {
-            applyState(cached);
-            setStateReady(true);
-            return;
-        }
-
-        void api
-            .get<any>(`/user/widgets/${id}/state`, controller.signal)
-            .then((saved) => {
-                if (!active()) return;
-                applyState(saved);
-                setStateReady(true);
-            })
-            .catch(() => {
-                if (active()) setStateReady(true);
-            });
-        return () => {
-            cancelled = true;
-            controller.abort();
-        };
-    }, [id, cacheToken]);
-
-    // Persist chart preferences; display timezone belongs to user settings.
-    useEffect(() => {
-        if (!stateReady || !isWidgetCacheCurrent(id, cacheToken)) return;
-        void api.put(`/user/widgets/${id}/state`, {
-            symbol,
-            interval,
-            state: {
-                chartType,
-                priceScale: {
-                    mode: scaleMode,
-                },
-                timeScale: chartStateRef.current
-                    ? chartStateRef.current
-                    : undefined,
-            },
-        });
-    }, [id, symbol, interval, chartType, scaleMode, stateReady, cacheToken]);
 
     function calculateHeikinAshi(bars: Bar[]): Bar[] {
         if (!bars.length) return [];
@@ -247,7 +220,10 @@ export function useChartState(
             const chart = chartRef.current;
             const range = chart?.timeScale().getVisibleRange();
             const logical = chart?.timeScale().getVisibleLogicalRange();
-            const nearLatest = !logical || logical.to >= series.data().length - 2;
+            const lastTime = series.data().at(-1)?.time;
+            const lastIndex = lastTime === undefined ? null : chart?.timeScale().timeToIndex(lastTime);
+            const nearLatest = !logical || lastIndex == null || logical.to >= lastIndex - 2;
+
             contextRef.current = context;
             const intraday = intervalSeconds(interval) !== null;
             if (intraday) bars = regularBars(bars, context);
@@ -296,19 +272,16 @@ export function useChartState(
                 timeVisible: !["1d", "1wk", "1mo"].includes(interval),
                 secondsVisible: false,
             });
-            if (fit && chartStateRef.current && bars.length) {
-                chart?.timeScale().setVisibleRange(chartStateRef.current as never);
-            } else if (fit && bars.length && !range) {
-                chart?.timeScale().fitContent();
-            } else if (!fit && range && !nearLatest) {
-                chart?.timeScale().setVisibleRange(range);
+            if (chart && !fit && range && !nearLatest) {
+                chart.timeScale().setVisibleRange(range);
             }
             lastState.set(id, { bars, interval, symbol });
+            if (bars.length) initializeRange();
 
             everLoaded.add(id);
             setStatus("ok");
         },
-        [id, symbol, interval, chartRef, seriesRef, intervalRef, cacheToken],
+        [id, symbol, interval, chartRef, seriesRef, intervalRef, cacheToken, initializeRange],
     );
 
     const reapplyCurrentBars = useCallback(() => {
@@ -320,13 +293,6 @@ export function useChartState(
         }
     }, [id, symbol, interval, applyBars]);
 
-    const captureRange = useCallback(() => {
-        if (!chartRef.current) return;
-        const range = chartRef.current.timeScale().getVisibleRange();
-        chartStateRef.current = range
-            ? { from: range.from as number, to: range.to as number }
-            : null;
-    }, [chartRef]);
 
     const onDataStatus = useCallback((next: "loading" | "ok" | "error", message?: string) => {
         setStatus(next);
@@ -345,13 +311,15 @@ export function useChartState(
         timezone,
         scaleMode,
         stateReady,
+        settings,
+        graphicSettings,
         setSymbol,
         selectInterval,
         setChartType,
         setScaleMode,
         applyScaleFormatting,
         reapplyCurrentBars,
-        captureRange,
+        initializeRange,
         setPrevClose,
         everLoadedRef: everLoaded,
         getLastState: (i: string) => lastState.get(i),

@@ -71,7 +71,8 @@ function colorToken(name: string): string {
 }
 
 export function getChartColors() {
-    return {
+  return {
+        transparent: "transparent",
         bg: colorToken("--color-bg"),
         bgElevated: colorToken("--color-bg-elevated"),
         bgSurface: colorToken("--color-bg-surface"),

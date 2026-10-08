@@ -3,6 +3,9 @@ import type { VNode } from "preact";
 import { BasicChart } from "../BasicChart";
 import { useChartState } from "../hooks/useChartState";
 import { useChartQuote } from "../hooks/useChartQuote";
+import { ChartMarketOverlay } from "../components/ChartMarketOverlay";
+import { graphicSettingsDefinition, resolveGraphicSettings } from "../settings/graphicSettings";
+import { nodes } from "../../../ui/Combobox/testHarness";
 
 vi.mock("preact/hooks", () => ({
     useRef: (current: unknown) => ({ current }),
@@ -20,6 +23,8 @@ const state = {
     symbol: "AAPL", interval: "1d", chartType: "candlestick", timezone: "UTC", status: "loading",
     errorMsg: "History unavailable", warning: "", stateReady: true,
     data: { lastTick: null }, setPrevClose: vi.fn(),
+    graphicSettings: resolveGraphicSettings({}),
+    settings: { definition: graphicSettingsDefinition, values: {}, ready: true, status: "ready", error: null, onChange: vi.fn(), onReset: vi.fn(), onRetry: vi.fn() },
 };
 const quote = { price: 123, currency: "USD", changePercent: 1, snapshot: null, ready: true };
 
@@ -29,11 +34,9 @@ beforeEach(() => {
 });
 
 function composition() {
-    const root = BasicChart({ id: "test", onRemove: vi.fn() }) as VNode<{
-        warning: string;
-        children: (overlay: null, options: null) => VNode<{ loading: boolean; error: string | null }>;
-    }>;
-    return { root, shell: root.props.children(null, null) };
+    const shell = BasicChart({ id: "test", onRemove: vi.fn() }) as VNode<{ loading: boolean; error: string | null }>;
+    const overlay = nodes(shell).find(node => node.type === ChartMarketOverlay)!;
+    return { overlay, shell };
 }
 
 describe("BasicChart summary and history loading", () => {
@@ -46,11 +49,11 @@ describe("BasicChart summary and history loading", () => {
         expect(composition().shell.props.loading).toBe(true);
     });
 
-    it("preserves a usable quote after history failure and exposes the error through details", () => {
+    it("preserves a usable quote after history failure and exposes the error through the status pill", () => {
         vi.mocked(useChartState).mockReturnValue({ ...state, status: "error" } as unknown as ReturnType<typeof useChartState>);
-        const { root, shell } = composition();
+        const { overlay, shell } = composition();
         expect(shell.props.error).toBeNull();
-        expect(root.props.warning).toBe("History unavailable");
+        expect(overlay.props.warning).toBe("History unavailable");
     });
 
     it("retains the normal error overlay when no usable quote is available", () => {

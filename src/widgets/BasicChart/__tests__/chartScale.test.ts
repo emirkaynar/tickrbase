@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { PriceScaleMode } from "lightweight-charts";
 import type { IChartApi, ISeriesApi } from "lightweight-charts";
-import { applyChartScale } from "../chartConfig";
+import { applyChartScale, setInitialChartRange } from "../chartConfig";
 
 function fixture() {
     const scale = { applyOptions: vi.fn() };
@@ -14,6 +14,42 @@ function fixture() {
     );
     return { chart, series, scale, apply };
 }
+
+describe("initial chart range", () => {
+    function rangeFixture(count: number, width = 800) {
+        const points = Array.from({ length: count }, (_, index) => ({ time: index + 1, value: 10 }));
+        const scale = {
+            width: () => width,
+            // The chart-wide index can include points from hidden gap/boundary series.
+            timeToIndex: (time: number) => (time - 1) * 2,
+            setVisibleLogicalRange: vi.fn(),
+            fitContent: vi.fn(),
+        };
+        const chart = { timeScale: () => scale } as unknown as IChartApi;
+        const series = { data: () => points } as unknown as ISeriesApi<any>;
+        return { chart, series, scale };
+    }
+
+    it("shows the latest 100 candles with five bars of right space, not all history", () => {
+        const { chart, series, scale } = rangeFixture(200);
+        expect(setInitialChartRange(chart, series)).toBe(true);
+        expect(scale.setVisibleLogicalRange).toHaveBeenCalledWith({ from: 200, to: 403 });
+        expect(scale.fitContent).not.toHaveBeenCalled();
+    });
+
+    it("leaves room for 100 candles when fewer are available", () => {
+        const { chart, series, scale } = rangeFixture(20);
+        expect(setInitialChartRange(chart, series)).toBe(true);
+        expect(scale.setVisibleLogicalRange).toHaveBeenCalledWith({ from: -80, to: 43 });
+    });
+
+    it("waits for data and a usable container width", () => {
+        for (const { chart, series, scale } of [rangeFixture(0), rangeFixture(100, 0)]) {
+            expect(setInitialChartRange(chart, series)).toBe(false);
+            expect(scale.setVisibleLogicalRange).not.toHaveBeenCalled();
+        }
+    });
+});
 
  describe("chart scale modes", () => {
     it("uses native first-visible-value percentage mode without quote metadata", () => {

@@ -4,7 +4,7 @@ import {
 } from "@ark-ui/react/select";
 import { Portal } from "@ark-ui/react/portal";
 import type { ComponentChildren } from "preact";
-import { useMemo, useRef } from "preact/hooks";
+import { useId, useMemo, useRef } from "preact/hooks";
 import { CheckIcon, ChevronsUpDownIcon, Lock } from "lucide-react";
 import styles from "./Select.module.css";
 
@@ -31,6 +31,7 @@ function hasSameValues(left: string[], right: string[]): boolean {
 }
 
 type Props = {
+    id?: string;
     items: SelectItem[];
     value?: string;
     onChange?: (value: string) => void;
@@ -48,12 +49,16 @@ type Props = {
     triggerVariant?: SelectTriggerVariant;
     triggerIcon?: ComponentChildren;
     triggerLabel?: string;
+    "aria-label"?: string;
+    "aria-labelledby"?: string;
+    "aria-describedby"?: string;
     disabled?: boolean;
     closeOnSelect?: boolean;
     onOpenChange?: (open: boolean) => void;
 };
 
 export function Select({
+    id,
     items,
     value,
     onChange,
@@ -66,6 +71,9 @@ export function Select({
     triggerVariant = "default",
     triggerIcon,
     triggerLabel = "Select",
+    "aria-label": ariaLabel,
+    "aria-labelledby": ariaLabelledBy,
+    "aria-describedby": ariaDescribedBy,
     disabled = false,
     closeOnSelect,
     onOpenChange,
@@ -86,6 +94,16 @@ export function Select({
         [multiple, value, values],
     );
 
+    const generatedId = useId();
+    const triggerRef = useRef<HTMLButtonElement | null>(null);
+    const positioning = useMemo(() => ({
+        placement,
+        strategy: "fixed" as const,
+        gutter: 6,
+        flip: true,
+        hideWhenDetached: true,
+        getAnchorElement: () => triggerRef.current,
+    }), [placement]);
     const shouldCloseOnSelect = closeOnSelect ?? !multiple;
     const previousOpenRef = useRef<boolean | null>(null);
 
@@ -99,6 +117,7 @@ export function Select({
 
     return (
         <ArkSelect.Root
+            id={id ?? generatedId}
             collection={collection}
             value={selectedValues}
             multiple={multiple}
@@ -120,21 +139,30 @@ export function Select({
                 previousOpenRef.current = details.open;
                 onOpenChange?.(details.open);
             }}
-            positioning={{ placement }}
+            positioning={positioning}
             className={[styles.root, className].filter(Boolean).join(" ")}
         >
             <ArkSelect.Control>
                 {triggerVariant === "icon" ? (
                     <ArkSelect.Trigger
+                        ref={triggerRef}
                         className={triggerClassName}
-                        aria-label={triggerLabel}
+                        aria-label={ariaLabel ?? triggerLabel}
+                        aria-labelledby={ariaLabelledBy}
+                        aria-describedby={ariaDescribedBy}
                     >
                         <span className={styles.iconSlot}>
                             {triggerIcon ?? <ChevronsUpDownIcon />}
                         </span>
                     </ArkSelect.Trigger>
                 ) : (
-                    <ArkSelect.Trigger className={triggerClassName}>
+                    <ArkSelect.Trigger
+                        ref={triggerRef}
+                        className={triggerClassName}
+                        aria-label={ariaLabel}
+                        aria-labelledby={ariaLabelledBy}
+                        aria-describedby={ariaDescribedBy}
+                    >
                         <ArkSelect.ValueText />
                         <ArkSelect.Indicator className={styles.indicator}>
                             <ChevronsUpDownIcon />

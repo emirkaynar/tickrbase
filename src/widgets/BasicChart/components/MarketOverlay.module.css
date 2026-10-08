@@ -11,9 +11,9 @@
     color: var(--color-text);
     padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-md);
-    background: color-mix(in srgb, var(--color-bg-elevated) 94%, transparent);
+    background: color-mix(var(--color-bg-elevated) 80%, transparent);
     pointer-events: none;
-    animation: summary-in var(--transition-base);
+    animation: scale-in var(--transition-fast) forwards;
 }
 
 .identityRow {
@@ -299,5 +299,14 @@
 }
 .marketRefresh:hover { border-color: var(--color-text-muted); }
 
-@keyframes summary-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
 @media (prefers-reduced-motion: reduce) { .marketOverlay { animation: none; } }

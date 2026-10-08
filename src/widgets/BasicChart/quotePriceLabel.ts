@@ -19,6 +19,7 @@ export class QuotePriceLabel {
     private line: IPriceLine | null = null;
     private quote: Quote = null;
     private color = "";
+
     private previousAutoscale: AutoscaleInfoProvider | undefined;
     private autoscale: AutoscaleInfoProvider;
 
@@ -36,6 +37,7 @@ export class QuotePriceLabel {
         };
         series.applyOptions({ autoscaleInfoProvider: this.autoscale });
     }
+
 
     update(quote: Quote): void {
         const colors = getChartColors();
