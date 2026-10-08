@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from datetime import datetime
 
 import httpx
@@ -15,6 +16,7 @@ from ..core.redis import get_redis_client
 
 _CACHE_PREFIX = "logo:bytes:"
 _COUNTER_PREFIX = "logo:monthly:"
+_TICKER_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,15}$")
 
 
 def _counter_key() -> str:
@@ -55,6 +57,9 @@ async def get_logo(symbol: str) -> bytes | None:
         return None
 
     sym_clean = symbol.upper().strip()
+    if not _TICKER_PATTERN.fullmatch(sym_clean):
+        return None
+
     redis = get_redis_client()
     cache_key = f"{_CACHE_PREFIX}{sym_clean}"
 
