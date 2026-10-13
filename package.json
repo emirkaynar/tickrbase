@@ -28,7 +28,7 @@
     "react-grid-layout": "^2.2.2"
   },
   "devDependencies": {
-    "@preact/preset-vite": "^2.10.2",
+    "@preact/preset-vite": "^2.10.6",
     "@types/node": "^24.10.1",
     "typescript": "~5.9.3",
     "vite": "^7.3.1",
