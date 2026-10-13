@@ -25,171 +25,168 @@ import { livePricesClient, type LiveStatus } from "./services/livePrices";
 import { usePortfolioState } from "./hooks/usePortfolioState";
 
 export function App() {
-    const { route, navigate } = useRouter();
-    const { theme, toggleTheme } = useTheme();
-    const auth = useAuth();
-    const layout = useLayout(!!auth.user, auth.user?.id);
-    const portfolioState = usePortfolioState(!!auth.user);
+  const { route, navigate } = useRouter();
+  const { theme, toggleTheme } = useTheme();
+  const auth = useAuth();
+  const layout = useLayout(!!auth.user, auth.user?.id);
+  const portfolioState = usePortfolioState(!!auth.user);
 
-    const [paletteOpen, setPaletteOpen] = useState(false);
-    const [palettePage, setPalettePage] = useState<CommandPalettePage>("root");
-    const [liveStatus, setLiveStatus] = useState<LiveStatus>(
-        livePricesClient.getStatus(),
-    );
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [palettePage, setPalettePage] = useState<CommandPalettePage>("root");
+  const [liveStatus, setLiveStatus] = useState<LiveStatus>(
+    livePricesClient.getStatus(),
+  );
 
-    function openPalette(page: CommandPalettePage) {
-        setPalettePage(page);
-        setPaletteOpen(true);
+  function openPalette(page: CommandPalettePage) {
+    setPalettePage(page);
+    setPaletteOpen(true);
+  }
+
+  useEffect(() => {
+    if (auth.user) {
+      livePricesClient.connect();
+      const unsubscribe = livePricesClient.onStatus(setLiveStatus);
+      return () => {
+        unsubscribe();
+        livePricesClient.disconnect();
+      };
     }
+  }, [auth.user]);
 
-    useEffect(() => {
-        if (auth.user) {
-            livePricesClient.connect();
-            const unsubscribe = livePricesClient.onStatus(setLiveStatus);
-            return () => {
-                unsubscribe();
-                livePricesClient.disconnect();
-            };
-        }
-    }, [auth.user]);
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isEditable =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable;
 
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            const target = e.target as HTMLElement | null;
-            const isEditable =
-                target?.tagName === "INPUT" ||
-                target?.tagName === "TEXTAREA" ||
-                target?.isContentEditable;
+      if (isEditable) return;
 
-            if (isEditable) return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        openPalette("root");
+      }
+    };
 
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-                e.preventDefault();
-                openPalette("root");
-            }
-        };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
 
-        document.addEventListener("keydown", onKeyDown);
-        return () => document.removeEventListener("keydown", onKeyDown);
-    }, []);
+  function handleAddWidget() {
+    openPalette("add-widget");
+  }
 
-    function handleAddWidget() {
-        openPalette("add-widget");
+  function manageScreens() {
+    openPalette("manage-screens");
+  }
+
+  async function handlePaletteAddWidget(type: WidgetType) {
+    const result = await layout.addWidget(type);
+    if (!result.success && result.noSpace) {
+      setPaletteOpen(false);
+      toast.warning({
+        title: "No space available",
+        description:
+          "This screen is full. Remove or resize a widget, then try again.",
+      });
     }
+  }
 
-    function manageScreens() {
-        openPalette("manage-screens");
-    }
+  function handlePaletteCreateScreen(name?: string) {
+    void layout.createScreen(name);
+  }
 
-    async function handlePaletteAddWidget(type: WidgetType) {
-        const result = await layout.addWidget(type);
-        if (!result.success && result.noSpace) {
-            setPaletteOpen(false);
-            toast.warning({
-                title: "No space available",
-                description:
-                    "This screen is full. Remove or resize a widget, then try again.",
-            });
-        }
-    }
+  function handlePaletteRenameScreen(screenId: string, name: string) {
+    void layout.renameScreen(screenId, name);
+  }
 
-    function handlePaletteCreateScreen(name?: string) {
-        void layout.createScreen(name);
-    }
+  async function handlePaletteDeleteScreen(screenId: string) {
+    return layout.deleteScreen(screenId);
+  }
 
-    function handlePaletteRenameScreen(screenId: string, name: string) {
-        void layout.renameScreen(screenId, name);
-    }
+  function handlePaletteReorderScreens(nextIds: string[]) {
+    void layout.reorderScreens(nextIds);
+  }
 
-    async function handlePaletteDeleteScreen(screenId: string) {
-        return layout.deleteScreen(screenId);
-    }
+  function handlePaletteMoveScreen(screenId: string, direction: -1 | 1) {
+    void layout.moveScreen(screenId, direction);
+  }
 
-    function handlePaletteReorderScreens(nextIds: string[]) {
-        void layout.reorderScreens(nextIds);
-    }
+  const topBar = (
+    <TopBar
+      screens={layout.screens}
+      activeScreenId={layout.activeScreenId}
+      onScreenChange={(id) => void layout.setActiveScreen(id)}
+      onManageScreens={manageScreens}
+      onAddWidget={handleAddWidget}
+      route={route}
+      onNavigate={navigate}
+      theme={theme}
+      onToggleTheme={toggleTheme}
+      user={auth.user}
+      onLogout={auth.logout}
+      portfolioState={portfolioState}
+    />
+  );
 
-    function handlePaletteMoveScreen(screenId: string, direction: -1 | 1) {
-        void layout.moveScreen(screenId, direction);
-    }
-
-    const topBar = (
-        <TopBar
-            screens={layout.screens}
-            activeScreenId={layout.activeScreenId}
-            onScreenChange={(id) => void layout.setActiveScreen(id)}
-            onManageScreens={manageScreens}
-            onAddWidget={handleAddWidget}
-            route={route}
-            onNavigate={navigate}
-            theme={theme}
-            onToggleTheme={toggleTheme}
-            user={auth.user}
-            onLogout={auth.logout}
-            portfolioState={portfolioState}
+  return (
+    <>
+      {!auth.user && !auth.loading && (
+        <AuthModal
+          onLogin={auth.login}
+          onRegister={auth.register}
+          loading={auth.loading}
+          error={auth.error}
         />
-    );
+      )}
 
-    return (
-        <>
-            {!auth.user && !auth.loading && (
-                <AuthModal
-                    onLogin={auth.login}
-                    onRegister={auth.register}
-                    loading={auth.loading}
-                    error={auth.error}
-                />
-            )}
+      <AppLayout topBar={topBar} contentKey={route}>
+        {route === "dashboard" && (
+          <DashboardPage layout={layout} onAddWidget={handleAddWidget} />
+        )}
+        {route === "portfolio" && (
+          <PortfolioPage portfolioState={portfolioState} />
+        )}
+        {route === "settings" && <SettingsPage />}
+      </AppLayout>
 
-            <AppLayout topBar={topBar} contentKey={route}>
-                {route === "dashboard" && (
-                    <DashboardPage
-                        layout={layout}
-                        onAddWidget={handleAddWidget}
-                    />
-                )}
-                {route === "portfolio" && (
-                    <PortfolioPage portfolioState={portfolioState} />
-                )}
-                {route === "settings" && <SettingsPage />}
-            </AppLayout>
+      {import.meta.env.MODE === "debug" && (
+        <div
+          style={{
+            position: "fixed",
+            right: "12px",
+            bottom: "12px",
+            zIndex: 1000,
+            border: "1px solid var(--color-border)",
+            background: "var(--color-bg-elevated)",
+            color: "var(--color-text-muted)",
+            borderRadius: "var(--radius-sm)",
+            fontSize: "11px",
+            padding: "4px 8px",
+            pointerEvents: "none",
+          }}
+        >
+          WS: {liveStatus}
+        </div>
+      )}
 
-            {import.meta.env.MODE === "debug" && (
-                <div
-                    style={{
-                        position: "fixed",
-                        right: "12px",
-                        bottom: "12px",
-                        zIndex: 1000,
-                        border: "1px solid var(--color-border)",
-                        background: "var(--color-bg-elevated)",
-                        color: "var(--color-text-muted)",
-                        borderRadius: "var(--radius-sm)",
-                        fontSize: "11px",
-                        padding: "4px 8px",
-                        pointerEvents: "none",
-                    }}
-                >
-                    WS: {liveStatus}
-                </div>
-            )}
+      <CommandPalette
+        open={paletteOpen}
+        initialPage={palettePage}
+        onClose={() => setPaletteOpen(false)}
+        onAddWidget={handlePaletteAddWidget}
+        screens={layout.screens}
+        activeScreenId={layout.activeScreenId}
+        onSetActiveScreen={(id) => void layout.setActiveScreen(id)}
+        onCreateScreen={handlePaletteCreateScreen}
+        onRenameScreen={handlePaletteRenameScreen}
+        onDeleteScreen={handlePaletteDeleteScreen}
+        onReorderScreens={handlePaletteReorderScreens}
+        onMoveScreen={handlePaletteMoveScreen}
+      />
 
-            <CommandPalette
-                open={paletteOpen}
-                initialPage={palettePage}
-                onClose={() => setPaletteOpen(false)}
-                onAddWidget={handlePaletteAddWidget}
-                screens={layout.screens}
-                activeScreenId={layout.activeScreenId}
-                onSetActiveScreen={(id) => void layout.setActiveScreen(id)}
-                onCreateScreen={handlePaletteCreateScreen}
-                onRenameScreen={handlePaletteRenameScreen}
-                onDeleteScreen={handlePaletteDeleteScreen}
-                onReorderScreens={handlePaletteReorderScreens}
-                onMoveScreen={handlePaletteMoveScreen}
-            />
-
-            <ToastViewport />
-        </>
-    );
+      <ToastViewport />
+    </>
+  );
 }

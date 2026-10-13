@@ -3,11 +3,11 @@ import type { VNode } from "preact";
 import { BasicChart } from "../BasicChart";
 import { useChartState } from "../hooks/useChartState";
 import { useChartQuote } from "../hooks/useChartQuote";
-import { ChartMarketOverlay } from "../components/ChartMarketOverlay";
+import { ChartOverlay } from "../components/ChartOverlay.tsx";
 import {
   graphicSettingsDefinition,
   resolveGraphicSettings,
-} from "../settings/graphicSettings";
+} from "../settings/basicChartSettings";
 import { nodes } from "../../../ui/Combobox/testHarness";
 
 vi.mock("preact/hooks", () => ({
@@ -76,9 +76,7 @@ function composition() {
     loading: boolean;
     error: string | null;
   }>;
-  const overlay = nodes(shell).find(
-    (node) => node.type === ChartMarketOverlay,
-  )!;
+  const overlay = nodes(shell).find((node) => node.type === ChartOverlay)!;
   return { overlay, shell };
 }
 

@@ -9,7 +9,7 @@ import {
   applyGraphicSettings,
   graphicSettingsDefinition,
   resolveGraphicSettings,
-} from "../settings/graphicSettings";
+} from "../settings/basicChartSettings";
 
 describe("BasicChart graphic settings", () => {
   it("keeps the existing appearance as defaults and validates persisted values", () => {

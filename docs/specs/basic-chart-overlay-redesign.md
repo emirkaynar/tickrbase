@@ -46,13 +46,13 @@ Aselsan Elektronik · BIST  (● D)
 
 Compact pill containing a session-colored dot and, when the latest accepted source timestamp lags by more than 60 seconds during an active/non-closed state, a `D`. Warning icons share this same pill rather than using a separate button. A short countdown can appear after D and before the warning icon. No always-visible session text, quote-age counter, or session timeline graph.
 
-| Session | Dot direction | Delay marker |
-| --- | --- | --- |
-| Regular | Green | `D` only for known positive delay |
-| Pre-market | Distinct cool color, e.g. blue | Same rule |
-| Post-market | Distinct warm color, e.g. amber | Same rule |
-| Verified overnight | Distinct color, e.g. violet | Same rule |
-| Closed | Muted gray | Same rule |
+| Session            | Dot direction                   | Delay marker                      |
+| ------------------ | ------------------------------- | --------------------------------- |
+| Regular            | Green                           | `D` only for known positive delay |
+| Pre-market         | Distinct cool color, e.g. blue  | Same rule                         |
+| Post-market        | Distinct warm color, e.g. amber | Same rule                         |
+| Verified overnight | Distinct color, e.g. violet     | Same rule                         |
+| Closed             | Muted gray                      | Same rule                         |
 
 Exact non-regular colors are implementation choices to validate in both themes using existing tokens where possible. Color alone must not communicate state: accessible labels and tooltips carry the full meaning.
 
@@ -172,7 +172,7 @@ Follow existing named components, typed props, Preact hooks, CSS modules, theme 
 
 ```tsx
 type RemoveProps = BaseProps & {
-    onClick: () => void;
+  onClick: () => void;
 };
 ```
 

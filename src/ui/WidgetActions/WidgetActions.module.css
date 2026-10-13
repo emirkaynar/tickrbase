@@ -1,71 +1,71 @@
 .button {
-    width: 22px;
-    height: 22px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: transparent;
-    color: var(--color-text-muted);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition:
-        border-color var(--transition-fast),
-        color var(--transition-fast),
-        opacity var(--transition-fast),
-        background var(--transition-base);
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    opacity var(--transition-fast),
+    background var(--transition-base);
 }
 
 .button svg {
-    width: 13px;
-    height: 13px;
+  width: 13px;
+  height: 13px;
 }
 
 .iconSlot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 
-    & svg {
-        width: 14px;
-        height: 14px;
-    }
+  & svg {
+    width: 14px;
+    height: 14px;
+  }
 }
 
 .options:hover,
 .options[data-state="open"] {
-    background: var(--color-bg-surface);
-    color: var(--color-text);
+  background: var(--color-bg-surface);
+  color: var(--color-text);
 }
 
 .options:focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: 2px;
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
 }
 
 .drag svg {
-    width: 11px;
-    height: 11px;
+  width: 11px;
+  height: 11px;
 }
 
 .remove:hover {
-    background: var(--color-bg-surface) !important;
-    color: var(--color-danger) !important;
+  background: var(--color-bg-surface) !important;
+  color: var(--color-danger) !important;
 }
 
 .remove:active {
-    background: var(--color-danger) !important;
-    color: var(--color-bg-surface) !important;
+  background: var(--color-danger) !important;
+  color: var(--color-bg-surface) !important;
 }
 
 .drag:active {
-    cursor: grabbing;
-    background: var(--color-primary) !important;
-    color: var(--color-bg-surface) !important;
+  cursor: grabbing;
+  background: var(--color-primary) !important;
+  color: var(--color-bg-surface) !important;
 }
 
 .drag:hover {
-    background: var(--color-bg-surface) !important;
-    color: var(--color-primary);
+  background: var(--color-bg-surface) !important;
+  color: var(--color-primary);
 }

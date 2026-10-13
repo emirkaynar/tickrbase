@@ -45,7 +45,10 @@ export function SettingsPage() {
     const options = new Map<string, ComboboxItem[]>();
     for (const def of settings) {
       if (def.type === "select") {
-        options.set(def.id, getSettingOptions(def).map((item) => ({ ...item })));
+        options.set(
+          def.id,
+          getSettingOptions(def).map((item) => ({ ...item })),
+        );
       }
     }
     return options;
@@ -67,7 +70,9 @@ export function SettingsPage() {
       setLoading(false);
     };
     void load();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handleBooleanChange = async (id: string, nextValue: boolean) => {
@@ -89,9 +94,10 @@ export function SettingsPage() {
       setValues((prev) => ({ ...prev, [id]: previousValue }));
       setErrors((prev) => ({
         ...prev,
-        [id]: error instanceof Error && error.message
-          ? error.message
-          : "Failed to save setting. Please try again.",
+        [id]:
+          error instanceof Error && error.message
+            ? error.message
+            : "Failed to save setting. Please try again.",
       }));
     } finally {
       pendingSelects.current.delete(id);
@@ -105,7 +111,9 @@ export function SettingsPage() {
         <Switch
           checked={values[def.id] === true}
           aria-labelledby={`setting-${def.id}-label`}
-          aria-describedby={def.description ? `setting-${def.id}-description` : undefined}
+          aria-describedby={
+            def.description ? `setting-${def.id}-description` : undefined
+          }
           onChange={(checked) => {
             void handleBooleanChange(def.id, checked);
           }}
@@ -114,10 +122,13 @@ export function SettingsPage() {
     }
     if (def.type === "select") {
       const error = errors[def.id];
-      const describedBy = [
-        def.description ? `setting-${def.id}-description` : null,
-        error ? `setting-${def.id}-error` : null,
-      ].filter(Boolean).join(" ") || undefined;
+      const describedBy =
+        [
+          def.description ? `setting-${def.id}-description` : null,
+          error ? `setting-${def.id}-error` : null,
+        ]
+          .filter(Boolean)
+          .join(" ") || undefined;
       return (
         <>
           <Combobox
@@ -129,13 +140,21 @@ export function SettingsPage() {
             invalid={Boolean(error)}
             aria-labelledby={`setting-${def.id}-label`}
             aria-describedby={describedBy}
-            onChange={(nextValue) => { void handleSelectChange(def.id, nextValue); }}
+            onChange={(nextValue) => {
+              void handleSelectChange(def.id, nextValue);
+            }}
           />
           {saving[def.id] && (
-            <div className={styles.selectStatus} role="status">Saving…</div>
+            <div className={styles.selectStatus} role="status">
+              Saving…
+            </div>
           )}
           {error && (
-            <div id={`setting-${def.id}-error`} className={styles.selectError} role="alert">
+            <div
+              id={`setting-${def.id}-error`}
+              className={styles.selectError}
+              role="alert"
+            >
               {error}
             </div>
           )}
@@ -287,7 +306,10 @@ export function SettingsPage() {
               <ArkScrollArea.Thumb className={styles.scrollThumb} />
             </ArkScrollArea.Scrollbar>
           </ArkScrollArea.Root>
-          <ArkScrollArea.Root className={styles.scrollRoot} style={"flex-grow: 1;"}>
+          <ArkScrollArea.Root
+            className={styles.scrollRoot}
+            style={"flex-grow: 1;"}
+          >
             <ArkScrollArea.Viewport className={styles.scrollViewport}>
               <ArkScrollArea.Content className={styles.scrollContent}>
                 {categoryIds.map((categoryId) =>
@@ -304,7 +326,10 @@ export function SettingsPage() {
                             className={getSettingItemClass(def.type)}
                           >
                             <div className={getSettingInfoClass(def.type)}>
-                              <div id={`setting-${def.id}-label`} className={getSettingLabelClass(def.type)}>
+                              <div
+                                id={`setting-${def.id}-label`}
+                                className={getSettingLabelClass(def.type)}
+                              >
                                 {def.label}
                               </div>
                               {def.description && (
@@ -325,7 +350,7 @@ export function SettingsPage() {
                         ))}
                       </div>
                     </ArkTabs.Content>
-                  ))
+                  )),
                 )}
               </ArkScrollArea.Content>
             </ArkScrollArea.Viewport>

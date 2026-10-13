@@ -3,52 +3,45 @@ import styles from "./Input.module.css";
 type InputSize = "sm" | "md";
 
 type Props = {
-    value: string;
-    onChange: (value: string) => void;
-    placeholder?: string;
-    size?: InputSize;
-    error?: boolean;
-    disabled?: boolean;
-    autoFocus?: boolean;
-    className?: string;
-    id?: string;
-    type?: "text" | "number" | "email";
-    step?: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  size?: InputSize;
+  error?: boolean;
+  disabled?: boolean;
+  autoFocus?: boolean;
+  className?: string;
+  id?: string;
+  type?: "text" | "number" | "email";
+  step?: string;
 };
 
 export function Input({
-    value,
-    onChange,
-    placeholder,
-    size = "sm",
-    error,
-    disabled,
-    autoFocus,
-    className,
-    id,
-    type = "text",
-    step,
+  value,
+  onChange,
+  placeholder,
+  size = "sm",
+  error,
+  disabled,
+  autoFocus,
+  className,
+  id,
+  type = "text",
+  step,
 }: Props) {
-    return (
-        <input
-            id={id}
-            type={type}
-            step={step ?? (type === "number" ? "any" : undefined)}
-            value={value}
-            onInput={(e) =>
-                onChange((e.currentTarget as HTMLInputElement).value)
-            }
-            placeholder={placeholder}
-            disabled={disabled}
-            autoFocus={autoFocus}
-            class={[
-                styles.input,
-                styles[size],
-                error ? styles.error : "",
-                className,
-            ]
-                .filter(Boolean)
-                .join(" ")}
-        />
-    );
+  return (
+    <input
+      id={id}
+      type={type}
+      step={step ?? (type === "number" ? "any" : undefined)}
+      value={value}
+      onInput={(e) => onChange((e.currentTarget as HTMLInputElement).value)}
+      placeholder={placeholder}
+      disabled={disabled}
+      autoFocus={autoFocus}
+      class={[styles.input, styles[size], error ? styles.error : "", className]
+        .filter(Boolean)
+        .join(" ")}
+    />
+  );
 }

@@ -1,512 +1,513 @@
 .root {
-    width: 100%;
-    min-height: 0;
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    background: var(--color-bg-elevated);
-    overflow: visible;
-    transition: opacity 140ms cubic-bezier(0.4, 0, 0.2, 1);
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  background: var(--color-bg-elevated);
+  overflow: visible;
+  transition: opacity 140ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .hydrating {
-    opacity: 0;
-    pointer-events: none;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .widget {
-    height: 100%;
+  height: 100%;
 }
 
 .full {
-    min-height: 320px;
+  min-height: 320px;
+  width: 100% !important;
+  table {
     width: 100% !important;
-    table {
-        width: 100% !important;
-    }
+  }
 }
 
 .loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    min-height: 180px;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-    font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 180px;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
 }
 
 .scrollArea {
-    width: 100%;
-    height: 100%;
+  width: 100%;
+  height: 100%;
 }
 
 .viewport {
-    width: 100%;
-    height: 100%;
+  width: 100%;
+  height: 100%;
 }
 
 .table {
-    width: max-content;
-    border-collapse: separate;
-    border-spacing: 0;
-    table-layout: fixed;
-    color: var(--color-text);
-    font-size: var(--font-size-base);
-    font-family: var(--font-mono);
+  width: max-content;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  font-family: var(--font-mono);
 }
 
 .fillColumn {
-    width: auto;
+  width: auto;
 }
 
 .head {
-    position: sticky;
-    top: 0;
-    z-index: 5;
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .headerRow {
-    background: var(--color-bg-surface);
+  background: var(--color-bg-surface);
 }
 
 .headerCell {
-    position: sticky;
-    top: 0;
-    z-index: 5;
-    border-bottom: 1px solid var(--color-border);
-    color: var(--color-text-muted);
-    padding: 0;
-    text-align: left;
-    vertical-align: middle;
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  padding: 0;
+  text-align: left;
+  vertical-align: middle;
 }
 
 .fillHeaderCell {
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-bg-surface);
-    padding: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-surface);
+  padding: 0;
 }
 
 .headerInner {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-height: 32px;
-    padding: var(--space-1) var(--space-2) var(--space-1) var(--space-1-5);
-    margin-right: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-1-5);
+  margin-right: var(--space-1);
 }
 
 .headerContent {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sortButton {
-    appearance: none;
-    border: none;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-width: 0;
-    width: 100% !important;
-    min-height: 24px;
-    cursor: pointer;
-    padding: 0;
-    transition: color var(--transition-fast);
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  width: 100% !important;
+  min-height: 24px;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--transition-fast);
 }
 
 .sortButton:hover {
-    color: var(--color-text);
+  color: var(--color-text);
 }
 
 .sortButton:has(.sortIndicator) {
-    color: var(--color-text);
+  color: var(--color-text);
 }
 
 .headerCell[data-draggable="true"] .headerInner,
 .headerCell[data-draggable="true"] .sortButton {
-    cursor: pointer;
+  cursor: pointer;
 }
 
 .headerCell[data-draggable="true"]:active .headerInner,
 .headerCell[data-draggable="true"]:active .sortButton {
-    cursor: grabbing;
+  cursor: grabbing;
 }
 
 .sortIndicator {
-    color: var(--color-primary);
-    background: var(--color-bg-surface);
-    font-size: var(--font-size-xs);
-    line-height: 1;
-    min-width: 14px !important;
-    -webkit-box-shadow: -3px 0px 2px 0px var(--color-bg-surface);
-    box-shadow: -3px 0px 2px 0px var(--color-bg-surface);
+  color: var(--color-primary);
+  background: var(--color-bg-surface);
+  font-size: var(--font-size-xs);
+  line-height: 1;
+  min-width: 14px !important;
+  -webkit-box-shadow: -3px 0px 2px 0px var(--color-bg-surface);
+  box-shadow: -3px 0px 2px 0px var(--color-bg-surface);
 }
 
 .columnResizer {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 8px;
-    height: 100%;
-    cursor: ew-resize;
-    z-index: 8;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 100%;
+  cursor: ew-resize;
+  z-index: 8;
 }
 
 .columnResizer::after {
-    content: "";
-    position: absolute;
-    top: var(--space-1-5);
-    bottom: var(--space-1-5);
-    left: 4px;
-    width: 2px;
-    background: var(--color-text-subtle);
-    border-radius: var(--radius-full);
-    transition: background var(--transition-fast);
+  content: "";
+  position: absolute;
+  top: var(--space-1-5);
+  bottom: var(--space-1-5);
+  left: 4px;
+  width: 2px;
+  background: var(--color-text-subtle);
+  border-radius: var(--radius-full);
+  transition: background var(--transition-fast);
 }
 
 .columnResizer:hover::after {
-    background: var(--color-text);
+  background: var(--color-text);
 }
 .headerCell:hover .resizing::after {
-    background: var(--color-primary);
+  background: var(--color-primary);
 }
 .body {
-    background: var(--color-bg-elevated);
+  background: var(--color-bg-elevated);
 }
 
 .virtualPadRow {
-    pointer-events: none;
+  pointer-events: none;
 }
 
 .virtualPadCell {
-    padding: 0;
-    border: 0;
-    background: transparent;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .bodyRow {
-    position: relative;
-    width: 100%;
-    transition:
-        background var(--transition-fast),
-        transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-        box-shadow var(--transition-fast);
+  position: relative;
+  width: 100%;
+  transition:
+    background var(--transition-fast),
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow var(--transition-fast);
 }
 
 .bodyRow[data-drag-state="dragging"],
 .bodyRow[data-drag-state="over"],
 .bodyRow[data-drag-state="settled"] {
-    will-change: transform, box-shadow;
+  will-change: transform, box-shadow;
 }
 
 .bodyRow[data-draggable="true"] {
-    cursor: pointer;
+  cursor: pointer;
 }
 
 .bodyRow[data-draggable="true"]:active {
-    cursor: grabbing;
+  cursor: grabbing;
 }
 
 .bodyRow[data-drag-state="dragging"] {
-    animation: rowLift 160ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: rowLift 160ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .bodyRow[data-drag-state="over"] .cell,
 .bodyRow[data-drag-state="over"] .fillCell {
-    animation: rowTargetFlash 220ms ease-out;
+  animation: rowTargetFlash 220ms ease-out;
 }
 
 .bodyRow[data-drag-state="settled"] {
-    animation: rowSettle 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: rowSettle 240ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .cell {
-    border-bottom: 1px solid var(--color-border);
-    padding: 0;
-    vertical-align: middle;
-    background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0;
+  vertical-align: middle;
+  background: var(--color-bg-elevated);
 }
 
 .fillCell {
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-bg-elevated);
-    padding: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  padding: 0;
 }
 
 .bodyRow:hover .cell {
-    background: var(--color-bg-surface);
+  background: var(--color-bg-surface);
 }
 
 .bodyRow:hover .fillCell {
-    background: var(--color-bg-surface);
+  background: var(--color-bg-surface);
 }
 
 .cellContent {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-height: 32px;
-    padding: var(--space-1-5) var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 32px;
+  padding: var(--space-1-5) var(--space-1);
 }
 
 .cellValue {
-    display: inline-flex;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  display: inline-flex;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .alignLeft {
-    justify-content: flex-start;
-    text-align: left;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .alignCenter {
-    justify-content: center;
-    text-align: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .alignRight {
-    justify-content: flex-end;
-    text-align: right;
+  justify-content: flex-end;
+  text-align: right;
 }
 
 .stickyCell {
-    position: sticky;
-    z-index: 4;
-    background: var(--color-bg-elevated);
+  position: sticky;
+  z-index: 4;
+  background: var(--color-bg-elevated);
 }
 
 .stickyCellRight {
-    position: sticky;
-    z-index: 4;
-    background: transparent;
+  position: sticky;
+  z-index: 4;
+  background: transparent;
 }
 
 .headerCell.stickyCell {
-    z-index: 7;
-    background: var(--color-bg-surface);
+  z-index: 7;
+  background: var(--color-bg-surface);
 }
 
 .headerCell.stickyCellRight {
-    display: none;
+  display: none;
 }
 
 .bodyRow:hover .stickyCell {
-    background: var(--color-bg-surface);
+  background: var(--color-bg-surface);
 }
 
-.bodyRow:hover .stickyCellRight, .bodyRow:focus-visible .stickyCellRight {
-    background: var(--color-bg-surface);
-    -webkit-box-shadow: -10px 0px 5px -2px var(--color-bg-surface);
-    box-shadow: -10px 0px 5px -2px var(--color-bg-surface);
+.bodyRow:hover .stickyCellRight,
+.bodyRow:focus-visible .stickyCellRight {
+  background: var(--color-bg-surface);
+  -webkit-box-shadow: -10px 0px 5px -2px var(--color-bg-surface);
+  box-shadow: -10px 0px 5px -2px var(--color-bg-surface);
 }
 
 .dragSource {
-    box-shadow: inset 0 0 0 1px var(--color-accent);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
 }
 
 .dropTarget {
-    box-shadow:
-        inset 0 0 0 1px var(--color-bg-surface),
-        0 0 0 2px color-mix(in hsl, var(--color-bg-surface), transparent 75%);
+  box-shadow:
+    inset 0 0 0 1px var(--color-bg-surface),
+    0 0 0 2px color-mix(in hsl, var(--color-bg-surface), transparent 75%);
 }
 
 @keyframes rowLift {
-    from {
-        transform: translateY(0);
-        box-shadow: inset 0 0 0 1px transparent;
-    }
+  from {
+    transform: translateY(0);
+    box-shadow: inset 0 0 0 1px transparent;
+  }
 
-    to {
-        transform: scale(1.005);
-        box-shadow:
-            inset 0 0 0 1px var(--color-accent),
-            0 10px 20px color-mix(in hsl, var(--color-bg), transparent 70%);
-    }
+  to {
+    transform: scale(1.005);
+    box-shadow:
+      inset 0 0 0 1px var(--color-accent),
+      0 10px 20px color-mix(in hsl, var(--color-bg), transparent 70%);
+  }
 }
 
 @keyframes rowTargetFlash {
-    0% {
-        background: color-mix(in hsl, var(--color-accent), transparent 90%);
-    }
+  0% {
+    background: color-mix(in hsl, var(--color-accent), transparent 90%);
+  }
 
-    100% {
-        background: transparent;
-    }
+  100% {
+    background: transparent;
+  }
 }
 
 @keyframes rowSettle {
-    0% {
-        transform: scale(0.998);
-        box-shadow: inset 0 0 0 1px var(--color-accent);
-    }
+  0% {
+    transform: scale(0.998);
+    box-shadow: inset 0 0 0 1px var(--color-accent);
+  }
 
-    100% {
-        transform: scale(1);
-        box-shadow: inset 0 0 0 1px transparent;
-    }
+  100% {
+    transform: scale(1);
+    box-shadow: inset 0 0 0 1px transparent;
+  }
 }
 
 .spacerRow {
-    background: var(--color-bg-elevated);
-    transition:
-        background var(--transition-fast),
-        transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
-        box-shadow var(--transition-fast);
+  background: var(--color-bg-elevated);
+  transition:
+    background var(--transition-fast),
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow var(--transition-fast);
 }
 
 .spacerRow:hover .spacerCell {
-    background: var(--color-bg-surface);
+  background: var(--color-bg-surface);
 }
 
 .spacerRow[data-drag-state="dragging"],
 .spacerRow[data-drag-state="over"],
 .spacerRow[data-drag-state="settled"] {
-    will-change: transform, box-shadow;
+  will-change: transform, box-shadow;
 }
 
 .spacerCell {
-    padding: 0;
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-bg-elevated);
+  padding: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
 }
 
 .spacer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-height: 32px;
-    padding: var(--space-1-5) var(--space-2);
-    position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: var(--space-1-5) var(--space-2);
+  position: relative;
 }
 
 .spacerLabel {
-    font-size: var(--font-size-lg);
-    color: var(--color-text-muted);
-    letter-spacing: 0.01em;
-    text-transform: none;
-    line-height: 1.2;
-    white-space: nowrap;
-    position: sticky;
-    left: var(--space-2);
-    z-index: 2;
+  font-size: var(--font-size-lg);
+  color: var(--color-text-muted);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  line-height: 1.2;
+  white-space: nowrap;
+  position: sticky;
+  left: var(--space-2);
+  z-index: 2;
 }
 
 .spacerRemoveWrapper {
-    margin-left: auto;
-    position: sticky;
-    right: var(--space-2);
-    z-index: 2;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  margin-left: auto;
+  position: sticky;
+  right: var(--space-2);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .spacerRemoveButton {
-    border: none;
-    background: var(--color-bg-elevated);
-    color: var(--color-text);
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-sm);
-    width: 20px;
-    height: 20px;
-    opacity: 0;
-    pointer-events: none;
-    transition:
-        opacity var(--transition-fast),
-        color var(--transition-fast),
-        background var(--transition-fast);
+  border: none;
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  width: 20px;
+  height: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 .spacerRemoveButton:hover {
-    color: var(--color-danger);
-    background: var(--color-bg-surface);
+  color: var(--color-danger);
+  background: var(--color-bg-surface);
 }
 
 .spacerRow:hover .spacerRemoveButton,
 .spacerRow[data-drag-state="dragging"] .spacerRemoveButton,
 .spacerRow[data-drag-state="over"] .spacerRemoveButton {
-    opacity: 1;
-    pointer-events: auto;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .spacerRow[data-draggable="true"] .spacer {
-    cursor: pointer;
+  cursor: pointer;
 }
 
 .spacerRow[data-draggable="true"]:active .spacer {
-    cursor: grabbing;
+  cursor: grabbing;
 }
 
 .emptyCell {
-    padding: var(--space-8) var(--space-4);
-    width: fit-content;
-    position: absolute;
-    display: flex;
-    text-align: center;
-    color: var(--color-text-muted);
-    background: var(--color-bg-elevated);
-    border-bottom: 1px solid var(--color-border-subtle);
+  padding: var(--space-8) var(--space-4);
+  width: fit-content;
+  position: absolute;
+  display: flex;
+  text-align: center;
+  color: var(--color-text-muted);
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 
 .scrollbar {
-    display: flex;
-    background: var(--color-bg-muted);
-    user-select: none;
-    touch-action: none;
-    padding: var(--space-0-5);
+  display: flex;
+  background: var(--color-bg-muted);
+  user-select: none;
+  touch-action: none;
+  padding: var(--space-0-5);
 }
 
 .scrollbar[data-state="hidden"] {
-    display: none;
+  display: none;
 }
 
 .scrollbar[data-orientation="horizontal"] {
-    flex-direction: column;
-    height: 12px;
-    border-top: 1px solid var(--color-border-subtle);
+  flex-direction: column;
+  height: 12px;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 .scrollbar[data-orientation="vertical"] {
-    width: 12px;
-    border-left: 1px solid var(--color-border-subtle);
+  width: 12px;
+  border-left: 1px solid var(--color-border-subtle);
 }
 
 .thumb {
-    flex: 1;
-    background: color-mix(in hsl, var(--color-text-subtle), transparent 25%);
-    border-radius: var(--radius-full);
+  flex: 1;
+  background: color-mix(in hsl, var(--color-text-subtle), transparent 25%);
+  border-radius: var(--radius-full);
 }
 
 @keyframes cellPulse {
-    0% {
-        background: var(--color-bg-surface);
-    }
+  0% {
+    background: var(--color-bg-surface);
+  }
 
-    100% {
-        background: transparent;
-    }
+  100% {
+    background: transparent;
+  }
 }
 
 .thumb:hover {
-    background: color-mix(in hsl, var(--color-text-muted), transparent 15%);
+  background: color-mix(in hsl, var(--color-text-muted), transparent 15%);
 }
 
 .corner {
-    background: var(--color-bg-muted);
+  background: var(--color-bg-muted);
 }

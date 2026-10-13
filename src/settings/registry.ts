@@ -4,8 +4,7 @@ export type SettingValue = boolean | number | string;
 
 export type SettingOption = { label: string; value: string };
 export type SettingOptions =
-  | readonly SettingOption[]
-  | (() => readonly SettingOption[]);
+  readonly SettingOption[] | (() => readonly SettingOption[]);
 
 export type SettingItemDefinition = {
   id: string; // Global unique ID, e.g. 'watchlist.disablePulse'
@@ -30,7 +29,7 @@ export type SettingDefinition = SettingItemDefinition & {
   subcategoryId: string; // Stable nested grouping key, e.g. 'lists'
   subcategoryLabel: string; // Nested tab label, e.g. 'Lists'
   subcategoryIcon?: string; // Optional Lucide icon name, e.g. 'List'
-}
+};
 
 export interface SettingSectionDefinition {
   category: string;
@@ -67,7 +66,7 @@ function getTimezoneOptions(): readonly SettingOption[] {
   } catch {
     zones = [Intl.DateTimeFormat().resolvedOptions().timeZone];
   }
-  timezoneOptions = [...new Set(["UTC", ...zones])].map(value => ({
+  timezoneOptions = [...new Set(["UTC", ...zones])].map((value) => ({
     value,
     label: value.replaceAll("_", " "),
   }));
@@ -194,14 +193,16 @@ registerSettingSections([
         id: "portfolio.defaultCurrency",
         type: "string",
         label: "Default Base Currency for All Portfolios",
-        description: "Currency used when viewing 'All Portfolios' or as general fallback.",
+        description:
+          "Currency used when viewing 'All Portfolios' or as general fallback.",
         defaultValue: "TRY",
       },
       {
         id: "portfolio.showNativeSubtitles",
         type: "boolean",
         label: "Show Native Currency Subtitles",
-        description: "Display the asset's native trading currency as a muted subtitle under converted values in Holdings and Transactions.",
+        description:
+          "Display the asset's native trading currency as a muted subtitle under converted values in Holdings and Transactions.",
         defaultValue: true,
       },
     ],
@@ -231,11 +232,13 @@ registerSettingSections([
         id: "general.timezone",
         type: "select",
         label: "Display timezone",
-        description: "Timezone used for chart times and market status. Exchange schedules remain in their native timezone.",
+        description:
+          "Timezone used for chart times and market status. Exchange schedules remain in their native timezone.",
         defaultValue: "UTC",
         options: getTimezoneOptions,
         placeholder: "Search timezones…",
-        validate: value => isValidTimezone(value) ? null : "Invalid IANA timezone",
+        validate: (value) =>
+          isValidTimezone(value) ? null : "Invalid IANA timezone",
       },
     ],
   },
@@ -264,7 +267,8 @@ registerSettingSections([
         id: "integrations.tickrbaseBridge.url",
         type: "string",
         label: "Server URL #todo",
-        description: "Configure the URL for connecting to your TICKRBASE Bridge server.",
+        description:
+          "Configure the URL for connecting to your TICKRBASE Bridge server.",
         defaultValue: "http://localhost:8001",
       },
     ],
@@ -279,7 +283,8 @@ registerSettingSections([
         id: "inregrations.tradingView.embedUrl",
         type: "string",
         label: "Embed URL #todo",
-        description: "Configure the base URL for embedding TradingView widgets. This is used to work around CORS issues when loading widgets from the official TradingView domain.",
+        description:
+          "Configure the base URL for embedding TradingView widgets. This is used to work around CORS issues when loading widgets from the official TradingView domain.",
         defaultValue: "https://s3.tradingview.com/external-embedding",
       },
     ],
@@ -294,21 +299,24 @@ registerSettingSections([
         id: "basicChart.defaultInterval",
         type: "string",
         label: "Default Interval #todo",
-        description: "Default time interval for new charts. Can be overridden per chart using the interval selector in the widget header.",
+        description:
+          "Default time interval for new charts. Can be overridden per chart using the interval selector in the widget header.",
         defaultValue: "1d",
       },
       {
         id: "defaultChartSymbol",
         type: "string",
         label: "Default Symbol #todo",
-        description: "Default ticker symbol for new charts. Can be overridden per chart using the ticker selector in the widget header.",
+        description:
+          "Default ticker symbol for new charts. Can be overridden per chart using the ticker selector in the widget header.",
         defaultValue: "XU100.IS",
       },
       {
         id: "crosshairMode",
         type: "integer",
         label: "Crosshair Mode #todo",
-        description: "Determines how the crosshair behaves on the chart. 0 = normal, 1 = magnet (snaps to nearest data point), 2 = free (does not snap).",
+        description:
+          "Determines how the crosshair behaves on the chart. 0 = normal, 1 = magnet (snaps to nearest data point), 2 = free (does not snap).",
         defaultValue: 1,
       },
     ],
@@ -338,14 +346,17 @@ registerSettingSections([
         id: "economicCalendar.defaultCountryFilter",
         type: "string",
         label: "Default Country",
-        description: "Comma-separated list of country codes to show in the calendar by default. See TradingView documentation for valid codes.",
-        defaultValue: "ar,au,br,ca,cn,fr,de,in,id,it,jp,kr,mx,ru,sa,za,tr,gb,us,eu",
+        description:
+          "Comma-separated list of country codes to show in the calendar by default. See TradingView documentation for valid codes.",
+        defaultValue:
+          "ar,au,br,ca,cn,fr,de,in,id,it,jp,kr,mx,ru,sa,za,tr,gb,us,eu",
       },
       {
         id: "economicCalendar.defaultImportanceFilter",
         type: "boolean",
         label: "Default Importance",
-        description: "Show only economic events with the selected importance level by default.",
+        description:
+          "Show only economic events with the selected importance level by default.",
         defaultValue: false,
       },
     ],
@@ -360,7 +371,8 @@ registerSettingSections([
         id: "watchlist.disablePulse",
         type: "boolean",
         label: "Disable Pulse Animations",
-        description: "Disable real-time price change pulse animations and related calculations for better performance.",
+        description:
+          "Disable real-time price change pulse animations and related calculations for better performance.",
         defaultValue: false,
       },
     ],

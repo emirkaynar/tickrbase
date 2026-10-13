@@ -1,47 +1,48 @@
 .input {
-    width: 100%;
-    border: none;
-    border-radius: var(--radius-sm);
-    background: transparent;
-    color: var(--color-text);
-    font-family: var(--font-mono);
-    outline: none;
-    transition:
-        border-color var(--transition-fast),
-        box-shadow var(--transition-fast);
+  width: 100%;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  outline: none;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
 }
 
 .input::placeholder {
-    color: var(--color-text-subtle);
+  color: var(--color-text-subtle);
 }
 
-.input:hover, .input:focus {
-    background: var(--color-bg-surface);
+.input:hover,
+.input:focus {
+  background: var(--color-bg-surface);
 }
 
 .input:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .error {
-    border-color: var(--color-danger);
+  border-color: var(--color-danger);
 }
 
 .error:focus {
-    box-shadow: 0 0 0 2px
-        color-mix(in oklab, var(--color-danger) 25%, transparent);
+  box-shadow: 0 0 0 2px
+    color-mix(in oklab, var(--color-danger) 25%, transparent);
 }
 
 /* ── Sizes ── */
 .sm {
-    height: 24px;
-    padding: 0 var(--space-2);
-    font-size: var(--font-size-sm);
+  height: 24px;
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-sm);
 }
 
 .md {
-    height: 32px;
-    padding: 0 var(--space-3);
-    font-size: var(--font-size-base);
+  height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--font-size-base);
 }

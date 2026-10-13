@@ -1,519 +1,519 @@
 .root {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-    background: var(--color-bg-elevated);
-    border-radius: var(--radius-md);
-    border: 1px solid var(--color-border);
-    box-shadow: inset 0 0 1px var(--color-border);
-    transition: border-color var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: inset 0 0 1px var(--color-border);
+  transition: border-color var(--transition-fast);
 }
 
 .root:has(.removeBtn:active) {
-    border-color: var(--color-danger) !important;
-    box-shadow: inset 0 0 2px var(--color-danger) !important;
+  border-color: var(--color-danger) !important;
+  box-shadow: inset 0 0 2px var(--color-danger) !important;
 }
 
 .handle {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    height: 32px;
-    min-height: 32px;
-    padding: 0 var(--space-2);
-    padding-left: var(--space-0-5);
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-bg-elevated);
-    flex-shrink: 0;
-    transition: box-shadow var(--transition-slow);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 32px;
+  min-height: 32px;
+  padding: 0 var(--space-2);
+  padding-left: var(--space-0-5);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  flex-shrink: 0;
+  transition: box-shadow var(--transition-slow);
 }
 
 .widgetTitle {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    min-width: 0;
-    position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  position: relative;
 }
 
 .listTitleButton {
-    border: none;
-    background: transparent;
-    color: inherit;
-    display: inline-flex;
-    align-items: center;
-    border-radius: var(--radius-sm);
-    gap: var(--space-1);
-    padding: var(--space-1-5) var(--space-1-5);
-    cursor: pointer;
-    transition: var(--transition-base);
+  border: none;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  gap: var(--space-1);
+  padding: var(--space-1-5) var(--space-1-5);
+  cursor: pointer;
+  transition: var(--transition-base);
 }
 
 .listTitleButton:hover {
-    background: var(--color-bg-surface);
-    color: var(--color-text);
+  background: var(--color-bg-surface);
+  color: var(--color-text);
 }
 
 .listMenu {
-    min-width: 220px;
-    max-width: 280px;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-elevated);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
-    z-index: var(--z-dropdown);
-    padding: var(--space-2);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    outline: none;
-    max-height: min(var(--available-height, 320px), 320px);
-    overflow: hidden;
-    &[data-state="open"] {
-        animation: scale-in var(--transition-fast) forwards;
-    }
+  min-width: 220px;
+  max-width: 280px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  z-index: var(--z-dropdown);
+  padding: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  outline: none;
+  max-height: min(var(--available-height, 320px), 320px);
+  overflow: hidden;
+  &[data-state="open"] {
+    animation: scale-in var(--transition-fast) forwards;
+  }
 }
 
 .listMenu[data-state="closed"] {
-    display: none;
+  display: none;
 }
 
 .listMenuSectionTitle {
-    font-size: var(--font-size-xs);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--color-text-subtle);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-subtle);
 }
 
 .listMenuItems {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-    max-height: 180px;
-    overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 .listMenuItem,
 .listMenuItemActive {
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-elevated);
-    color: var(--color-text-muted);
-    border-radius: var(--radius-sm);
-    padding: var(--space-1) var(--space-2);
-    text-align: left;
-    cursor: pointer;
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    outline: none;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  text-align: left;
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  outline: none;
 }
 
 .listMenuItem:hover,
 .listMenuItem:focus-visible {
-    border-color: var(--color-border-subtle);
-    background: var(--color-bg-surface);
-    color: var(--color-text);
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  color: var(--color-text);
 }
 
 .listMenuItemActive {
-    border-color: var(--color-primary);
-    background: var(--color-bg-surface);
-    color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: var(--color-bg-surface);
+  color: var(--color-primary);
 }
 
 .listMenuCreateRow {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    gap: var(--space-1);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-1);
 }
 
 .listInput {
-    min-width: 0;
+  min-width: 0;
 }
 
 .listMenuAction {
-    white-space: nowrap;
+  white-space: nowrap;
 }
 
 .deleteListButton {
-    border: 1px solid var(--color-danger);
-    background: transparent;
-    color: var(--color-danger);
-    border-radius: var(--radius-sm);
-    padding: var(--space-1) var(--space-2);
-    font-size: var(--font-size-xs);
-    cursor: pointer;
+  border: 1px solid var(--color-danger);
+  background: transparent;
+  color: var(--color-danger);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--font-size-xs);
+  cursor: pointer;
 }
 
 .deleteListButton:hover {
-    background: color-mix(in hsl, var(--color-danger), transparent 88%);
+  background: color-mix(in hsl, var(--color-danger), transparent 88%);
 }
 
 .heading {
-    font-size: var(--font-size-sm);
-    letter-spacing: 0.03em;
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  letter-spacing: 0.03em;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
 }
 
 .count {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-subtle);
-    white-space: nowrap;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-subtle);
+  white-space: nowrap;
 }
 
 .dragGrip {
-    flex: 1 1 auto;
-    display: flex;
-    align-items: center;
-    cursor: grab;
-    height: 100%;
-    min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  cursor: grab;
+  height: 100%;
+  min-width: 0;
 }
 
 .dragGrip:active {
-    cursor: grabbing;
+  cursor: grabbing;
 }
 
 .controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
 }
 
 .columnSelect {
-    display: inline-flex;
+  display: inline-flex;
 }
 
 .controlButton {
-    width: 22px;
-    height: 22px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: var(--color-bg-elevated);
-    color: var(--color-text-muted);
-    border-radius: var(--radius-sm);
-    cursor: pointer;
-    transition:
-        color var(--transition-fast),
-        background var(--transition-base),
-        opacity var(--transition-fast);
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    background var(--transition-base),
+    opacity var(--transition-fast);
 }
 
 .controlButton svg {
-    width: 12px;
-    height: 12px;
+  width: 12px;
+  height: 12px;
 }
 
 .controlButton:hover:not(:disabled) {
-    background: var(--color-bg-surface);
-    color: var(--color-primary);
+  background: var(--color-bg-surface);
+  color: var(--color-primary);
 }
 
 .controlButton:active:not(:disabled) {
-    background: var(--color-primary);
-    color: var(--color-bg-surface);
+  background: var(--color-primary);
+  color: var(--color-bg-surface);
 }
 
 .controlButton:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .content {
-    position: relative;
-    flex: 0 0 auto;
-    width: max-content;
-    min-width: 100%;
-    min-height: 100%;
+  position: relative;
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
 }
 
 .content > * {
-    min-height: 100%;
+  min-height: 100%;
 }
 
 .table {
-    height: auto;
-    min-height: 100%;
-    border: none;
-    border-radius: 0;
-    background: transparent;
-    user-select: none;
+  height: auto;
+  min-height: 100%;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  user-select: none;
 }
 
 .rowDeleteButton {
-    border: none;
-    background: var(--color-bg-elevated);
-    color: var(--color-text);
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: var(--radius-sm);
-    width: 20px;
-    height: 20px;
-    opacity: 0;
-    pointer-events: none;
-    transition:
-        opacity var(--transition-fast),
-        color var(--transition-fast),
-        background var(--transition-fast);
+  border: none;
+  background: var(--color-bg-elevated);
+  color: var(--color-text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  width: 20px;
+  height: 20px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
 }
 
 :global(.bodyRow:hover) .rowDeleteButton,
 :global(tr:hover) .rowDeleteButton {
-    opacity: 1;
-    pointer-events: auto;
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .rowDeleteButton:hover {
-    color: var(--color-danger);
-    background: var(--color-bg-elevated);
+  color: var(--color-danger);
+  background: var(--color-bg-elevated);
 }
 
 .symbolCell {
-    font-weight: 600;
+  font-weight: 600;
 }
 
 .mutedValue {
-    color: var(--color-text-muted);
+  color: var(--color-text-muted);
 }
 
 .positiveValue {
-    color: var(--color-success);
+  color: var(--color-success);
 }
 
 .negativeValue {
-    color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 .priceCell {
-    font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .cellPulseBase {
-    position: relative;
-    isolation: isolate;
-    overflow: hidden;
-    --pulse-flash: color-mix(in hsl, var(--color-text-muted), transparent 84%);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  --pulse-flash: color-mix(in hsl, var(--color-text-muted), transparent 84%);
 }
 
 .cellPulseBase::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-    background: var(--pulse-flash);
-    opacity: 0;
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: var(--pulse-flash);
+  opacity: 0;
 }
 
 .cellPulseActive::after {
-    animation: cell-value-pulse 800ms ease-out;
+  animation: cell-value-pulse 800ms ease-out;
 }
 
 .cellPulseBase > * {
-    position: relative;
-    z-index: 1;
+  position: relative;
+  z-index: 1;
 }
 
 .errorState {
-    display: grid;
-    place-items: center;
-    width: 100%;
-    height: 100%;
-    padding: var(--space-2);
-    color: var(--color-danger);
-    font-size: var(--font-size-sm);
-    text-align: center;
-    background: var(--color-bg-elevated);
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: var(--space-2);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+  text-align: center;
+  background: var(--color-bg-elevated);
 }
 
 .bodyWrapper {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .scrollRoot {
-    width: 100%;
-    flex: 1;
-    min-height: 0;
-    box-sizing: border-box;
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
 }
 .scrollViewport {
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    scrollbar-width: none;
-    overflow: auto !important;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  scrollbar-width: none;
+  overflow: auto !important;
 }
 .scrollContent {
-    width: max-content;
-    min-width: 100%;
-    min-height: 100%;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .bottomActions {
-    border-top: 1px solid var(--color-border-subtle);
-    background: var(--color-bg-elevated);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    row-gap: var(--space-1);
-    flex-wrap: wrap;
-    flex-shrink: 0;
-    margin-top: auto;
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  row-gap: var(--space-1);
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  margin-top: auto;
 }
 
 .bottomActionButton {
-    border: none;
-    background: transparent;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-2) var(--space-2);
-    cursor: pointer;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-2);
+  cursor: pointer;
 }
 
 .bottomActionButton:hover {
-    color: var(--color-text);
+  color: var(--color-text);
 }
 
 .bottomActionEditor {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .bottomActionPopover {
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-elevated);
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-md);
-    padding: var(--space-2);
-    z-index: var(--z-dropdown);
-    outline: none;
-    &[data-state="open"] {
-        animation: scale-in var(--transition-fast) forwards;
-    }
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-2);
+  z-index: var(--z-dropdown);
+  outline: none;
+  &[data-state="open"] {
+    animation: scale-in var(--transition-fast) forwards;
+  }
 }
 
 .bottomActionPopover[data-state="closed"] {
-    display: none;
+  display: none;
 }
 
 .symbolSelector {
-    min-width: 180px;
+  min-width: 180px;
 }
 
 .groupInput {
-    min-width: 140px;
+  min-width: 140px;
 }
 
 .deleteDialogActions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
 }
 .scrollbar {
-    display: flex;
-    position: relative;
-    background-color: var(--color-bg-surface);
-    border-radius: 0.375rem;
-    margin: 0.5rem;
-    opacity: 0;
-    transition: opacity 150ms;
-    pointer-events: none;
+  display: flex;
+  position: relative;
+  background-color: var(--color-bg-surface);
+  border-radius: 0.375rem;
+  margin: 0.5rem;
+  opacity: 0;
+  transition: opacity 150ms;
+  pointer-events: none;
+
+  &::before {
+    content: "";
+    position: absolute;
+  }
+
+  &[data-scrolling] {
+    transition-duration: 0ms;
+  }
+
+  &[data-hover],
+  &[data-scrolling] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &[data-orientation="vertical"] {
+    width: 0.25rem;
 
     &::before {
-        content: "";
-        position: absolute;
+      width: 1.25rem;
+      height: 100%;
+      left: 50%;
+      transform: translateX(-50%);
     }
 
-    &[data-scrolling] {
-        transition-duration: 0ms;
+    &:not([data-overflow-y]) {
+      display: none;
+    }
+  }
+
+  &[data-orientation="horizontal"] {
+    height: 0.25rem;
+
+    &::before {
+      width: 100%;
+      height: 1.25rem;
+      left: 0;
+      right: 0;
+      bottom: -0.5rem;
     }
 
-    &[data-hover],
-    &[data-scrolling] {
-        opacity: 1;
-        pointer-events: auto;
+    &:not([data-overflow-x]) {
+      display: none;
     }
-
-    &[data-orientation="vertical"] {
-        width: 0.25rem;
-
-        &::before {
-            width: 1.25rem;
-            height: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        &:not([data-overflow-y]) {
-            display: none;
-        }
-    }
-
-    &[data-orientation="horizontal"] {
-        height: 0.25rem;
-
-        &::before {
-            width: 100%;
-            height: 1.25rem;
-            left: 0;
-            right: 0;
-            bottom: -0.5rem;
-        }
-
-        &:not([data-overflow-x]) {
-            display: none;
-        }
-    }
+  }
 }
 
 .scrollThumb {
-    width: 100%;
-    border-radius: inherit;
-    background-color: var(--color-text-muted);
+  width: 100%;
+  border-radius: inherit;
+  background-color: var(--color-text-muted);
 
-    [data-orientation="horizontal"] & {
-        width: unset;
-        height: 100%;
-    }
+  [data-orientation="horizontal"] & {
+    width: unset;
+    height: 100%;
+  }
 }
 
 .corner {
-    background-color: transparent;
+  background-color: transparent;
 }
 
 @keyframes scale-in {
-    from {
-        opacity: 0;
-        transform: scale(0.96);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes cell-value-pulse {
-    from {
-        opacity: 1;
-    }
-    to {
-        opacity: 0;
-    }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }

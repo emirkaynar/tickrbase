@@ -1,16 +1,26 @@
-import { useEffect, useRef, useCallback } from "preact/hooks";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useCallback,
+  useState,
+  useMemo,
+} from "preact/hooks";
 import { ChevronDown } from "lucide-react";
-import type { IChartApi, ISeriesApi } from "lightweight-charts";
-import { createChart } from "lightweight-charts";
+import type { IChartApi, ISeriesApi, LogicalRange } from "lightweight-charts";
+import { createChart, PriceScaleMode } from "lightweight-charts";
 import { Select, TickerSelector, Tooltip } from "../../ui";
 import type { SelectItem } from "../../ui";
 import { Shell } from "../Shell";
-import { ChartMarketOverlay } from "./components/ChartMarketOverlay";
-import { applyGraphicSettings } from "./settings/graphicSettings";
+import { ChartOverlay } from "./components/ChartOverlay";
+import type { LegendBinding, LegendSource } from "./hooks/useChartLegend";
+import { applyGraphicSettings } from "./settings/basicChartSettings";
 import { useChartQuote } from "./hooks/useChartQuote";
 import { useInstrumentIdentity } from "./hooks/useInstrumentIdentity";
 import { useChartState } from "./hooks/useChartState";
+import { useChartNavigation } from "./hooks/useChartNavigation";
 import { useExtendedPriceLabel } from "./hooks/useExtendedPriceLabel";
+import { usePriceAnnotations } from "./hooks/usePriceAnnotations";
 import { createChartConfig, getSeriesColors } from "./chartConfig";
 
 import { addChartSeries } from "./seriesFactory";
@@ -47,6 +57,20 @@ function BasicChart({ id, onRemove }: Props) {
   const seriesTypeRef = useRef<ChartType | null>(null);
   const volumeRef = useRef<VolumePane | null>(null);
   const extremaRef = useRef<VisibleExtrema | null>(null);
+  const resetButtonRef = useRef<HTMLButtonElement>(null);
+  const logButtonRef = useRef<HTMLButtonElement>(null);
+  const [plotBounds, setPlotBounds] = useState({ left: 0, width: 0 });
+  const [stripHost, setStripHost] = useState<HTMLDivElement | null>(null);
+  const [compactHeight, setCompactHeight] = useState(0);
+  const [legendBinding, setLegendBinding] = useState<LegendBinding | null>(
+    null,
+  );
+  const legendResizeRef = useRef<{
+    chart: IChartApi;
+    series: ISeriesApi<any>;
+    logical: LogicalRange | null;
+    price: { from: number; to: number } | null;
+  } | null>(null);
 
   const {
     data,
@@ -63,12 +87,17 @@ function BasicChart({ id, onRemove }: Props) {
     stateReady,
     reapplyCurrentBars,
     initializeRange,
+    resetView,
+    isViewReady,
+    viewResetRevision,
     setPrevClose,
     scaleMode,
     setScaleMode,
     applyScaleFormatting,
     settings,
     graphicSettings,
+    getLastState,
+    hasBars,
 
     refreshVolume,
   } = useChartState(id, { chartRef, seriesRef, intervalRef, volumeRef });
@@ -77,6 +106,26 @@ function BasicChart({ id, onRemove }: Props) {
   const identity = useInstrumentIdentity(symbol, stateReady);
 
   const isIntraday = !["1d", "1wk", "1mo"].includes(interval);
+  const legendEnabled =
+    graphicSettings.legendOHLC ||
+    graphicSettings.legendVolume ||
+    graphicSettings.legendChange;
+  const previousLegendRef = useRef(legendEnabled);
+  useLayoutEffect(() => {
+    if (previousLegendRef.current === legendEnabled) return;
+    previousLegendRef.current = legendEnabled;
+    const chart = chartRef.current;
+    const series = seriesRef.current;
+    if (!chart || !series || !isViewReady()) return;
+    legendResizeRef.current = {
+      chart,
+      series,
+      logical: chart.timeScale().getVisibleLogicalRange(),
+      price: series.priceScale().options().autoScale
+        ? null
+        : series.priceScale().getVisibleRange(),
+    };
+  }, [legendEnabled, isViewReady]);
 
   // Keep websocket subscription map in sync with current widget symbol.
   useEffect(() => {
@@ -109,6 +158,7 @@ function BasicChart({ id, onRemove }: Props) {
     reapplyCurrentBars();
     applyScaleFormatting();
     applyGraphicSettings(chart, series, graphicSettings);
+    setLegendBinding({ chart, series, chartType });
 
     return () => {
       chartRef.current = null;
@@ -151,7 +201,37 @@ function BasicChart({ id, onRemove }: Props) {
       rafId = requestAnimationFrame(() => {
         rafId = null;
         if (!chartRef.current) return;
-        chartRef.current.resize(container.clientWidth, container.clientHeight);
+        const chart = chartRef.current;
+        chart.resize(container.clientWidth, container.clientHeight);
+        const preserved = legendResizeRef.current;
+        legendResizeRef.current = null;
+        if (
+          preserved?.chart === chart &&
+          preserved.series === seriesRef.current &&
+          isViewReady()
+        ) {
+          if (preserved.logical)
+            chart.timeScale().setVisibleLogicalRange(preserved.logical);
+          if (preserved.price) {
+            const scale = preserved.series.priceScale();
+            const current = scale.getVisibleRange();
+            if (
+              !current ||
+              current.from !== preserved.price.from ||
+              current.to !== preserved.price.to
+            ) {
+              const mode = scale.options().mode;
+              // LWC 5.2 reads LOG ranges as prices but writes them in scale units.
+              // Let its public mode conversion handle the fallback restoration.
+              if (mode === PriceScaleMode.Logarithmic)
+                scale.applyOptions({ mode: PriceScaleMode.Normal });
+              scale.setVisibleRange(preserved.price);
+              if (mode === PriceScaleMode.Logarithmic)
+                scale.applyOptions({ mode });
+            }
+          }
+        }
+        // This is a no-op after initialization, including legend-only resizes.
         initializeRange();
       });
     });
@@ -161,7 +241,7 @@ function BasicChart({ id, onRemove }: Props) {
       ro.disconnect();
       if (rafId !== null) cancelAnimationFrame(rafId);
     };
-  }, [initializeRange]);
+  }, [initializeRange, isViewReady]);
 
   // Re-apply colors when theme changes (data-theme attribute mutation)
   useEffect(() => {
@@ -220,10 +300,49 @@ function BasicChart({ id, onRemove }: Props) {
     seriesRef.current = addChartSeries(chart, chartType);
     seriesTypeRef.current = chartType;
     lifecycle.reapplyCurrentBars();
-    if (visibleRange) chart.timeScale().setVisibleLogicalRange(visibleRange);
+    if (visibleRange && isViewReady())
+      chart.timeScale().setVisibleLogicalRange(visibleRange);
     lifecycle.applyScaleFormatting();
     applyGraphicSettings(chart, seriesRef.current, lifecycle.graphicSettings);
+    setLegendBinding({ chart, series: seriesRef.current, chartType });
   }, [chartType]);
+
+  useEffect(() => {
+    const chart = chartRef.current;
+    if (!chart) return;
+    const timeScale = chart.timeScale();
+    const updatePlotBounds = () => {
+      const left = chart.priceScale("left").width();
+      const width = timeScale.width();
+      setPlotBounds((previous) =>
+        previous.left === left && previous.width === width
+          ? previous
+          : { left, width },
+      );
+    };
+    // Plot-size events also account for changing price-axis label widths.
+    timeScale.subscribeSizeChange(updatePlotBounds);
+    updatePlotBounds();
+    return () => {
+      if (chartRef.current === chart)
+        timeScale.unsubscribeSizeChange(updatePlotBounds);
+    };
+  }, [id, chartType]);
+
+  const hasNavigated = useChartNavigation(
+    id,
+    { containerRef, chartRef, seriesRef },
+    isViewReady,
+    viewResetRevision,
+  );
+  useEffect(() => {
+    const button = resetButtonRef.current;
+    if (!hasNavigated && button && document.activeElement === button) {
+      if (button.matches(":focus-visible"))
+        logButtonRef.current?.focus({ preventScroll: true });
+      else button.blur();
+    }
+  }, [hasNavigated]);
 
   useEffect(() => {
     const chart = chartRef.current,
@@ -243,7 +362,41 @@ function BasicChart({ id, onRemove }: Props) {
     };
   }, [id, chartType, graphicSettings.highLow]);
 
-  useExtendedPriceLabel(chartRef, seriesRef, symbol, interval, chartType, data);
+  useExtendedPriceLabel(
+    chartRef,
+    seriesRef,
+    symbol,
+    interval,
+    chartType,
+    data,
+    graphicSettings.extendedHoursPrice,
+  );
+  usePriceAnnotations(
+    chartRef,
+    seriesRef,
+    symbol,
+    interval,
+    chartType,
+    data,
+    quote,
+    graphicSettings,
+    () => getLastState(id),
+  );
+
+  const getLegendBars = useCallback(() => getLastState(id), [id, getLastState]);
+  const legendSource = useMemo<LegendSource>(
+    () => ({
+      id,
+      binding: legendBinding,
+      symbol,
+      interval,
+      chartType,
+      getBars: getLegendBars,
+      containerRef,
+      stripHost,
+    }),
+    [id, legendBinding, symbol, interval, chartType, getLegendBars, stripHost],
+  );
 
   const handleSymbolSelect = useCallback(
     (value: string) => {
@@ -313,7 +466,7 @@ function BasicChart({ id, onRemove }: Props) {
           <Select
             items={INTERVAL_ITEMS}
             value={interval}
-            placement="bottom-end"
+            placement="bottom"
             disabled={!settings.ready}
             onChange={handleIntervalSelect}
             variant="widget"
@@ -321,64 +474,102 @@ function BasicChart({ id, onRemove }: Props) {
           <Select
             items={CHART_TYPE_ITEMS}
             value={chartType}
-            placement="bottom-end"
+            placement="bottom"
             disabled={!settings.ready}
             onChange={handleChartTypeSelect}
             variant="widget"
           />
         </>
       }
-      loading={(!stateReady || status === "loading") && !quote.ready}
-      error={status === "error" && !quote.ready ? errorMsg : null}
+      loading={
+        (!stateReady || status === "loading") && !quote.ready && !hasBars
+      }
+      error={status === "error" && !quote.ready && !hasBars ? errorMsg : null}
       onRemove={onRemove}
     >
+      <div
+        class={styles.legendHost}
+        ref={setStripHost}
+        hidden={!legendEnabled}
+      />
       <div class={styles.chartContainer} ref={containerRef}>
-        <ChartMarketOverlay
+        <ChartOverlay
           symbol={symbol}
           identity={identity}
           data={data}
           quote={quote}
           warning={status === "error" ? errorMsg : warning}
+          stripHost={stripHost}
+          settings={graphicSettings}
+          legendSource={legendSource}
+          onCompactHeight={setCompactHeight}
         />
 
+        <div
+          class={styles.resetOverlay}
+          style={{
+            "--plot-left": `${plotBounds.left}px`,
+            "--plot-width": `${plotBounds.width}px`,
+            "--reset-top": `${!legendEnabled && quote.ready ? compactHeight || 64 : 8}px`,
+          }}
+        >
+          <Tooltip content="Reset view — show latest 100 candles and fit prices">
+            <button
+              ref={resetButtonRef}
+              type="button"
+              class={styles.resetBtn}
+              data-visible={hasNavigated}
+              aria-hidden={!hasNavigated}
+              tabIndex={hasNavigated ? 0 : -1}
+              aria-label="Reset chart view"
+              onPointerDown={(event) => event.preventDefault()}
+              onClick={resetView}
+            >
+              Reset view
+            </button>
+          </Tooltip>
+        </div>
         <div class={styles.axisCorner}>
-          <Tooltip content="Logarithmic Scale">
-            <button
-              type="button"
-              disabled={!settings.ready}
-              class={[
-                styles.scaleBtn,
-                scaleMode === "logarithmic" ? styles.scaleBtnActive : "",
-              ].join(" ")}
-              onClick={() =>
-                setScaleMode(
-                  scaleMode === "logarithmic" ? "normal" : "logarithmic",
-                )
-              }
-              aria-label="Toggle Logarithmic Scale"
-            >
-              LOG
-            </button>
-          </Tooltip>
-          <Tooltip content="Percentage Scale">
-            <button
-              type="button"
-              disabled={!settings.ready}
-              class={[
-                styles.scaleBtn,
-                scaleMode === "percentage" ? styles.scaleBtnActive : "",
-              ].join(" ")}
-              onClick={() =>
-                setScaleMode(
-                  scaleMode === "percentage" ? "normal" : "percentage",
-                )
-              }
-              aria-label="Toggle percentage scale relative to the first visible value"
-              aria-pressed={scaleMode === "percentage"}
-            >
-              %
-            </button>
-          </Tooltip>
+          <div class={styles.scaleRow}>
+            <Tooltip content="Logarithmic Scale">
+              <button
+                type="button"
+                disabled={!settings.ready}
+                class={[
+                  styles.scaleBtn,
+                  scaleMode === "logarithmic" ? styles.scaleBtnActive : "",
+                ].join(" ")}
+                onClick={() =>
+                  setScaleMode(
+                    scaleMode === "logarithmic" ? "normal" : "logarithmic",
+                  )
+                }
+                ref={logButtonRef}
+                aria-label="Toggle Logarithmic Scale"
+              >
+                LOG
+              </button>
+            </Tooltip>
+            <Tooltip content="Percentage Scale">
+              <button
+                type="button"
+                disabled={!settings.ready}
+                class={[
+                  styles.scaleBtn,
+                  scaleMode === "percentage" ? styles.scaleBtnActive : "",
+                ].join(" ")}
+                onClick={() =>
+                  setScaleMode(
+                    scaleMode === "percentage" ? "normal" : "percentage",
+                  )
+                }
+                aria-label="Toggle percentage scale relative to the first visible value"
+                aria-pressed={scaleMode === "percentage"}
+              >
+                %
+              </button>
+            </Tooltip>
+          </div>
         </div>
       </div>
     </Shell>

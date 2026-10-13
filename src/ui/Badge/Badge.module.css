@@ -1,49 +1,57 @@
 .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-0-5);
-    padding: 1px var(--space-1-5);
-    border-radius: var(--radius-full);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-medium);
-    font-family: var(--font-mono);
-    letter-spacing: 0.03em;
-    white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-0-5);
+  padding: 1px var(--space-1-5);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  font-family: var(--font-mono);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
 }
 
 .bull {
-    background: color-mix(in oklab, var(--color-bull) 18%, transparent);
-    color: var(--color-bull);
+  background: color-mix(in oklab, var(--color-bull) 18%, transparent);
+  color: var(--color-bull);
 }
 .bear {
-    background: color-mix(in oklab, var(--color-bear) 18%, transparent);
-    color: var(--color-bear);
+  background: color-mix(in oklab, var(--color-bear) 18%, transparent);
+  color: var(--color-bear);
 }
 .success {
-    background: color-mix(in oklab, var(--color-success) 18%, transparent);
-    color: var(--color-success);
+  background: color-mix(in oklab, var(--color-success) 18%, transparent);
+  color: var(--color-success);
 }
 .warning {
-    background: color-mix(in oklab, var(--color-warning) 18%, transparent);
-    color: var(--color-warning);
+  background: color-mix(in oklab, var(--color-warning) 18%, transparent);
+  color: var(--color-warning);
 }
 .danger {
-    background: color-mix(in oklab, var(--color-danger) 18%, transparent);
-    color: var(--color-danger);
+  background: color-mix(in oklab, var(--color-danger) 18%, transparent);
+  color: var(--color-danger);
 }
 .accent {
-    background: color-mix(in oklab, var(--color-accent) 18%, transparent);
-    color: var(--color-accent);
+  background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+  color: var(--color-accent);
 }
 .amber-subtle {
-    background: color-mix(in oklab, var(--color-amber) 18%, var(--color-badge-mix));
-    color: var(--color-amber);
+  background: color-mix(
+    in oklab,
+    var(--color-amber) 18%,
+    var(--color-badge-mix)
+  );
+  color: var(--color-amber);
 }
 .blue-subtle {
-    background: color-mix(in oklab, var(--color-blue) 18%, var(--color-badge-mix));
-    color: var(--color-blue);
+  background: color-mix(
+    in oklab,
+    var(--color-blue) 18%,
+    var(--color-badge-mix)
+  );
+  color: var(--color-blue);
 }
 .muted {
-    background: var(--color-bg-surface);
-    color: var(--color-text-muted);
+  background: var(--color-bg-surface);
+  color: var(--color-text-muted);
 }

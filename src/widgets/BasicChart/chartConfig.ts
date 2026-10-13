@@ -10,22 +10,32 @@ import {
 import { getChartColors, getFonts } from "../../styles/tokens";
 import type { ChartType, ScaleMode } from "../../services/types";
 
-export function setInitialChartRange(
+export function getInitialChartRange(
   chart: IChartApi,
   series: ISeriesApi<any>,
-): boolean {
+) {
   const points = series.data();
   const latest = points.at(-1);
   const first = points.at(-100) ?? points[0];
   const scale = chart.timeScale();
-  if (!latest || !first || scale.width() <= 0) return false;
+  if (!latest || !first || scale.width() <= 0) return null;
   const from = scale.timeToIndex(first.time);
   const to = scale.timeToIndex(latest.time);
-  if (from === null || to === null) return false;
-  scale.setVisibleLogicalRange({
+  if (from === null || to === null) return null;
+  return {
     from: from - Math.max(0, 100 - points.length),
     to: to + 5,
-  });
+  };
+}
+
+export function setInitialChartRange(
+  chart: IChartApi,
+  series: ISeriesApi<any>,
+): boolean {
+  const range = getInitialChartRange(chart, series);
+  if (!range) return false;
+  series.priceScale().applyOptions({ autoScale: true });
+  chart.timeScale().setVisibleLogicalRange(range);
   return true;
 }
 

@@ -4,16 +4,34 @@ import type { WidgetSettingsDefinition } from "../../settings/types";
 import { resolveWidgetSettings } from "../../settings/definitions";
 import type { VolumeMode } from "../volumePane";
 
+export type PriceAnnotationMode = "off" | "label" | "line" | "both";
+export const annotationHasLabel = (mode: PriceAnnotationMode) =>
+  mode === "label" || mode === "both";
+export const annotationHasLine = (mode: PriceAnnotationMode) =>
+  mode === "line" || mode === "both";
+const annotationOptions = [
+  { label: "Off", value: "off" },
+  { label: "Label", value: "label" },
+  { label: "Line", value: "line" },
+  { label: "Label & line", value: "both" },
+];
+
 export type GraphicSettings = {
   crosshair: "free" | "close" | "ohlc" | "off";
   horizontalGrid: boolean;
   verticalGrid: boolean;
   volume: VolumeMode;
   highLow: boolean;
+  lastPrice: PriceAnnotationMode;
+  extendedHoursPrice: PriceAnnotationMode;
+  previousClose: PriceAnnotationMode;
+  legendOHLC: boolean;
+  legendVolume: boolean;
+  legendChange: boolean;
 };
 
 export const graphicSettingsDefinition: WidgetSettingsDefinition = {
-  title: "Chart settings",
+  title: "Chart Settings",
   tabs: [
     {
       id: "general",
@@ -21,7 +39,7 @@ export const graphicSettingsDefinition: WidgetSettingsDefinition = {
       groups: [
         {
           id: "cursor",
-          label: "Cursor",
+          label: "Interaction",
           settings: [
             {
               id: "crosshair",
@@ -38,12 +56,12 @@ export const graphicSettingsDefinition: WidgetSettingsDefinition = {
           ],
         },
         {
-          id: "volume",
-          label: "Volume",
+          id: "data",
+          label: "Data",
           settings: [
             {
               id: "volume",
-              label: "Display",
+              label: "Volume",
               type: "select",
               defaultValue: "overlay",
               options: [
@@ -52,23 +70,45 @@ export const graphicSettingsDefinition: WidgetSettingsDefinition = {
                 { label: "Pane", value: "pane" },
               ],
             },
+            {
+              id: "highLow",
+              label: "Visible high / low",
+              type: "boolean",
+              defaultValue: true,
+            },
           ],
         },
       ],
     },
     {
       id: "visual",
-      label: "Visual",
+      label: "Display",
       groups: [
         {
-          id: "labels",
-          label: "Labels",
+          id: "priceAnnotations",
+          label: "Price Annotations",
           settings: [
             {
-              id: "highLow",
-              label: "Highest / Lowest",
-              type: "boolean",
-              defaultValue: true,
+              id: "lastPrice",
+              label: "Last price",
+              type: "select",
+              defaultValue: "both",
+              options: annotationOptions,
+            },
+
+            {
+              id: "previousClose",
+              label: "Previous close",
+              type: "select",
+              defaultValue: "off",
+              options: annotationOptions,
+            },
+            {
+              id: "extendedHoursPrice",
+              label: "Extended hours",
+              type: "select",
+              defaultValue: "both",
+              options: annotationOptions,
             },
           ],
         },
@@ -85,6 +125,36 @@ export const graphicSettingsDefinition: WidgetSettingsDefinition = {
             {
               id: "verticalGrid",
               label: "Vertical lines",
+              type: "boolean",
+              defaultValue: false,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "legend",
+      label: "Legend",
+      groups: [
+        {
+          id: "barInformation",
+          label: "Bar information",
+          settings: [
+            {
+              id: "legendOHLC",
+              label: "OHLC",
+              type: "boolean",
+              defaultValue: false,
+            },
+            {
+              id: "legendVolume",
+              label: "Volume",
+              type: "boolean",
+              defaultValue: false,
+            },
+            {
+              id: "legendChange",
+              label: "Change",
               type: "boolean",
               defaultValue: false,
             },
@@ -111,7 +181,7 @@ const crosshairModes = {
 };
 export function applyGraphicSettings(
   chart: IChartApi,
-  series: ISeriesApi<any> | null,
+  _series: ISeriesApi<any> | null,
   settings: GraphicSettings,
 ) {
   chart.applyOptions({
@@ -121,5 +191,6 @@ export function applyGraphicSettings(
       vertLines: { visible: settings.verticalGrid },
     },
   });
-  series?.applyOptions({ priceLineVisible: true, lastValueVisible: true });
+  // usePriceAnnotations is the sole owner of native last-value/price-line visibility,
+  // so theme/config updates cannot briefly restore synthetic or duplicate labels.
 }

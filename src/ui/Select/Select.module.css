@@ -1,189 +1,189 @@
 .root {
-    position: relative;
+  position: relative;
 }
 
 .trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: 0 var(--space-1-5);
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-sm);
-    color: var(--color-text-muted);
-    font-size: var(--font-size-sm);
-    font-family: var(--font-mono);
-    font-weight: var(--font-weight-semibold);
-    cursor: pointer;
-    transition:
-        border-color var(--transition-fast),
-        color var(--transition-fast),
-        background var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-1-5);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-mono);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition:
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    background var(--transition-fast);
 
-    & svg {
-        width: 12px;
-        height: 12px;
-    }
+  & svg {
+    width: 12px;
+    height: 12px;
+  }
 }
 
 .widget {
-    height: 22px;
+  height: 22px;
 }
 
 .full {
-    height: 24px;
+  height: 24px;
 }
 
 .iconTrigger {
-    width: 22px;
-    min-width: 22px;
-    padding: 0;
-    justify-content: center;
-    background: transparent;
+  width: 22px;
+  min-width: 22px;
+  padding: 0;
+  justify-content: center;
+  background: transparent;
 }
 
 .full.iconTrigger {
-    width: 24px;
-    min-width: 24px;
+  width: 24px;
+  min-width: 24px;
 }
 
 .iconTrigger:hover,
 .iconTrigger[data-state="open"] {
-    background: var(--color-bg-surface);
-    color: var(--color-primary);
+  background: var(--color-bg-surface);
+  color: var(--color-accent);
 }
 
 .iconSlot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
 
-    & svg {
-        width: 13px;
-        height: 13px;
-    }
+  & svg {
+    width: 13px;
+    height: 13px;
+  }
 }
 
 .trigger:disabled,
 .trigger[data-disabled] {
-    opacity: 0.45;
-    cursor: not-allowed;
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .iconTrigger:disabled:hover,
 .iconTrigger[data-disabled]:hover,
 .iconTrigger[data-disabled][data-state="open"] {
-    background: var(--color-bg-elevated);
-    color: var(--color-text-muted);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-muted);
 }
 
 .trigger:hover,
 .trigger[data-state="open"] {
-    background: var(--color-bg-surface);
-    color: var(--color-text);
+  background: var(--color-bg-surface);
+  color: var(--color-text);
 
-    .indicator {
-        color: var(--color-text-muted);
-    }
+  .indicator {
+    color: var(--color-text-muted);
+  }
 }
 
 .indicator {
-    display: flex;
-    align-items: center;
-    color: var(--color-text-subtle);
+  display: flex;
+  align-items: center;
+  color: var(--color-text-subtle);
 }
 
 .content {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-0-5);
-    padding: var(--space-1-5);
-    min-width: 80px;
-    background: var(--color-mica-surface-light);
-    backdrop-filter: blur(var(--mica-backdrop-blur))
-        saturate(var(--mica-backdrop-saturate));
-    border-radius: var(--radius-md);
-    box-shadow: var(--shadow-sm);
-    outline: none;
-    z-index: calc(var(--z-modal) + 10);
-    animation: scale-in var(--transition-fast) forwards;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  padding: var(--space-1-5);
+  min-width: 80px;
+  background: var(--color-mica-surface-light);
+  backdrop-filter: blur(var(--mica-backdrop-blur))
+    saturate(var(--mica-backdrop-saturate));
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  outline: none;
+  z-index: calc(var(--z-modal) + 10);
+  animation: scale-in var(--transition-fast) forwards;
 }
 
 .iconContent {
-    min-width: none;
+  min-width: none;
 }
 
 .content[data-state="closed"] {
-    display: none;
+  display: none;
 }
 
 .item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    padding: var(--space-1-5) var(--space-2);
-    border-radius: var(--radius-sm);
-    font-size: var(--font-size-sm);
-    font-weight: var(--font-weight-semibold);
-    color: var(--color-text);
-    cursor: pointer;
-    outline: none;
-    user-select: none;
-    transition: background var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-1-5) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  transition: background var(--transition-fast);
 
-    & svg {
-        width: 12px;
-        height: 12px;
-    }
+  & svg {
+    width: 12px;
+    height: 12px;
+  }
 }
 
 .itemText {
-    flex: 1 1 auto;
-    min-width: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .itemMeta {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .lockIcon {
-    color: var(--color-text-subtle);
+  color: var(--color-text-subtle);
 }
 
 .item[data-highlighted] {
-    background: var(--color-mica-surface-light);
-    color: var(--color-text);
+  background: var(--color-mica-surface-light);
+  color: var(--color-text);
 }
 
 .item[data-state="checked"] {
-    background: var(--color-mica-surface-light);
+  background: var(--color-mica-surface-light);
 }
 
 .item[data-disabled] {
-    opacity: 0.6;
+  opacity: 0.6;
 }
 
 .itemIndicator {
-    display: flex;
-    align-items: center;
-    color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  color: var(--color-accent);
 }
 
 .itemIndicator[data-state="unchecked"] {
-    opacity: 0;
+  opacity: 0;
 }
 
 @keyframes scale-in {
-    from {
-        opacity: 0;
-        transform: scale(0.96);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }

@@ -1,42 +1,43 @@
 {
-    "name": "tickrbase",
-    "private": true,
-    "version": "0.0.0",
-    "type": "module",
-    "scripts": {
-        "dev": "vite",
-        "build": "tsc -b && vite build",
-        "preview": "vite preview",
-        "test": "vitest run"
-    },
-    "dependencies": {
-        "@ark-ui/react": "^5.32.0",
-        "@tanstack/react-table": "^8.21.3",
-        "@types/d3-hierarchy": "^3.1.7",
-        "@visx/gradient": "^4.0.0",
-        "@visx/group": "^4.0.0",
-        "@visx/hierarchy": "^4.0.0",
-        "@visx/responsive": "^4.0.0",
-        "@visx/scale": "^4.0.0",
-        "@visx/shape": "^4.0.0",
-        "@visx/tooltip": "^4.0.0",
-        "d3-hierarchy": "^3.1.2",
-        "lightweight-charts": "^5.2.0",
-        "lucide-react": "^0.575.0",
-        "preact": "^10.28.4",
-        "react-grid-layout": "^2.2.2"
-    },
-    "devDependencies": {
-        "@preact/preset-vite": "^2.10.2",
-        "@types/node": "^24.10.1",
-        "typescript": "~5.9.3",
-        "vite": "^7.3.1",
-        "vitest": "^3.0.5"
-    },
-    "overrides": {
-        "@prefresh/core": "1.5.11"
-    },
-    "allowScripts": {
-        "esbuild@0.28.1": true
-    }
+  "name": "tickrbase",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "prettier": "npx prettier --write ."
+  },
+  "dependencies": {
+    "@ark-ui/react": "^5.32.0",
+    "@tanstack/react-table": "^8.21.3",
+    "@types/d3-hierarchy": "^3.1.7",
+    "@visx/gradient": "^4.0.0",
+    "@visx/group": "^4.0.0",
+    "@visx/hierarchy": "^4.0.0",
+    "@visx/responsive": "^4.0.0",
+    "@visx/scale": "^4.0.0",
+    "@visx/shape": "^4.0.0",
+    "@visx/tooltip": "^4.0.0",
+    "d3-hierarchy": "^3.1.2",
+    "lightweight-charts": "^5.2.0",
+    "lucide-react": "^0.575.0",
+    "preact": "^10.28.4",
+    "react-grid-layout": "^2.2.2"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "^2.10.2",
+    "@types/node": "^24.10.1",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1",
+    "vitest": "^3.0.5"
+  },
+  "overrides": {
+    "@prefresh/core": "1.5.11"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  }
 }

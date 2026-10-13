@@ -12,13 +12,13 @@ These totals include native nodes; they are not JS-only heap readings.
 entries. The project overrides it to 1.5.11, which replaces per-instance entries
 and clears them on unmount. Component hot-refresh remains enabled.
 
-| Reproduction | Before | After | Verification |
-| --- | --- | --- | --- |
-| 10,000 renders of one component | 10,000 `lastSeen` entries | 1 entry; 0 after unmount | Installed runtime hooks, isolated Node reproduction |
-| Chart deletion / logout | Retained bars restored even after eviction; late ticks/responses still applied | Evicted data is not restored; obsolete writers are ignored | `useChartData.test.ts`, ownership and layout tests |
-| Quote polling with a stalled request for 45 seconds | 4 request starts | 1 request start | Fake-timer regression using the Lists polling helper |
-| Removed Lists cells | Detached callbacks escaped element-based pruning | Obsolete callbacks and pending pulses are pruned independently | Lists lifecycle tests |
-| Scroll-effect replacement during settling | Scrolling flag remained true after its timer was cancelled | Timer ref and scrolling flag are reset | Lists lifecycle tests |
+| Reproduction                                        | Before                                                                         | After                                                          | Verification                                         |
+| --------------------------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------- | ---------------------------------------------------- |
+| 10,000 renders of one component                     | 10,000 `lastSeen` entries                                                      | 1 entry; 0 after unmount                                       | Installed runtime hooks, isolated Node reproduction  |
+| Chart deletion / logout                             | Retained bars restored even after eviction; late ticks/responses still applied | Evicted data is not restored; obsolete writers are ignored     | `useChartData.test.ts`, ownership and layout tests   |
+| Quote polling with a stalled request for 45 seconds | 4 request starts                                                               | 1 request start                                                | Fake-timer regression using the Lists polling helper |
+| Removed Lists cells                                 | Detached callbacks escaped element-based pruning                               | Obsolete callbacks and pending pulses are pruned independently | Lists lifecycle tests                                |
+| Scroll-effect replacement during settling           | Scrolling flag remained true after its timer was cancelled                     | Timer ref and scrolling flag are reset                         | Lists lifecycle tests                                |
 
 The latter rows verify lifecycle behavior, not a measured browser heap reduction.
 Post-change browser heap profiling remains outstanding. No production memory

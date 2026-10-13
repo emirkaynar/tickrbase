@@ -1,23 +1,23 @@
 .shell {
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .main {
-    flex: 1;
-    overflow: hidden;
-    position: relative;
-    animation: page-in 300ms ease-out;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+  animation: page-in 300ms ease-out;
 }
 
 @keyframes page-in {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }

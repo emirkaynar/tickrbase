@@ -191,9 +191,12 @@ export function useChartData(
     };
     onWarning("");
     commit();
+    const cachedBars = cached?.store.bars(current.marketContext) ?? [];
+    // A short cache is provisional; the initial max-history response may expand
+    // it. That response still qualifies a genuinely short instrument's history.
     onBars(
-      cached?.store.bars(current.marketContext) ?? [],
-      true,
+      cachedBars,
+      hasCachedHistory && cachedBars.length >= 100,
       current.marketContext,
       false,
     );

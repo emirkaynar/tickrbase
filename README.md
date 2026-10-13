@@ -11,7 +11,7 @@ A modular BIST (Turkish Stock Market) investment dashboard featuring a Python ba
 ✅ **Chart State Persistence** - Symbol, interval, chart type and visible range stored per widget; display timezone follows user settings
 ✅ **PostgreSQL History Caching** - PostgreSQL OHLC cache stores full history, serving delta refreshes efficiently  
 ✅ **Redis Caching & WebSocket Ticks** - Redis pub/sub for real-time live price streaming and search caching  
-✅ **Watchlists & Settings** - User watchlist management with customizable column preferences  
+✅ **Watchlists & Settings** - User watchlist management with customizable column preferences
 
 ## Quick Start
 

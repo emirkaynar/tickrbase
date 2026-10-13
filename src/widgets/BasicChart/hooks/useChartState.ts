@@ -7,7 +7,11 @@ import {
 } from "preact/hooks";
 import type { IChartApi, ISeriesApi, UTCTimestamp } from "lightweight-charts";
 import { LineSeries } from "lightweight-charts";
-import { applyChartScale, setInitialChartRange } from "../chartConfig";
+import {
+  applyChartScale,
+  getInitialChartRange,
+  setInitialChartRange,
+} from "../chartConfig";
 import { useWidgetState } from "../../settings/useWidgetState";
 import { stateRecord } from "../../settings/widgetStateStore";
 
@@ -20,8 +24,8 @@ import {
 import {
   graphicSettingsDefinition,
   resolveGraphicSettings,
-} from "../settings/graphicSettings";
-import type { GraphicSettings } from "../settings/graphicSettings";
+} from "../settings/basicChartSettings";
+import type { GraphicSettings } from "../settings/basicChartSettings";
 import type {
   Bar,
   Interval,
@@ -55,6 +59,39 @@ const lastState = registerWidgetCache(
   new Map<string, { bars: Bar[]; interval: Interval; symbol: string }>(),
 );
 
+const getLastState = (id: string) => lastState.get(id);
+// Delivered raw arrays are immutable snapshots. Share the exact full-history
+// transformation between the series and readout; WeakMap does not retain history.
+const heikinAshiCache = new WeakMap<readonly Bar[], Bar[]>();
+export function calculateHeikinAshi(bars: readonly Bar[]): Bar[] {
+  const cached = heikinAshiCache.get(bars);
+  if (cached) return cached;
+  if (!bars.length) return [];
+  const result: Bar[] = [];
+  let prevHaOpen = (bars[0].open + bars[0].close) / 2;
+  let prevHaClose =
+    (bars[0].open + bars[0].high + bars[0].low + bars[0].close) / 4;
+
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i];
+    const haClose = (b.open + b.high + b.low + b.close) / 4;
+    const haOpen = i === 0 ? prevHaOpen : (prevHaOpen + prevHaClose) / 2;
+    const haHigh = Math.max(b.high, haOpen, haClose);
+    const haLow = Math.min(b.low, haOpen, haClose);
+    result.push({
+      time: b.time,
+      open: haOpen,
+      high: haHigh,
+      low: haLow,
+      close: haClose,
+    });
+    prevHaOpen = haOpen;
+    prevHaClose = haClose;
+  }
+  heikinAshiCache.set(bars, result);
+  return result;
+}
+
 type ChartRefs = {
   chartRef: { current: IChartApi | null };
   seriesRef: { current: ISeriesApi<any> | null };
@@ -75,6 +112,7 @@ type UseChartStateReturn = {
   stateReady: boolean;
   settings: WidgetSettingsProps;
   graphicSettings: GraphicSettings;
+  hasBars: boolean;
 
   refreshVolume: () => void;
   setSymbol: (s: string) => void;
@@ -84,6 +122,9 @@ type UseChartStateReturn = {
   applyScaleFormatting: () => void;
   reapplyCurrentBars: () => void;
   initializeRange: () => void;
+  resetView: () => void;
+  isViewReady: () => boolean;
+  viewResetRevision: number;
   setPrevClose: (val: number | null) => void;
   everLoadedRef: typeof everLoaded;
   getLastState: (
@@ -107,15 +148,21 @@ export function useChartState(
     series: ISeriesApi<any>;
     primitive: SessionLines;
   } | null>(null);
-  const initialRangeRef = useRef<{
-    chart: IChartApi;
-    symbol: string;
-    interval: Interval;
-  } | null>(null);
+  const fitFrameRef = useRef<number | null>(null);
+  const [viewResetRevision, setViewResetRevision] = useState(0);
 
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState("");
   const [warning, setWarning] = useState("");
+  const [barAvailability, setBarAvailability] = useState(() =>
+    _prev
+      ? {
+          symbol: _prev.symbol,
+          interval: _prev.interval,
+          hasBars: _prev.bars.length > 0,
+        }
+      : null,
+  );
 
   const persisted = useWidgetState(id);
   const saved = persisted.document;
@@ -148,12 +195,14 @@ export function useChartState(
     [saved.state.settings],
   );
   // A volume preference edit must not replace applyBars and restart the history effect.
+  const fitAfterUpdateRef = useRef<() => void>(() => {});
   const volumeModeRef = useRef(graphicSettings.volume);
   volumeModeRef.current = graphicSettings.volume;
   const updateVolume = useCallback(
     (bars: readonly Bar[], live = false) => {
       if (!isWidgetCacheCurrent(id, cacheToken) || !volumeRef.current) return;
       volumeRef.current.update(bars, volumeModeRef.current, live);
+      fitAfterUpdateRef.current();
     },
     [id, cacheToken, volumeRef],
   );
@@ -168,24 +217,85 @@ export function useChartState(
   useEffect(() => {
     refreshVolume();
   }, [graphicSettings.volume, refreshVolume]);
-  const initializeRange = useCallback(() => {
-    const chart = chartRef.current,
-      series = seriesRef.current;
-    const cached = lastState.get(id);
-    const initialized = initialRangeRef.current;
-    if (
-      !chart ||
-      !series ||
-      cached?.symbol !== symbol ||
-      cached.interval !== interval ||
-      (initialized?.chart === chart &&
-        initialized.symbol === symbol &&
-        initialized.interval === interval)
-    )
+  // A new selection is an epoch, including A -> empty B -> A. Cached/tick
+  // deliveries cannot complete it until a full-history delivery qualifies it.
+  const viewRef = useRef({ symbol, interval, qualified: false, pending: true });
+  if (
+    viewRef.current.symbol !== symbol ||
+    viewRef.current.interval !== interval
+  ) {
+    viewRef.current = { symbol, interval, qualified: false, pending: true };
+  }
+  const selectionEpoch = viewRef.current;
+  const isViewReady = useCallback(() => !viewRef.current.pending, []);
+  const initializeRange = useCallback(
+    (attempt = 0) => {
+      // If a very narrow scale clamps the range, leave it pending for resize/data
+      // rather than spinning indefinitely. New updates start a fresh attempt.
+      if (attempt > 2) return;
+      const epoch = viewRef.current;
+      const chart = chartRef.current;
+      if (!epoch.pending || !epoch.qualified || !chart) return;
+      if (fitFrameRef.current !== null)
+        cancelAnimationFrame(fitFrameRef.current);
+      // LWC queues logical ranges until draw. Apply after all price/boundary/volume
+      // updates, then confirm after that draw rather than marking a request done.
+      fitFrameRef.current = requestAnimationFrame(() => {
+        fitFrameRef.current = null;
+        if (viewRef.current !== epoch || chartRef.current !== chart) return;
+        const series = seriesRef.current;
+        const cached = lastState.get(id);
+        if (
+          !series ||
+          cached?.symbol !== epoch.symbol ||
+          cached.interval !== epoch.interval
+        )
+          return;
+        if (!setInitialChartRange(chart, series)) return;
+        fitFrameRef.current = requestAnimationFrame(() => {
+          fitFrameRef.current = null;
+          if (viewRef.current !== epoch || chartRef.current !== chart) return;
+          if (seriesRef.current !== series) {
+            initializeRange(attempt + 1);
+            return;
+          }
+          const actual = chart.timeScale().getVisibleLogicalRange();
+          const target = getInitialChartRange(chart, series);
+          if (!actual || !target) return;
+          if (
+            Math.abs(actual.from - target.from) > 0.01 ||
+            Math.abs(actual.to - target.to) > 0.01 ||
+            !series.priceScale().options().autoScale
+          ) {
+            initializeRange(attempt + 1);
+            return;
+          }
+          epoch.pending = false;
+          setViewResetRevision((revision) => revision + 1);
+        });
+      });
+    },
+    [id, chartRef, seriesRef],
+  );
+  fitAfterUpdateRef.current = initializeRange;
+  const resetView = useCallback(() => {
+    // A button click during selection loading must not qualify provisional data.
+    if (viewRef.current.pending) {
+      initializeRange();
       return;
-    if (setInitialChartRange(chart, series))
-      initialRangeRef.current = { chart, symbol, interval };
-  }, [id, symbol, interval, chartRef, seriesRef]);
+    }
+    // Manual reset uses only the existing price series; no data refresh/reapply.
+    viewRef.current.pending = true;
+    viewRef.current.qualified = true;
+    initializeRange();
+  }, [initializeRange]);
+  useEffect(
+    () => () => {
+      if (fitFrameRef.current !== null)
+        cancelAnimationFrame(fitFrameRef.current);
+    },
+    [],
+  );
   const setSymbol = useCallback(
     (symbol: string) =>
       persisted.update((document) => ({ ...document, symbol })),
@@ -285,34 +395,6 @@ export function useChartState(
     [seriesRef],
   );
 
-  function calculateHeikinAshi(bars: Bar[]): Bar[] {
-    if (!bars.length) return [];
-    const result: Bar[] = [];
-    let prevHaOpen = (bars[0].open + bars[0].close) / 2;
-    let prevHaClose =
-      (bars[0].open + bars[0].high + bars[0].low + bars[0].close) / 4;
-
-    for (let i = 0; i < bars.length; i++) {
-      const b = bars[i];
-      const haClose = (b.open + b.high + b.low + b.close) / 4;
-      const haOpen = i === 0 ? prevHaOpen : (prevHaOpen + prevHaClose) / 2;
-      const haHigh = Math.max(b.high, haOpen, haClose);
-      const haLow = Math.min(b.low, haOpen, haClose);
-
-      result.push({
-        time: b.time,
-        open: haOpen,
-        high: haHigh,
-        low: haLow,
-        close: haClose,
-      });
-
-      prevHaOpen = haOpen;
-      prevHaClose = haClose;
-    }
-    return result;
-  }
-
   function formatSeriesPoint(bar: Bar, type: ChartType): any {
     if (type === "line" || type === "area" || type === "baseline") {
       return { time: bar.time as UTCTimestamp, value: bar.close };
@@ -347,9 +429,35 @@ export function useChartState(
       context: MarketContext | null = contextRef.current,
       live = false,
     ) => {
-      if (!isWidgetCacheCurrent(id, cacheToken)) return;
+      if (
+        !isWidgetCacheCurrent(id, cacheToken) ||
+        viewRef.current !== selectionEpoch
+      )
+        return;
+      // Cache delivery can precede chart creation on mount. Keep its qualification
+      // so reapplyCurrentBars can fit without waiting for a network response.
+      if (fit) viewRef.current.qualified = true;
       const series = seriesRef.current;
-      if (!series) return;
+      if (!series) {
+        contextRef.current = context;
+        const cached = {
+          bars:
+            intervalSeconds(interval) !== null
+              ? regularBars(bars, context)
+              : bars,
+          interval,
+          symbol,
+        };
+        lastState.set(id, cached);
+        setBarAvailability((previous) =>
+          previous?.symbol === symbol &&
+          previous.interval === interval &&
+          previous.hasBars === Boolean(cached.bars.length)
+            ? previous
+            : { symbol, interval, hasBars: cached.bars.length > 0 },
+        );
+        return;
+      }
       intervalRef.current = interval;
       const chart = chartRef.current;
       const range = chart?.timeScale().getVisibleRange();
@@ -456,10 +564,18 @@ export function useChartState(
         timeVisible: !["1d", "1wk", "1mo"].includes(interval),
         secondsVisible: false,
       });
-      if (chart && !fit && range && !nearLatest) {
+      if (chart && !viewRef.current.pending && !fit && range && !nearLatest) {
         chart.timeScale().setVisibleRange(range);
       }
-      lastState.set(id, { bars, interval, symbol });
+      const cached = { bars, interval, symbol };
+      lastState.set(id, cached);
+      setBarAvailability((previous) =>
+        previous?.symbol === symbol &&
+        previous.interval === interval &&
+        previous.hasBars === Boolean(bars.length)
+          ? previous
+          : { symbol, interval, hasBars: bars.length > 0 },
+      );
       if (bars.length) initializeRange();
 
       everLoaded.add(id);
@@ -473,6 +589,7 @@ export function useChartState(
       seriesRef,
       intervalRef,
       cacheToken,
+      selectionEpoch,
       initializeRange,
       updateVolume,
     ],
@@ -517,6 +634,10 @@ export function useChartState(
     stateReady,
     settings,
     graphicSettings,
+    hasBars:
+      barAvailability?.symbol === symbol &&
+      barAvailability.interval === interval &&
+      barAvailability.hasBars,
 
     refreshVolume,
     setSymbol,
@@ -526,8 +647,11 @@ export function useChartState(
     applyScaleFormatting,
     reapplyCurrentBars,
     initializeRange,
+    resetView,
+    isViewReady,
+    viewResetRevision,
     setPrevClose,
     everLoadedRef: everLoaded,
-    getLastState: (i: string) => lastState.get(i),
+    getLastState,
   };
 }

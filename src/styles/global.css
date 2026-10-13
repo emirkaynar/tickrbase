@@ -3,258 +3,260 @@
 
 /* ── Font ────────────────────────────────────────────────────────────────── */
 @font-face {
-    font-family: "JetBrains Mono";
-    src: url("/fonts/JetBrainsMono.ttf") format("truetype");
-    font-weight: 100 900;
-    font-style: normal;
-    font-display: swap;
+  font-family: "JetBrains Mono";
+  src: url("/fonts/JetBrainsMono.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
 }
 
 /* ── Base ────────────────────────────────────────────────────────────────── */
 html {
-    /* smooth theme transitions — applied to html so all descendants inherit */
-    transition:
-        background-color var(--transition-theme),
-        color var(--transition-theme);
+  /* smooth theme transitions — applied to html so all descendants inherit */
+  transition:
+    background-color var(--transition-theme),
+    color var(--transition-theme);
 }
 
 body {
-    font-family: var(--font-mono);
-    font-size: var(--font-size-base);
-    line-height: 1;
-    background: var(--color-bg);
-    color: var(--color-text);
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-base);
+  line-height: 1;
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #app {
-    width: 100vw;
-    height: 100vh;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ── Focus visible ───────────────────────────────────────────────────────── */
 :focus-visible {
-    outline: 2px solid var(--color-focus-ring);
-    outline-offset: -1px;
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: -1px;
 }
 
 /* ── Scrollbar ───────────────────────────────────────────────────────────── */
 * {
-    scrollbar-width: thin;
-    scrollbar-color: var(--color-border) transparent;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
 }
 
 *::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+  width: 6px;
+  height: 6px;
 }
 
 *::-webkit-scrollbar-track {
-    background: transparent;
+  background: transparent;
 }
 
 *::-webkit-scrollbar-thumb {
-    background: var(--color-border);
-    border-radius: var(--radius-full);
+  background: var(--color-border);
+  border-radius: var(--radius-full);
 }
 
 /* Global Scrollbar Styling */
 [data-scope="scroll-area"][data-part="scrollbar"] {
-    display: flex;
-    position: relative;
-    background-color: transparent;
-    border-radius: 0.375rem;
-    margin: 0.125rem;
-    opacity: 0;
-    transition: opacity 150ms;
-    pointer-events: none;
+  display: flex;
+  position: relative;
+  background-color: transparent;
+  border-radius: 0.375rem;
+  margin: 0.125rem;
+  opacity: 0;
+  transition: opacity 150ms;
+  pointer-events: none;
+
+  &::before {
+    content: "";
+    position: absolute;
+  }
+
+  &[data-scrolling] {
+    transition-duration: 0ms;
+  }
+
+  &[data-hover],
+  &[data-scrolling] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &[data-orientation="vertical"] {
+    width: 0.25rem;
 
     &::before {
-        content: "";
-        position: absolute;
+      width: 1.25rem;
+      height: 100%;
+      left: 50%;
+      transform: translateX(-50%);
     }
 
-    &[data-scrolling] {
-        transition-duration: 0ms;
+    &:not([data-overflow-y]) {
+      display: none;
+    }
+  }
+
+  &[data-orientation="horizontal"] {
+    height: 0.25rem;
+
+    &::before {
+      width: 100%;
+      height: 1.25rem;
+      left: 0;
+      right: 0;
+      bottom: -0.5rem;
     }
 
-    &[data-hover],
-    &[data-scrolling] {
-        opacity: 1;
-        pointer-events: auto;
+    &:not([data-overflow-x]) {
+      display: none;
     }
-
-    &[data-orientation="vertical"] {
-        width: 0.25rem;
-
-        &::before {
-            width: 1.25rem;
-            height: 100%;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        &:not([data-overflow-y]) {
-            display: none;
-        }
-    }
-
-    &[data-orientation="horizontal"] {
-        height: 0.25rem;
-
-        &::before {
-            width: 100%;
-            height: 1.25rem;
-            left: 0;
-            right: 0;
-            bottom: -0.5rem;
-        }
-
-        &:not([data-overflow-x]) {
-            display: none;
-        }
-    }
+  }
 }
 
 [data-scope="scroll-area"][data-part="thumb"] {
-    width: 100%;
-    border-radius: inherit;
-    background-color: var(--color-text-subtle);
+  width: 100%;
+  border-radius: inherit;
+  background-color: var(--color-text-subtle);
 
-    [data-orientation="horizontal"] & {
-        width: unset;
-        height: 100%;
-    }
+  [data-orientation="horizontal"] & {
+    width: unset;
+    height: 100%;
+  }
 }
 
 [data-scope="scroll-area"][data-part="corner"] {
-    background-color: transparent;
+  background-color: transparent;
 }
 
 /* ── Hide lightweight-charts attribution ─────────────────────────────────── */
 a[href*="tradingview.com"] {
-    display: none !important;
+  display: none !important;
 }
 
 /* ── RGL resize handle cursors ───────────────────────────────────────────── */
 .react-resizable-handle {
-    opacity: 0 !important;
-    z-index: 100 !important;
+  opacity: 0 !important;
+  z-index: 100 !important;
 }
 
 .react-resizable-handle::after {
-    display: none !important;
+  display: none !important;
 }
 
 /* ── RGL transition overrides ────────────────────────────────────────────── */
 .react-grid-layout {
-    height: calc(100vh - var(--topbar-height)) !important;
-    transition: none !important;
+  height: calc(100vh - var(--topbar-height)) !important;
+  transition: none !important;
 }
 
 .react-grid-item {
-    box-sizing: border-box !important;
-    transition: none !important;
+  box-sizing: border-box !important;
+  transition: none !important;
 }
 
 .react-grid-item:not(.resizing):not(.react-grid-item-resizing) {
-    box-sizing: border-box !important;
-    width: calc((100% - 150px) / 24 * var(--w, 1) + (var(--w, 1) - 1) * 6px) !important;
+  box-sizing: border-box !important;
+  width: calc(
+    (100% - 150px) / 24 * var(--w, 1) + (var(--w, 1) - 1) * 6px
+  ) !important;
 }
 
 .react-grid-item.react-draggable-dragging {
-    box-sizing: border-box !important;
-    transition: transform 0ms linear !important;
+  box-sizing: border-box !important;
+  transition: transform 0ms linear !important;
 }
 
 .react-grid-item.resizing {
-    box-sizing: border-box !important;
-    transition:
-        width 20ms ease,
-        height 20ms ease !important;
+  box-sizing: border-box !important;
+  transition:
+    width 20ms ease,
+    height 20ms ease !important;
 }
 
 .react-grid-item.react-grid-placeholder {
-    background: none !important;
+  background: none !important;
 }
 
 .react-resizable-handle-n {
-    cursor: row-resize !important;
-    width: calc(100% - 24px) !important;
-    height: 4px !important;
-    rotate: 135deg !important;
-    top: -4px !important;
-    left: 0 !important;
-    margin-left: 12px !important;
+  cursor: row-resize !important;
+  width: calc(100% - 24px) !important;
+  height: 4px !important;
+  rotate: 135deg !important;
+  top: -4px !important;
+  left: 0 !important;
+  margin-left: 12px !important;
 }
 .react-resizable-handle-s {
-    cursor: row-resize !important;
-    width: calc(100% - 24px) !important;
-    height: 4px !important;
-    rotate: 135deg !important;
-    bottom: -4px !important;
-    left: 0 !important;
-    margin-left: 12px !important;
+  cursor: row-resize !important;
+  width: calc(100% - 24px) !important;
+  height: 4px !important;
+  rotate: 135deg !important;
+  bottom: -4px !important;
+  left: 0 !important;
+  margin-left: 12px !important;
 }
 .react-resizable-handle-e {
-    cursor: col-resize !important;
-    width: 4px !important;
-    height: calc(100% - 24px) !important;
-    rotate: 45deg !important;
-    right: -4px !important;
-    top: 0 !important;
-    margin-top: 12px !important;
+  cursor: col-resize !important;
+  width: 4px !important;
+  height: calc(100% - 24px) !important;
+  rotate: 45deg !important;
+  right: -4px !important;
+  top: 0 !important;
+  margin-top: 12px !important;
 }
 .react-resizable-handle-w {
-    cursor: col-resize !important;
-    width: 4px !important;
-    height: calc(100% - 24px) !important;
-    rotate: 45deg !important;
-    left: -4px !important;
-    top: 0 !important;
-    margin-top: 12px !important;
+  cursor: col-resize !important;
+  width: 4px !important;
+  height: calc(100% - 24px) !important;
+  rotate: 45deg !important;
+  left: -4px !important;
+  top: 0 !important;
+  margin-top: 12px !important;
 }
 .react-resizable-handle-ne {
-    cursor: ne-resize;
-    width: 14px !important;
-    height: 14px !important;
-    top: -4px !important;
-    right: -4px !important;
+  cursor: ne-resize;
+  width: 14px !important;
+  height: 14px !important;
+  top: -4px !important;
+  right: -4px !important;
 }
 .react-resizable-handle-nw {
-    cursor: nw-resize;
-    width: 14px !important;
-    height: 14px !important;
-    top: -4px !important;
-    left: -4px !important;
+  cursor: nw-resize;
+  width: 14px !important;
+  height: 14px !important;
+  top: -4px !important;
+  left: -4px !important;
 }
 .react-resizable-handle-se {
-    cursor: se-resize;
-    width: 14px !important;
-    height: 14px !important;
-    bottom: -4px !important;
-    right: -4px !important;
+  cursor: se-resize;
+  width: 14px !important;
+  height: 14px !important;
+  bottom: -4px !important;
+  right: -4px !important;
 }
 .react-resizable-handle-sw {
-    cursor: sw-resize;
-    width: 14px !important;
-    height: 14px !important;
-    bottom: -4px !important;
-    left: -4px !important;
+  cursor: sw-resize;
+  width: 14px !important;
+  height: 14px !important;
+  bottom: -4px !important;
+  left: -4px !important;
 }
 
 /* ── Reduced motion ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: 0.01ms !important;
-        scroll-behavior: auto !important;
-    }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
