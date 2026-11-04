@@ -29,6 +29,10 @@ docker compose -f docker-compose.dev.yml up -d
 # Install Python dependencies
 pip install -r backend/requirements.txt
 
+# Copy backend/.env.example to backend/.env.dev and set JWT_SECRET to a
+# locally generated value: python -c "import secrets; print(secrets.token_urlsafe(48))"
+# Optional logo credentials belong only in this ignored local file.
+
 # Run database migrations
 python -m alembic -c backend/alembic.ini upgrade head
 
@@ -44,6 +48,23 @@ npm run dev
 ```
 
 Open http://localhost:5173 in your browser.
+
+`ENV` is selected from the process environment (defaults to `dev`). Only local
+`dev`, `development`, and `local` modes load `backend/.env.dev`; process variables
+take precedence. A random `JWT_SECRET` of at least 32 bytes is required in every
+environment. There is no built-in signing key. Changing this key invalidates
+existing sessions after the backend restarts.
+
+Outside local mode, provide `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, and exact
+HTTPS `CORS_ORIGINS` through the deployment environment. Secure cookies default
+on and cannot be disabled there. Local HTTP defaults to `COOKIE_SECURE=false`
+with `SameSite=lax`; `SameSite=none` requires secure cookies in every environment.
+Do not reuse the local Docker credentials for a shared deployment.
+
+Previously committed credentials remain in Git history. Revoke/reissue any active
+provider token in its provider account, update only the ignored local environment
+or deployment secret store, and restart the backend. Removing tracking does not
+revoke a provider credential. Never paste credentials into logs or commit them.
 
 ## Stack
 

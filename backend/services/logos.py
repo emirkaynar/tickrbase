@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import base64
+import logging
 import re
 from datetime import datetime
+from urllib.parse import quote, quote_plus
 
 import httpx
 
@@ -17,6 +19,22 @@ from ..core.redis import get_redis_client
 _CACHE_PREFIX = "logo:bytes:"
 _COUNTER_PREFIX = "logo:monthly:"
 _TICKER_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,15}$")
+logger = logging.getLogger(__name__)
+
+
+class _RedactLogoToken(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        message = record.getMessage()
+        if LOGO_DEV_TOKEN:
+            for value in (LOGO_DEV_TOKEN, quote(LOGO_DEV_TOKEN, safe=""), quote_plus(LOGO_DEV_TOKEN)):
+                message = message.replace(value, "[REDACTED]")
+        record.msg = message
+        record.args = ()
+        return True
+
+
+# HTTPX logs full request URLs at INFO, including the provider's query token.
+logging.getLogger("httpx").addFilter(_RedactLogoToken())
 
 
 def _counter_key() -> str:
@@ -25,10 +43,8 @@ def _counter_key() -> str:
 
 
 async def _fetch_logo_from_dev(client: httpx.AsyncClient, ticker_str: str) -> tuple[int, bytes | None]:
-    url = (
-        f"https://img.logo.dev/ticker/{ticker_str}"
-        f"?token={LOGO_DEV_TOKEN}&fallback=404&size=128&theme=dark&format=webp"
-    )
+    url = f"https://img.logo.dev/ticker/{ticker_str}"
+    params = {"token": LOGO_DEV_TOKEN, "fallback": "404", "size": "128", "theme": "dark", "format": "webp"}
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -38,13 +54,14 @@ async def _fetch_logo_from_dev(client: httpx.AsyncClient, ticker_str: str) -> tu
         "Authorization": f"Bearer {LOGO_DEV_TOKEN}",
     }
     try:
-        resp = await client.get(url, headers=headers)
-        print(f"[LOGO.DEV] GET {url} -> {resp.status_code}")
+        resp = await client.get(url, params=params, headers=headers)
+        logger.info("Logo provider response ticker=%s status=%s", ticker_str, resp.status_code)
         if resp.status_code == 200:
             return 200, resp.content
         return resp.status_code, None
     except Exception as exc:
-        print(f"[LOGO.DEV ERROR] {url}: {exc}")
+        # Exception text may contain the authenticated request URL.
+        logger.warning("Logo provider request failed ticker=%s error_type=%s", ticker_str, type(exc).__name__)
         return 500, None
 
 

@@ -1,4 +1,7 @@
 # Custom
+.env
+.env.*
+!.env.example
 backend/data/lima.db
 backend/testing.py
 __pycache__/
