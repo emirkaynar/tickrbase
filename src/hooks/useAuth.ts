@@ -6,7 +6,7 @@ export function useAuth() {
   const [user, setUser] = useState<UserMe | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const currentUserId = useRef<number | null>(null);
+  const currentUserId = useRef<string | null>(null);
   const updateUser = useCallback((next: UserMe | null) => {
     const nextId = next?.id ?? null;
     if (currentUserId.current !== nextId) clearWidgetCaches();

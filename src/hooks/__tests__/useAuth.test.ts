@@ -18,12 +18,16 @@ vi.mock("../../services/api", () => ({
   ApiError: class extends Error {},
 }));
 const firstUser = {
-  id: 1,
+  id: "4a15c70e-8c4a-4052-83e4-19d3fa01e9cb",
   email: "first@example.test",
   tier: "free",
   created_at: "2026-01-01",
 };
-const secondUser = { ...firstUser, id: 2, email: "second@example.test" };
+const secondUser = {
+  ...firstUser,
+  id: "08a9175e-8d74-4325-a5dc-55110948e23a",
+  email: "second@example.test",
+};
 
 beforeEach(() => {
   vi.resetAllMocks();

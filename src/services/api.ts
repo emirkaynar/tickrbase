@@ -49,7 +49,7 @@ async function withRetry<T>(
 }
 
 export type UserMe = {
-  id: number;
+  id: string;
   email: string;
   tier: string;
   created_at: string;

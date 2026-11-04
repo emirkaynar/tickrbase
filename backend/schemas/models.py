@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -15,7 +16,7 @@ class UserLogin(BaseModel):
 
 
 class UserMeResponse(BaseModel):
-    id: int
+    id: UUID
     email: str
     tier: str
     created_at: datetime

@@ -50,11 +50,11 @@ async def register(
     await db.commit()
     await db.refresh(user)
 
-    token = create_access_token(user.id)
+    token = create_access_token(user.public_id)
     set_auth_cookie(response, token)
 
     return UserMeResponse(
-        id=user.id,
+        id=user.public_id,
         email=user.email,
         tier=user.tier,
         created_at=user.created_at,
@@ -77,11 +77,11 @@ async def login(
             detail="Invalid email or password",
         )
 
-    token = create_access_token(user.id)
+    token = create_access_token(user.public_id)
     set_auth_cookie(response, token)
 
     return UserMeResponse(
-        id=user.id,
+        id=user.public_id,
         email=user.email,
         tier=user.tier,
         created_at=user.created_at,
@@ -97,7 +97,7 @@ async def logout(response: Response):
 @router.get("/me", response_model=UserMeResponse)
 async def get_me(current_user: Annotated[User, Depends(get_current_user)]):
     return UserMeResponse(
-        id=current_user.id,
+        id=current_user.public_id,
         email=current_user.email,
         tier=current_user.tier,
         created_at=current_user.created_at,

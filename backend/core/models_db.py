@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import uuid4
 from sqlalchemy import (
     BigInteger,
     Column,
@@ -13,6 +14,8 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    Uuid,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -25,8 +28,15 @@ def utc_now() -> datetime:
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("public_id", name="uq_users_public_id"),)
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    public_id = Column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     tier = Column(String(50), nullable=False, default="free")

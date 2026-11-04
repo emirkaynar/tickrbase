@@ -1,6 +1,6 @@
 # Backend/API investigation and remediation roadmap
 
-Reviewed 2026-11-04. Investigation below records the pre-remediation state. **Implementation has now started with T01**; current status and remaining provider-account rotation are recorded in [todo.md](todo.md). The remaining roadmap is not complete.
+Reviewed 2026-11-04. Investigation below records the pre-remediation state. **Implementation has completed T01 workspace changes and the public account UUID slice of T03**; current status and remaining provider-account rotation are recorded in [todo.md](todo.md). The remaining roadmap is not complete.
 
 ## Scope and evidence
 

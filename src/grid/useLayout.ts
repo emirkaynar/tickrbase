@@ -63,7 +63,7 @@ function defaultScreenNameFrom(records: { name: string }[]): string {
   return `Screen ${max + 1}`;
 }
 
-export function useLayout(isAuthenticated: boolean = true, userId?: number) {
+export function useLayout(isAuthenticated: boolean = true, userId?: string) {
   const owner = isAuthenticated ? (userId ?? "authenticated") : null;
   const loadedOwner = useRef<typeof owner>(null);
   const [screens, setScreens] = useState<ScreenItem[]>([]);
@@ -77,7 +77,7 @@ export function useLayout(isAuthenticated: boolean = true, userId?: number) {
 
   // Initial load from backend API
   const loadLayout = useCallback(
-    async (signal: AbortSignal, owner: number | "authenticated") => {
+    async (signal: AbortSignal, owner: string) => {
       const session = getWidgetCacheSessionToken();
       const active = () =>
         !signal.aborted && isWidgetCacheSessionCurrent(session);

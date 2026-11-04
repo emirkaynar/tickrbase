@@ -40,6 +40,23 @@ python -m alembic -c backend/alembic.ini upgrade head
 python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
+### Public account IDs
+
+Apply migration `008_public_user_identity` with the migration command above before
+running this backend. Registration, login, and `/auth/me` return a UUID string in
+`id`; JWT subjects use the same public account UUID. Internal integer user keys
+and foreign keys are preserved. Existing numeric-subject sessions require login
+again after the backend restarts. Owner-prefixed screen/widget/watchlist resource
+IDs remain pending in T03 of [the backend roadmap](tasks/todo.md).
+
+The focused identity checks can also exercise a local PostgreSQL server. They
+create and clean up generated test schemas without resetting the application DB:
+
+```powershell
+$env:RUN_DATABASE_TESTS = '1'
+.\backend\.venv\Scripts\python.exe -B -m pytest backend/tests/test_public_identity.py backend/tests/test_public_identity_database.py -q -p no:cacheprovider
+```
+
 ### 3. Frontend Setup
 
 ```bash

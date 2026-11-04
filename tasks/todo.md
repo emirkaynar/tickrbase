@@ -1,6 +1,6 @@
 # Backend/API remediation tasks
 
-Implementation started with T01. Scope excludes the entire user-portfolios feature, which will receive a separate full redesign. Other active tasks remain pending. See [plan.md](plan.md) for evidence and the scope boundary. No old-user/data migration work is included. Original task IDs are retained.
+Implementation completed T01 workspace changes and the public account UUID slice of T03. Scope excludes the entire user-portfolios feature, which will receive a separate full redesign. Other active tasks remain pending. See [plan.md](plan.md) for evidence and the scope boundary. No old-user/data migration work is included. Original task IDs are retained.
 
 Shared auth/middleware/configuration can govern requests globally, but active work must not change portfolio feature code, schema, call sites, frontend flows, tests, or jobs. Keep internal user keys and existing shared service signatures. Defer any portion that cannot meet this boundary.
 
@@ -13,10 +13,13 @@ Shared auth/middleware/configuration can govern requests globally, but active wo
 - Dependencies: none. Files: config, logo service, env example, .gitignore, README, focused security tests. Verification: 40 backend tests passed, including configuration isolation and raw/encoded token-log checks; changed source/examples/docs contain neither current local credential. No portfolio files changed.
 
 ## T03 — Add public IDs and secure non-portfolio relationships (P1; identity)
-- [ ] Add a public user UUID while keeping internal integer user keys and all portfolio foreign keys intact; align auth response/client types.
+- [x] Add a public user UUID while keeping internal integer user keys and all portfolio foreign keys intact; align auth response/client types.
 - [ ] Replace owner-prefixed non-portfolio IDs and legacy fallbacks with opaque resource IDs/structured uniqueness; enforce owned screen/widget relationships.
 - Acceptance/verification: two-user layout/watchlist/widget/preference tests prove isolation; no public numeric user sequence; no portfolio schema/code edits.
 - Dependencies: none. Split public account identity and non-portfolio resource schema/contracts into focused changes.
+- Public account slice (2026-11-04): migration `008_public_user_identity` applied to local development PostgreSQL; unique UUIDv4 defaults on `users.public_id`; auth JSON `id` and JWT `sub` use this UUID; auth lookup still returns the existing ORM user and internal integer key. Numeric-subject JWTs require login again. No portfolio code/schema/FK changes.
+- Verification: 54 backend tests passed, including two opt-in real PostgreSQL tests for registration/login/me, uniqueness, and isolated migration upgrade/downgrade. All 14 auth/layout frontend tests passed. Matched baseline/current full frontend runs each had 511 passed / 38 failed, with identical failing tests across 11 unrelated chart/UI files (the earlier full run had 37 failures; refresh-transform timeout timing varies). Build remains blocked by the baseline `visibleExtrema.test.ts:161` mock missing `horzScaleBehavior`; the missed numeric auth fixture was corrected. `backend/.env.dev` exists and remains ignored.
+- Remaining T03: owner-prefixed screen/widget/watchlist IDs still expose internal user-number prefixes. Account UUID completion does not satisfy full resource opacity or the two-user resource-relationship acceptance checks.
 
 ## T04 — Consolidate browser sessions (P1; F03)
 - [ ] Implement opaque sessions with stored digests, aligned TTL, rotation, and server-side revocation.
