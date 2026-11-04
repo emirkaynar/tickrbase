@@ -42,12 +42,13 @@ python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8001
 
 ### Public account IDs
 
-Apply migration `008_public_user_identity` with the migration command above before
-running this backend. Registration, login, and `/auth/me` return a UUID string in
-`id`; JWT subjects use the same public account UUID. Internal integer user keys
-and foreign keys are preserved. Existing numeric-subject sessions require login
-again after the backend restarts. Owner-prefixed screen/widget/watchlist resource
-IDs remain pending in T03 of [the backend roadmap](tasks/todo.md).
+Apply all current migrations with the command above before running this backend.
+Registration, login, and `/auth/me` return a public UUID string in `id`; browser
+cookies contain opaque, revocable session tokens. Internal integer user keys and
+foreign keys are preserved. Old JWT cookies require login again. Screen, widget,
+and watchlist IDs are opaque and server writes validate ownership. See
+[backend operations](docs/backend-operations.md) for budgets, runtime roles,
+health checks, dependency verification, and failure behavior.
 
 The focused identity checks can also exercise a local PostgreSQL server. They
 create and clean up generated test schemas without resetting the application DB:
@@ -60,7 +61,7 @@ $env:RUN_DATABASE_TESTS = '1'
 ### 3. Frontend Setup
 
 ```bash
-npm install
+npm ci --ignore-scripts
 npm run dev
 ```
 
@@ -69,8 +70,8 @@ Open http://localhost:5173 in your browser.
 `ENV` is selected from the process environment (defaults to `dev`). Only local
 `dev`, `development`, and `local` modes load `backend/.env.dev`; process variables
 take precedence. A random `JWT_SECRET` of at least 32 bytes is required in every
-environment. There is no built-in signing key. Changing this key invalidates
-existing sessions after the backend restarts.
+environment. There is no built-in signing key. The key also protects identity
+keys in distributed authentication limits; keep it consistent across processes.
 
 Outside local mode, provide `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, and exact
 HTTPS `CORS_ORIGINS` through the deployment environment. Secure cookies default

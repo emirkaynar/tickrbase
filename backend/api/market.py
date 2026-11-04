@@ -25,6 +25,8 @@ from ..schemas.models import (
     SymbolsResponse,
 )
 from ..services.market_context import build_market_context
+from ..services.market_validation import validate_symbol, validate_history
+from ..services.cache_control import optional_get, optional_set, single_flight
 from ..services import logos as logos_service
 from ..services import lookup as lookup_service
 from ..services import overview as overview_service
@@ -42,8 +44,12 @@ async def health_check():
 
 
 @router.get("/logo/{ticker}")
-async def get_ticker_logo(ticker: str):
-    image_bytes = await logos_service.get_logo(ticker)
+async def get_ticker_logo(ticker: str, current_user: Annotated[User, Depends(get_current_user)]):
+    try:
+        await logos_service.reserve_request(current_user.id)
+        image_bytes = await logos_service.get_logo(ticker)
+    except logos_service.LogoUnavailable:
+        raise HTTPException(503, 'Logo service unavailable', headers={'Retry-After': '60'}) from None
     if image_bytes is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -54,7 +60,6 @@ async def get_ticker_logo(ticker: str):
         media_type="image/webp",
         headers={
             "Cache-Control": "public, max-age=604800",
-            "Access-Control-Allow-Origin": "*",
         },
     )
 
@@ -65,6 +70,7 @@ async def get_price(
     current_user: Annotated[User, Depends(get_current_user)],
     redis=Depends(get_redis),
 ):
+    validate_symbol(ticker)
     provider = get_provider(current_user.tier)
     try:
         price, stale, fetched_at = await prices_service.get_price(
@@ -72,7 +78,7 @@ async def get_price(
         )
         return prices_service.to_price_payload(ticker, price, stale, fetched_at)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Market provider unavailable")
 
 
 @router.get("/history/{ticker}", response_model=HistoryResponse)
@@ -85,10 +91,12 @@ async def get_history_route(
     since: Optional[int] = None,
     sessions: Literal["regular", "extended"] = "regular",
 ):
+    validate_history(period, since)
     if interval not in INTERVAL_SECONDS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported interval"
         )
+    validate_symbol(ticker)
     provider = get_provider(current_user.tier)
     try:
         candles, stale, last_updated = await get_history(
@@ -106,19 +114,21 @@ async def get_history_route(
             "last_updated": prices_service.iso_timestamp(last_updated),
         }
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Market provider unavailable")
 
 
 @router.get("/quotes", response_model=QuotesResponse)
 async def get_quotes(
     current_user: Annotated[User, Depends(get_current_user)],
     redis=Depends(get_redis),
-    symbols: str = Query(..., description="Comma-separated ticker symbols"),
+    symbols: str = Query(..., max_length=825, description="Comma-separated ticker symbols"),
     fields: str | None = Query(
-        None,
+        None, max_length=64,
         description="Comma-separated field groups: session,volume,quote",
     ),
 ):
+    for symbol in symbols.split(","):
+        validate_symbol(symbol.strip())
     normalized_symbols = quotes_service.normalize_symbols(symbols.split(","))
     if not normalized_symbols:
         raise HTTPException(
@@ -190,8 +200,8 @@ async def get_symbols(
 
 @router.get("/lookup", response_model=LookupResponse)
 async def get_lookup(
-    q: str,
     current_user: Annotated[User, Depends(get_current_user)],
+    q: str = Query(..., min_length=2, max_length=128),
     redis=Depends(get_redis),
 ):
     provider = get_provider(current_user.tier)
@@ -208,9 +218,9 @@ async def get_lookup(
             "last_updated": prices_service.iso_timestamp(fetched_at),
         }
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Market provider unavailable")
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Market provider unavailable")
 
 
 
@@ -220,6 +230,7 @@ async def get_overview_route(
     current_user: Annotated[User, Depends(get_current_user)],
     redis=Depends(get_redis),
 ):
+    validate_symbol(ticker)
     provider = get_provider(current_user.tier)
     try:
         payload, stale, fetched_at = await overview_service.get_overview(
@@ -227,7 +238,7 @@ async def get_overview_route(
         )
         return payload
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Market provider unavailable")
 
 
 @router.get("/market-context/{ticker}", response_model=MarketContextResponse)
@@ -242,11 +253,12 @@ async def get_market_context(
         raise HTTPException(status_code=400, detail="Date range must be positive and at most 366 days")
     import asyncio
     import json
+    validate_symbol(ticker)
     provider = get_provider(current_user.tier)
     normalized = provider.normalize_symbol(ticker)
     key = f"market-metadata:{provider.source_id}:{normalized}"
-    cached = await redis.get(key)
-    metadata = json.loads(cached) if cached else await provider.get_market_metadata_async(normalized)
+    cached = await optional_get(redis, key)
+    metadata = json.loads(cached) if cached else await single_flight(key, lambda: provider.get_market_metadata_async(normalized))
     if not cached and metadata.get("exchange"):
-        await redis.set(key, json.dumps(metadata), ex=86400)
+        await optional_set(redis, key, json.dumps(metadata), ex=86400)
     return await asyncio.to_thread(build_market_context, normalized, metadata, start, end)

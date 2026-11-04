@@ -10,9 +10,10 @@ from ..core.config import (
     LOOKUP_TTL_SECONDS,
 )
 from ..providers.base import DataProvider
+from .cache_control import optional_get, optional_set, single_flight
 
 
-async def search_lookup(
+async def _search_lookup(
     redis: aioredis.Redis,
     provider: DataProvider,
     query: str,
@@ -24,12 +25,12 @@ async def search_lookup(
         )
 
     now = int(time.time())
-    cache_key = f"lookup:{cleaned.lower()}"
+    cache_key = f"lookup:{provider.source_id}:{cleaned.lower()}"
 
     stale_items: list[dict] | None = None
     stale_fetched_at: int | None = None
 
-    cached_str = await redis.get(cache_key)
+    cached_str = await optional_get(redis, cache_key)
     if cached_str:
         try:
             data = json.loads(cached_str)
@@ -46,10 +47,14 @@ async def search_lookup(
     try:
         items = await provider.lookup_async(cleaned, count=LOOKUP_MAX_RESULTS)
         payload = json.dumps({"items": items, "fetched_at": now})
-        await redis.set(cache_key, payload, ex=LOOKUP_TTL_SECONDS)
+        await optional_set(redis, cache_key, payload, ex=LOOKUP_TTL_SECONDS * 2)
         return cleaned, items, False, now
     except Exception:
 
         if stale_items is not None and stale_fetched_at is not None:
             return cleaned, stale_items, True, stale_fetched_at
         raise
+
+
+async def search_lookup(redis, provider, query):
+    return await single_flight(f"lookup:{provider.source_id}:{query.strip().lower()}", lambda: _search_lookup(redis, provider, query))

@@ -5,6 +5,7 @@ import time
 import redis.asyncio as aioredis
 
 from ..providers.base import DataProvider
+from .cache_control import optional_get, optional_set, single_flight
 from ..providers.yahoo import normalize_ticker
 from .prices import iso_timestamp
 
@@ -19,16 +20,16 @@ def _coerce_float(val: object) -> float | None:
     return None
 
 
-async def get_overview(
+async def _get_overview(
     provider: DataProvider,
     redis: aioredis.Redis,
     ticker: str,
 ) -> tuple[dict, bool, int]:
     normalized = normalize_ticker(ticker)
     now = int(time.time())
-    cache_key = f"overview:{normalized}"
+    cache_key = f"overview:{provider.source_id}:{normalized}"
 
-    cached_str = await redis.get(cache_key)
+    cached_str = await optional_get(redis, cache_key)
     stale_fallback: dict | None = None
     stale_fetched_at: int | None = None
 
@@ -56,6 +57,11 @@ async def get_overview(
 
     info_res, candles_res = await asyncio.gather(info_task, history_task, return_exceptions=True)
 
+    if isinstance(info_res, Exception):
+        if stale_fallback is not None and stale_fetched_at is not None:
+            stale_fallback = {**stale_fallback, "stale": True, "last_updated": iso_timestamp(stale_fetched_at)}
+            return stale_fallback, True, stale_fetched_at
+        raise info_res
     info = info_res if isinstance(info_res, dict) else {}
     candles = candles_res if isinstance(candles_res, list) else []
 
@@ -107,13 +113,17 @@ async def get_overview(
     }
 
     try:
-        await redis.set(
+        await optional_set(redis,
             cache_key,
             json.dumps({"data": payload, "fetched_at": now}),
-            ex=OVERVIEW_TTL_SECONDS,
+            ex=OVERVIEW_TTL_SECONDS * 2,
         )
     except Exception:
         pass
 
     return payload, False, now
 
+
+
+async def get_overview(provider, redis, ticker):
+    return await single_flight(f"overview:{provider.source_id}:{normalize_ticker(ticker)}", lambda: _get_overview(provider, redis, ticker))

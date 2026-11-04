@@ -4,6 +4,32 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from threading import BoundedSemaphore
+from ..core.telemetry import adjust, increment
+
+_executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="market-provider")
+_capacity = BoundedSemaphore(32)
+
+
+async def _bounded_call(fn, *args):
+    # Keep the slot until the synchronous call truly ends, even after timeout.
+    if not _capacity.acquire(blocking=False):
+        increment("provider_rejected")
+        raise RuntimeError("Market provider capacity exhausted")
+    try:
+        future = _executor.submit(fn, *args)
+    except BaseException:
+        _capacity.release()
+        raise
+    adjust("provider_inflight", 1)
+    def completed(result):
+        _capacity.release()
+        adjust("provider_inflight", -1)
+        increment("provider_failed" if result.cancelled() or result.exception() else "provider_completed")
+    future.add_done_callback(completed)
+    return await asyncio.wait_for(asyncio.wrap_future(future), timeout=12)
+
 
 if TYPE_CHECKING:
     from ..schemas.models import Candle
@@ -25,7 +51,7 @@ class DataProvider(ABC):
         return {}
 
     async def get_market_metadata_async(self, ticker: str) -> dict:
-        return await asyncio.to_thread(self.get_market_metadata, ticker)
+        return await _bounded_call(self.get_market_metadata, ticker)
 
     @abstractmethod
     def get_price(self, ticker: str) -> tuple[float, int]:
@@ -33,7 +59,7 @@ class DataProvider(ABC):
         pass
 
     async def get_price_async(self, ticker: str) -> tuple[float, int]:
-        return await asyncio.to_thread(self.get_price, ticker)
+        return await _bounded_call(self.get_price, ticker)
 
     @abstractmethod
     def get_history(
@@ -57,7 +83,7 @@ class DataProvider(ABC):
         end: int | None = None,
         sessions: str = "regular",
     ) -> list[Candle]:
-        return await asyncio.to_thread(
+        return await _bounded_call(
             self.get_history, ticker, interval, period, start, end, sessions
         )
 
@@ -67,7 +93,7 @@ class DataProvider(ABC):
         pass
 
     async def get_company_info_async(self, ticker: str) -> dict:
-        return await asyncio.to_thread(self.get_company_info, ticker)
+        return await _bounded_call(self.get_company_info, ticker)
 
     @abstractmethod
     def get_quote_snapshot(
@@ -83,7 +109,7 @@ class DataProvider(ABC):
         ticker: str,
         groups: set[str] | None = None,
     ) -> tuple[dict, int]:
-        return await asyncio.to_thread(self.get_quote_snapshot, ticker, groups)
+        return await _bounded_call(self.get_quote_snapshot, ticker, groups)
 
     @abstractmethod
     def lookup(self, query: str, count: int) -> list[dict]:
@@ -91,5 +117,5 @@ class DataProvider(ABC):
         pass
 
     async def lookup_async(self, query: str, count: int) -> list[dict]:
-        return await asyncio.to_thread(self.lookup, query, count)
+        return await _bounded_call(self.lookup, query, count)
 

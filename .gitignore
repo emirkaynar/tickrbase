@@ -36,5 +36,9 @@ dist-ssr
 GEMINI.md
 .venv
 skills-lock.json
+.audit-tools/
+.audit-cache/
+.verification/
+.test-temp-*/
 conductor/
 docs/research

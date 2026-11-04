@@ -19,20 +19,18 @@ async def prewarm_market_cache() -> None:
     """Pre-warm Redis cache for tickers used in active watchlists and portfolios."""
     try:
         async with AsyncSessionLocal() as db:
-            # Collect unique tickers from watchlists
-            res_wl = await db.execute(select(UserWatchlist.items_json))
-            wl_rows = res_wl.scalars().all()
+            # Watchlist work has an independent bounded cursor, so portfolio
+            # ordering cannot permanently starve eligible watchlist symbols.
+            from .services.watchlist_prewarm import select_watchlist_batch
+            watchlist_symbols = await select_watchlist_batch(db)
+            if watchlist_symbols:
+                try:
+                    await quotes_service.get_quotes(YahooFinanceProvider(), get_redis_client(), watchlist_symbols, {"session", "volume", "quote"})
+                    for symbol in watchlist_symbols:
+                        await prices_service.get_price(YahooFinanceProvider(), get_redis_client(), symbol)
+                except Exception:
+                    logger.warning("watchlist_prewarm_upstream_failed")
             tickers: set[str] = set()
-            for items_str in wl_rows:
-                if items_str:
-                    try:
-                        items = json.loads(items_str)
-                        for item in items:
-                            sym = item.get("symbol") or item.get("value")
-                            if sym:
-                                tickers.add(str(sym).strip().upper())
-                    except Exception:
-                        pass
 
             # Collect unique tickers from active portfolio positions
             res_pos = await db.execute(

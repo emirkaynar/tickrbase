@@ -13,7 +13,7 @@ from backend.api.deps import get_current_user
 from backend.core.config import JWT_ALGORITHM, JWT_SECRET
 from backend.core.models_db import User
 from backend.schemas.models import UserMeResponse
-from backend.services.auth import create_access_token, decode_access_token
+from secrets import token_urlsafe
 
 
 PUBLIC_ID = uuid4()
@@ -27,23 +27,13 @@ def test_auth_response_serializes_public_uuid():
     assert response.model_dump(mode="json")["id"] == str(PUBLIC_ID)
 
 
-def test_access_token_uses_public_uuid_subject():
-    token = create_access_token(PUBLIC_ID)
-    assert decode_access_token(token) == PUBLIC_ID
-    claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-    assert claims["sub"] == str(PUBLIC_ID)
-
-
-@pytest.mark.parametrize("subject", ["1", "", None, [], {}, 1])
-def test_token_decoder_rejects_invalid_or_numeric_subjects(subject):
+def test_legacy_jwt_is_rejected_without_database_lookup():
     now = datetime.now(timezone.utc)
-    token = jwt.encode({"sub": subject, "iat": now, "exp": now + timedelta(minutes=1)}, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    assert decode_access_token(token) is None
-
-
-def test_expired_public_subject_rejected():
-    token = jwt.encode({"sub": str(PUBLIC_ID), "exp": 1}, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    assert decode_access_token(token) is None
+    token = jwt.encode({"sub": str(PUBLIC_ID), "exp": now + timedelta(minutes=1)}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    db = AsyncMock()
+    with pytest.raises(HTTPException):
+        asyncio.run(get_current_user(db, access_token=token))
+    db.execute.assert_not_called()
 
 
 def test_auth_dependency_resolves_public_id_to_internal_user():
@@ -52,11 +42,11 @@ def test_auth_dependency_resolves_public_id_to_internal_user():
     result.scalar_one_or_none.return_value = user
     db = AsyncMock()
     db.execute.return_value = result
-    resolved = asyncio.run(get_current_user(db, access_token=create_access_token(PUBLIC_ID)))
+    resolved = asyncio.run(get_current_user(db, access_token=token_urlsafe(32)))
     assert resolved is user
     assert resolved.id == 17
     query = db.execute.call_args.args[0]
-    assert "users.public_id" in str(query)
+    assert "auth_sessions.token_digest" in str(query)
 
 
 def test_missing_public_identity_is_unauthorized():
@@ -65,7 +55,7 @@ def test_missing_public_identity_is_unauthorized():
     db = AsyncMock()
     db.execute.return_value = result
     with pytest.raises(HTTPException) as error:
-        asyncio.run(get_current_user(db, access_token=create_access_token(PUBLIC_ID)))
+        asyncio.run(get_current_user(db, access_token=token_urlsafe(32)))
     assert error.value.status_code == 401
 
 
@@ -76,7 +66,7 @@ def test_me_never_returns_internal_database_id():
     app.dependency_overrides[get_current_user] = lambda: user
 
     async def run():
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://test") as client:
             response = await client.get("/auth/me")
             assert response.status_code == 200
             assert response.json()["id"] == str(PUBLIC_ID)

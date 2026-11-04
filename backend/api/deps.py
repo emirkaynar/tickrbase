@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from typing import Annotated
 from fastapi import Cookie, Depends, HTTPException, Header, status
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
 from ..core.models_db import User
 from ..core.redis import get_redis
-from ..services.auth import decode_access_token
+from ..services.sessions import resolve_session
 
 
 async def get_current_user(
@@ -29,15 +28,7 @@ async def get_current_user(
             detail="Authentication token required",
         )
 
-    public_id = decode_access_token(token)
-    if public_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired authentication token",
-        )
-
-    result = await db.execute(select(User).where(User.public_id == public_id))
-    user = result.scalar_one_or_none()
+    user = await resolve_session(db, token)
 
     if user is None:
         raise HTTPException(

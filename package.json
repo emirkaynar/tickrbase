@@ -3,6 +3,11 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "npm@11.19.0",
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": "11.19.x"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -31,8 +36,8 @@
     "@preact/preset-vite": "^2.10.2",
     "@types/node": "^24.10.1",
     "typescript": "~5.9.3",
-    "vite": "^7.3.1",
-    "vitest": "^3.0.5"
+    "vite": "7.3.7",
+    "vitest": "4.1.12"
   },
   "overrides": {
     "@prefresh/core": "1.5.11"

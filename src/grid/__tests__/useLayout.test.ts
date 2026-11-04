@@ -65,6 +65,7 @@ vi.mock("../../hooks/useDebounce", () => ({
 }));
 
 const payload: BackendLayoutPayload = {
+  revision: 0,
   screens: [
     { id: "first", name: "First", order: 0, createdAt: 0 },
     { id: "second", name: "Second", order: 1, createdAt: 0 },
@@ -134,10 +135,35 @@ describe("layout-owned widget cache lifetime", () => {
     vi.mocked(api.get).mockImplementation(async (path) =>
       path === "/user/layout" ? payload : { symbol: "TEST" },
     );
-    vi.mocked(api.put).mockResolvedValue(undefined);
+    vi.mocked(api.put).mockResolvedValue({ revision: 1 });
   });
   afterEach(() => {
     for (const slot of harness.slots) slot.cleanup?.();
+  });
+
+  it("serializes saves and uses the revision returned by the previous save", async () => {
+    const layout = await loaded();
+    const firstSave = deferred<{ revision: number }>();
+    vi.mocked(api.put).mockReturnValueOnce(firstSave.promise);
+    void layout.renameScreen("first", "Renamed");
+    void layout.setActiveScreen("second");
+    await settle();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.put).mock.calls[0][1]).toMatchObject({ revision: 0 });
+    firstSave.resolve({ revision: 1 });
+    await settle();
+    expect(api.put).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.put).mock.calls[1][1]).toMatchObject({ revision: 1 });
+  });
+
+  it("reloads after a conflict and discards already queued stale saves", async () => {
+    const layout = await loaded();
+    vi.mocked(api.put).mockRejectedValueOnce(new Error("Conflict"));
+    void layout.renameScreen("first", "Stale rename");
+    void layout.setActiveScreen("second");
+    await settle();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(render().screens).toEqual(payload.screens);
   });
 
   it("evicts a removed widget from every registered cache", async () => {

@@ -12,7 +12,6 @@ from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from fastapi import FastAPI
 import httpx
-import jwt
 import pytest
 from sqlalchemy import insert, select, text
 from sqlalchemy.exc import IntegrityError
@@ -20,9 +19,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from backend.api.auth import router
-from backend.core.config import DATABASE_URL, JWT_ALGORITHM, JWT_SECRET
+from backend.core.config import DATABASE_URL
 from backend.core.database import get_db
 from backend.core.models_db import User
+from backend.core.session_models import AuthSession
+from backend.services.sessions import issue_session, token_digest
+from unittest.mock import AsyncMock, patch
 
 pytestmark = pytest.mark.skipif(os.getenv("RUN_DATABASE_TESTS") != "1", reason="Set RUN_DATABASE_TESTS=1 for isolated PostgreSQL checks")
 
@@ -52,6 +54,7 @@ def test_registration_login_and_me_use_public_ids_with_real_postgres():
         async with isolated_database() as engine:
             async with engine.begin() as conn:
                 await conn.run_sync(User.__table__.create)
+                await conn.run_sync(AuthSession.__table__.create)
             app = FastAPI()
             app.include_router(router)
 
@@ -61,14 +64,14 @@ def test_registration_login_and_me_use_public_ids_with_real_postgres():
                     await session.commit()
             app.dependency_overrides[get_db] = database
 
-            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            with patch("backend.api.auth.enforce_auth_limits", new=AsyncMock()):
+              async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://test") as client:
                 first = await client.post("/auth/register", json={"email": "first@example.com", "password": "test-password"})
                 assert first.status_code == 201
                 first_id = UUID(first.json()["id"])
                 assert first_id.version == 4
                 token = client.cookies["access_token"]
-                claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-                assert claims["sub"] == str(first_id)
+                assert len(token) == 43 and "." not in token
                 me = await client.get("/auth/me")
                 assert me.json()["id"] == str(first_id)
                 second = await client.post("/auth/register", json={"email": "second@example.com", "password": "test-password"})
@@ -113,4 +116,77 @@ def test_public_identity_migration_upgrades_and_downgrades_user_table_only():
                 assert "public_id" not in columns
                 tables = (await conn.execute(text("SELECT tablename FROM pg_tables WHERE schemaname=current_schema()"))).scalars().all()
                 assert tables == ["users"]
+    asyncio.run(run())
+
+
+def test_session_migration_and_concurrent_registration_race():
+    migration = importlib.import_module("backend.alembic.versions.009_auth_sessions")
+
+    def apply(conn, command):
+        with Operations.context(MigrationContext.configure(conn)):
+            command()
+
+    async def run():
+        async with isolated_database() as engine:
+            async with engine.begin() as conn:
+                await conn.run_sync(User.__table__.create)
+                await conn.run_sync(lambda sync: apply(sync, migration.upgrade))
+            app = FastAPI()
+            app.include_router(router)
+            checked = 0
+            both_checked = asyncio.Event()
+
+            class RacingSession(AsyncSession):
+                async def execute(self, statement, *args, **kwargs):
+                    nonlocal checked
+                    result = await super().execute(statement, *args, **kwargs)
+                    if getattr(statement, "is_select", False) and "users.email =" in str(statement):
+                        checked += 1
+                        if checked == 2:
+                            both_checked.set()
+                        await asyncio.wait_for(both_checked.wait(), timeout=3)
+                    return result
+
+            async def database():
+                async with RacingSession(engine, expire_on_commit=False) as session:
+                    yield session
+            app.dependency_overrides[get_db] = database
+            with patch("backend.api.auth.enforce_auth_limits", new=AsyncMock()):
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://test") as client:
+                    async def register():
+                        return await client.post("/auth/register", json={"email": "race@example.com", "password": "race-test-password"})
+                    responses = await asyncio.gather(register(), register())
+                    assert sorted(r.status_code for r in responses) == [201, 400]
+                    assert "access_token=" in next(r for r in responses if r.status_code == 201).headers["set-cookie"]
+            async with engine.begin() as conn:
+                assert (await conn.execute(text("SELECT count(*) FROM users"))).scalar_one() == 1
+                assert (await conn.execute(text("SELECT count(*) FROM auth_sessions"))).scalar_one() == 1
+                await conn.run_sync(lambda sync: apply(sync, migration.downgrade))
+                assert (await conn.execute(text("SELECT count(*) FROM users"))).scalar_one() == 1
+    asyncio.run(run())
+
+
+def test_concurrent_session_issuance_preserves_per_user_cap():
+    async def run():
+        async with isolated_database() as engine:
+            async with engine.begin() as conn:
+                await conn.run_sync(User.__table__.create)
+                await conn.run_sync(AuthSession.__table__.create)
+            async with AsyncSession(engine, expire_on_commit=False) as db:
+                user = User(email="cap@example.com", hashed_password="unused")
+                db.add(user)
+                await db.commit()
+                user_id = user.id
+
+            async def issue():
+                async with AsyncSession(engine, expire_on_commit=False) as db:
+                    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one()
+                    token = await issue_session(db, user)
+                    await db.commit()
+                    return token
+            tokens = await asyncio.gather(*(issue() for _ in range(25)))
+            async with AsyncSession(engine) as db:
+                digests = (await db.execute(select(AuthSession.token_digest))).scalars().all()
+                assert len(digests) == 20
+                assert all(digest in {token_digest(token) for token in tokens} for digest in digests)
     asyncio.run(run())

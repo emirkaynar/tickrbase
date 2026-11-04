@@ -56,7 +56,7 @@ export function createWidgetInstance(
   const def = getWidgetDefinition(type);
   const stamp = Date.now();
   return {
-    id: `${type}-${stamp}`,
+    id: crypto.randomUUID(),
     screenId,
     type,
     x: position?.x ?? 0,
