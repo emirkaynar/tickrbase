@@ -1,5 +1,5 @@
 import type { ComponentChildren } from "preact";
-import { Clock3, TriangleAlert } from "lucide-react";
+import { Moon, Sun, Sunrise, Sunset, TriangleAlert } from "lucide-react";
 import { Tooltip } from "../../../ui";
 import { MarketPillTooltip } from "./MarketPillTooltip";
 import { formatCurrency, formatPercentChange } from "../../../utils";
@@ -7,6 +7,23 @@ import type { ChartQuote } from "../hooks/useChartQuote";
 import { formatDelay } from "../marketStatus";
 import type { MarketCountdown, MarketTooltip } from "../marketStatus";
 import styles from "./ChartOverlay.module.css";
+
+const sessionIcons = {
+  pre: Sunrise,
+  regular: Sun,
+  post: Sunset,
+  overnight: Moon,
+  closed: null,
+};
+
+function SessionIcon({ session }: { session: MarketTooltip["session"] }) {
+  const Icon = session ? sessionIcons[session] : null;
+  return Icon ? (
+    <Icon className={styles.sessionIcon} width={12} height={12} stroke-width={2.5}/>
+  ) : (
+    <span class={styles.sessionDot} />
+  );
+}
 
 type Props = {
   tooltipIdPrefix?: string;
@@ -107,7 +124,7 @@ export function MarketStatusOverlay({
           data-session={tooltip.session}
         >
           <span class={styles.tooltipMarker} aria-hidden="true">
-            <span class={styles.sessionDot} />
+            <SessionIcon session={tooltip.session} />
           </span>
           <div class={styles.tooltipRowText}>
             <strong>{sessionNames[tooltip.session]}</strong>
@@ -142,7 +159,7 @@ export function MarketStatusOverlay({
           data-next-session={upcomingSession}
         >
           <span class={styles.tooltipMarker} aria-hidden="true">
-            <Clock3 size={12} />
+            <SessionIcon session={upcomingSession} />
           </span>
           <div class={styles.tooltipRowText}>
             <strong>{sessionNames[upcomingSession]}</strong>
@@ -192,7 +209,12 @@ export function MarketStatusOverlay({
       >
         {tooltip.session && (
           <span class={styles.sessionSegment} aria-hidden="true">
-            <span class={styles.sessionDot} />
+            <span class={styles.sessionIconSlot}>
+              <span class={styles.sessionDot} />
+              {tooltip.session !== "closed" && (
+                <SessionIcon session={tooltip.session} />
+              )}
+            </span>
           </span>
         )}
         {tooltip.session && delayed && (

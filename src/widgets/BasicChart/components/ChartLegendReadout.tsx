@@ -80,7 +80,7 @@ export const ChartLegendReadout = memo(function ChartLegendReadout({
           {settings.legendVolume && (
             <span class={styles.barField}>
               <span class={styles.barLabel}>V</span>
-              <span class={valueClass(legend.actual?.volume)}>
+              <span class={valueClass(legend.actual?.volume) + " " + styles.barValueVolume}>
                 {legend.actual?.volume != null &&
                 Number.isFinite(legend.actual.volume)
                   ? legend.actual.volume === 0

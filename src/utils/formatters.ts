@@ -106,7 +106,7 @@ export function formatPercentChange(
   if (val < 0) {
     return `${showArrow ? "▼ " : "-"}${absValStr}%`;
   }
-  return `${absValStr}%`;
+  return `● ${absValStr}%`;
 }
 
 /**
