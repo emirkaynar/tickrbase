@@ -86,6 +86,10 @@ def _counter_key() -> str:
     return f"{_COUNTER_PREFIX}{now.year}:{now.month:02}"
 
 
+def _sanitize_for_log(value: object) -> str:
+    return str(value).replace('\r', '').replace('\n', '')
+
+
 async def _fetch_logo_from_dev(client: httpx.AsyncClient, ticker_str: str) -> tuple[int, bytes | None]:
     url = f"https://img.logo.dev/ticker/{ticker_str}"
     params = {"token": LOGO_DEV_TOKEN, "fallback": "404", "size": "128", "theme": "dark", "format": "webp"}
@@ -97,9 +101,10 @@ async def _fetch_logo_from_dev(client: httpx.AsyncClient, ticker_str: str) -> tu
         ),
         "Authorization": f"Bearer {LOGO_DEV_TOKEN}",
     }
+    safe_ticker = _sanitize_for_log(ticker_str)
     try:
         async with client.stream('GET', url, params=params, headers=headers) as resp:
-            logger.info("Logo provider response ticker=%s status=%s", ticker_str, resp.status_code)
+            logger.info("Logo provider response ticker=%s status=%s", safe_ticker, resp.status_code)
             if resp.status_code != 200:
                 return resp.status_code, None
             if resp.headers.get('content-type', '').split(';')[0] != 'image/webp':
@@ -115,7 +120,7 @@ async def _fetch_logo_from_dev(client: httpx.AsyncClient, ticker_str: str) -> tu
             return 200, content
     except Exception as exc:
         # Exception text may contain the authenticated request URL.
-        logger.warning("Logo provider request failed ticker=%s error_type=%s", ticker_str, type(exc).__name__)
+        logger.warning("Logo provider request failed ticker=%s error_type=%s", safe_ticker, type(exc).__name__)
         return 500, None
 
 
