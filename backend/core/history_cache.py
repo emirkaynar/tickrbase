@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..providers.base import DataProvider
 from ..schemas.models import Candle
+from ..services.market_validation import MAX_HISTORY_POINTS, validate_history
+from ..services.cache_control import single_flight
 from .config import (
     DEFAULT_PERIOD,
     HISTORY_TTL_SECONDS,
@@ -94,9 +96,9 @@ async def _read_history(
     else:
         stmt = stmt.where(OHLC.time >= start_time)
 
-    stmt = stmt.order_by(OHLC.time.asc())
+    stmt = stmt.order_by(OHLC.time.desc()).limit(MAX_HISTORY_POINTS)
     result = await db.execute(stmt)
-    rows = result.all()
+    rows = list(reversed(result.all()))
 
     return [
         Candle(
@@ -158,6 +160,7 @@ async def get_history(
     since: int | None = None,
     sessions: str = "regular",
 ) -> tuple[list[Candle], bool, int]:
+    validate_history(period or DEFAULT_PERIOD, since)
     normalized = provider.normalize_symbol(ticker)
     source = provider.source_id
     now_ts = _now_ts()
@@ -173,10 +176,19 @@ async def get_history(
     has_cache = latest_time is not None
     stale = False
 
+    # Bound upstream work before I/O even for period=max. Provider range policy
+    # may narrow the maximum further (especially intraday Yahoo intervals).
+    earliest = max(0, now_ts - min(100 * 365 * 86400, MAX_HISTORY_POINTS * INTERVAL_SECONDS[interval]))
+    provider_range = provider.history_range(interval)
+    if provider_range and provider_range != "max":
+        earliest = max(earliest, _period_start(provider_range, now_ts))
     if not has_cache:
-        candles = await provider.get_history_async(
-            normalized, interval, period=provider.history_range(interval), sessions=sessions
+        candles = await single_flight(
+            f"history:{source}:{sessions}:{normalized}:{interval}:{earliest // 60}:{now_ts // 60}",
+            lambda: provider.get_history_async(normalized, interval, start=earliest, end=now_ts, sessions=sessions),
         )
+        if len(candles) > MAX_HISTORY_POINTS:
+            raise ValueError("Provider history point limit exceeded")
         if not candles:
             raise ValueError("No history data returned")
         await _upsert_history(db, normalized, interval, candles, source, sessions)
@@ -188,19 +200,18 @@ async def get_history(
             start = None
             if latest_time is not None:
                 pad = INTERVAL_SECONDS.get(interval, 60) * 2
-                start = max(latest_time - pad, 0)
+                start = max(latest_time - pad, earliest)
                 max_range_period = provider.history_range(interval)
                 if max_range_period and max_range_period != "max":
                     start = max(start, _period_start(max_range_period, now_ts))
             try:
-                delta = await provider.get_history_async(
-                    normalized,
-                    interval,
-                    start=start,
-                    end=now_ts,
-                    sessions=sessions,
+                delta = await single_flight(
+                    f"history:{source}:{sessions}:{normalized}:{interval}:{start // 60}:{now_ts // 60}",
+                    lambda: provider.get_history_async(normalized, interval, start=start, end=now_ts, sessions=sessions),
                 )
 
+                if len(delta) > MAX_HISTORY_POINTS:
+                    raise ValueError("Provider history point limit exceeded")
                 if delta:
                     await _upsert_history(db, normalized, interval, delta, source, sessions)
                 await _set_last_refresh(db, normalized, interval, now_ts, source, sessions)
@@ -211,9 +222,9 @@ async def get_history(
                     raise
 
     if since is not None:
-        candles = await _read_history(db, normalized, interval, 0, since=since, source=source, sessions=sessions)
+        candles = await _read_history(db, normalized, interval, 0, since=max(since, earliest - 1), source=source, sessions=sessions)
     else:
-        start_time = _period_start(period, now_ts)
+        start_time = max(earliest, _period_start(period, now_ts))
         candles = await _read_history(db, normalized, interval, start_time, source=source, sessions=sessions)
 
     last_updated = last_refresh or now_ts

@@ -27,6 +27,8 @@ from ..providers.yahoo import normalize_ticker
 
 
 logger = logging.getLogger(__name__)
+WS_SEND_TIMEOUT_SECONDS = 5
+WS_UPSTREAM_CLOSE_TIMEOUT_SECONDS = 2
 
 
 def _now_ms() -> int:
@@ -39,7 +41,7 @@ def _coerce_float(val: Any) -> float | None:
     try:
         f = float(val)
         return f if math.isfinite(f) else None
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, OverflowError):
         return None
 
 
@@ -68,7 +70,7 @@ def _extract_tick(data: dict[str, Any]) -> tuple[str, float, int, str] | None:
             val = int(raw_ts)
             if val > 0:
                 ts = val * 1000 if val < 1_000_000_000_000 else val
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, OverflowError):
             pass
 
     origin = "source" if ts is not None else "receipt"
@@ -80,6 +82,11 @@ def _extract_tick(data: dict[str, Any]) -> tuple[str, float, int, str] | None:
 
 class LivePriceStreamHub:
     def __init__(self) -> None:
+        self._lease_owner = str(uuid.uuid4())
+        self._lease_task = None
+        self._principals: dict[str, str] = {}
+        self._redis_queue: asyncio.Queue = asyncio.Queue(maxsize=256)
+        self._redis_task = None
         self._clients: dict[str, WebSocket] = {}
         self._queues: dict[str, asyncio.Queue[dict[str, Any]]] = {}
         self._client_symbols: dict[str, set[str]] = {}
@@ -104,16 +111,33 @@ class LivePriceStreamHub:
     def drop_count(self) -> int:
         return self._drop_count
 
+    def stats(self):
+        return {"clients": len(self._clients), "subscriptions": sum(len(v) for v in self._client_symbols.values()),
+                "symbols": len(self._symbol_ref_counts), "queued_frames": sum(q.qsize() for q in self._queues.values()),
+                "dropped": self._drop_count, "redis_queued": self._redis_queue.qsize()}
+
     async def start(self) -> None:
         if self._stream_task is not None:
             return
+        # One upstream owner per deployment; fail startup for a second worker.
+        acquired = await asyncio.wait_for(get_redis_client().set(
+            "stream:upstream-owner", self._lease_owner, nx=True, ex=30
+        ), timeout=2)
+        if not acquired:
+            raise RuntimeError("Live streaming requires a single API worker")
         self._stop_event.clear()
+        self._lease_task = asyncio.create_task(self._lease_loop())
+        self._redis_task = asyncio.create_task(self._redis_writer_loop())
         self._stream_task = asyncio.create_task(
             self._stream_loop(), name="yf-stream-hub"
         )
 
     async def stop(self) -> None:
         self._stop_event.set()
+        if self._lease_task:
+            self._lease_task.cancel()
+            await asyncio.gather(self._lease_task, return_exceptions=True)
+            self._lease_task = None
         if self._stream_task:
             self._stream_task.cancel()
             try:
@@ -123,14 +147,51 @@ class LivePriceStreamHub:
             self._stream_task = None
 
         writer_tasks = list(self._writer_tasks.values())
+        if self._redis_task:
+            writer_tasks.append(self._redis_task)
+            self._redis_task = None
         for task in writer_tasks:
             task.cancel()
         if writer_tasks:
             await asyncio.gather(*writer_tasks, return_exceptions=True)
         self._writer_tasks.clear()
+        for client_id in list(self._clients):
+            await self.unregister_client(client_id)
+        try:
+            await asyncio.wait_for(get_redis_client().eval(
+                "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+                1, "stream:upstream-owner", self._lease_owner,
+            ), timeout=2)
+        except Exception:
+            logger.warning("stream_owner_release_failed")
 
-    async def register_client(self, websocket: WebSocket) -> str:
+
+    async def _lease_loop(self):
+        while True:
+            await asyncio.sleep(5)
+            try:
+                renewed = await asyncio.wait_for(get_redis_client().eval(
+                    "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('expire', KEYS[1], 30) else return 0 end",
+                    1, "stream:upstream-owner", self._lease_owner,
+                ), timeout=2)
+                if not renewed:
+                    raise RuntimeError("Stream ownership lost")
+            except Exception:
+                logger.error("stream_owner_lost")
+                self._stop_event.set()
+                if self._stream_task:
+                    self._stream_task.cancel()
+                for client_id in list(self._clients):
+                    await self.unregister_client(client_id)
+                return
+
+    async def register_client(self, websocket: WebSocket, principal: str = "anonymous") -> str:
+        if self._stop_event.is_set():
+            raise ValueError("Streaming unavailable")
+        if len(self._clients) >= WS_MAX_CLIENTS or sum(p == principal for p in self._principals.values()) >= 4:
+            raise ValueError("Connection quota exceeded")
         client_id = str(uuid.uuid4())
+        self._principals[client_id] = principal
         self._clients[client_id] = websocket
         self._queues[client_id] = asyncio.Queue(maxsize=WS_CLIENT_QUEUE_SIZE)
         self._client_symbols[client_id] = set()
@@ -142,6 +203,7 @@ class LivePriceStreamHub:
         return client_id
 
     async def unregister_client(self, client_id: str) -> None:
+        self._principals.pop(client_id, None)
         websocket = self._clients.pop(client_id, None)
         self._queues.pop(client_id, None)
         old_symbols = self._client_symbols.pop(client_id, set())
@@ -152,12 +214,13 @@ class LivePriceStreamHub:
                 self._symbol_ref_counts.pop(sym, None)
 
         task = self._writer_tasks.pop(client_id, None)
-        if task:
+        if task and task is not asyncio.current_task():
             task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
         if websocket:
             try:
-                await websocket.close()
+                await asyncio.wait_for(websocket.close(), timeout=2)
             except Exception:
                 pass
 
@@ -185,9 +248,10 @@ class LivePriceStreamHub:
 
         current_global_count = len(self._symbol_ref_counts)
         new_symbols_needed = sum(
-            1 for s in added if self._symbol_ref_counts[s] == 0
+            1 for s in added if self._symbol_ref_counts.get(s, 0) == 0
         )
-        if current_global_count + new_symbols_needed > WS_MAX_GLOBAL_SYMBOLS:
+        freed_symbols = sum(1 for s in removed if self._symbol_ref_counts.get(s, 0) == 1)
+        if current_global_count - freed_symbols + new_symbols_needed > WS_MAX_GLOBAL_SYMBOLS:
             return False, f"max_global_symbols_exceeded_{WS_MAX_GLOBAL_SYMBOLS}", set()
 
         for s in removed:
@@ -229,16 +293,11 @@ class LivePriceStreamHub:
         if raw is not None:
             payload["raw"] = raw
 
-        # Update Redis L1 price cache & publish to Redis Pub/Sub
+        # Delivery never waits for Redis; publication is bounded and optional.
         try:
-            redis = get_redis_client()
-            ts_sec = int(ts / 1000) if ts > 1_000_000_000_000 else int(ts)
-            cache_key = f"price:{symbol}"
-            price_payload = json.dumps({"price": price, "fetched_at": ts_sec})
-            await redis.set(cache_key, price_payload, ex=PRICE_TTL_SECONDS * 2)
-            await redis.publish("market_ticks", json.dumps({"symbol": symbol, "price": price, "ts": ts}))
-        except Exception as exc:
-            logger.debug(f"Redis tick update failed: {exc}")
+            self._redis_queue.put_nowait((symbol, price, ts))
+        except asyncio.QueueFull:
+            self._drop_count += 1
 
         for client_id, symbols in list(self._client_symbols.items()):
             if symbol in symbols:
@@ -260,10 +319,26 @@ class LivePriceStreamHub:
         try:
             while True:
                 msg = await queue.get()
-                await websocket.send_json(msg)
+                await asyncio.wait_for(websocket.send_json(msg), timeout=WS_SEND_TIMEOUT_SECONDS)
                 queue.task_done()
-        except (asyncio.CancelledError, Exception):
-            pass
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            await self.unregister_client(client_id)
+
+    async def _redis_writer_loop(self):
+        while True:
+            symbol, price, ts = await self._redis_queue.get()
+            try:
+                redis = get_redis_client()
+                ts_sec = int(ts / 1000) if ts > 1_000_000_000_000 else int(ts)
+                async with asyncio.timeout(1):
+                    await redis.set(f"price:yahoo:{symbol}", json.dumps({"price": price, "fetched_at": ts_sec}), ex=PRICE_TTL_SECONDS * 10)
+                    await redis.publish("market_ticks", json.dumps({"symbol": symbol, "price": price, "ts": ts}))
+            except Exception:
+                logger.warning("market_tick_cache_write_failed")
+            finally:
+                self._redis_queue.task_done()
 
     async def _stream_loop(self) -> None:
         from yfinance import AsyncWebSocket
@@ -276,7 +351,7 @@ class LivePriceStreamHub:
                 await asyncio.sleep(1.0)
                 continue
 
-            tick_queue: asyncio.Queue[tuple[str, float, int, dict[str, Any] | None, str]] = asyncio.Queue()
+            tick_queue: asyncio.Queue[tuple[str, float, int, dict[str, Any] | None, str]] = asyncio.Queue(maxsize=WS_MAX_GLOBAL_SYMBOLS)
 
             def on_message(msg: Any, *args: Any) -> None:
                 data = msg if isinstance(msg, dict) else (args[0] if args and isinstance(args[0], dict) else None)
@@ -284,7 +359,13 @@ class LivePriceStreamHub:
                     extracted = _extract_tick(data)
                     if extracted:
                         sym, price, ts, origin = extracted
-                        tick_queue.put_nowait((sym, price, ts, data, origin))
+                        if sym not in self._symbol_ref_counts:
+                            return
+                        if tick_queue.full():
+                            tick_queue.get_nowait()
+                            tick_queue.task_done()
+                            self._drop_count += 1
+                        tick_queue.put_nowait((sym, price, ts, None, origin))
 
             ws = AsyncWebSocket(verbose=False)
             listen_task: asyncio.Task[None] | None = None
@@ -294,6 +375,10 @@ class LivePriceStreamHub:
                 backoff = WS_RECONNECT_BACKOFF_MIN_SECONDS
 
                 while not self._stop_event.is_set():
+                    if listen_task.done():
+                        # Surface upstream termination to the reconnect path.
+                        await listen_task
+                        raise ConnectionError("Upstream listener stopped")
                     current_symbols = set(self._symbol_ref_counts.keys())
                     if set(active_symbols) != current_symbols:
                         break
@@ -309,17 +394,17 @@ class LivePriceStreamHub:
             except asyncio.CancelledError:
                 break
             except Exception as exc:
-                logger.warning(f"Live stream error: {exc}. Reconnecting in {backoff}s...")
+                logger.warning("live_stream_reconnecting")
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, WS_RECONNECT_BACKOFF_MAX_SECONDS)
             finally:
                 if listen_task:
                     listen_task.cancel()
                     try:
-                        await listen_task
-                    except asyncio.CancelledError:
-                        pass
+                        await asyncio.wait_for(asyncio.gather(listen_task, return_exceptions=True), timeout=WS_UPSTREAM_CLOSE_TIMEOUT_SECONDS)
+                    except asyncio.TimeoutError:
+                        logger.warning("live_stream_listener_close_timeout")
                 try:
-                    await ws.close()
+                    await asyncio.wait_for(ws.close(), timeout=WS_UPSTREAM_CLOSE_TIMEOUT_SECONDS)
                 except Exception:
                     pass

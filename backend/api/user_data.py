@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Annotated, Literal
+from ..schemas.user_state import ResourceId
+from fastapi import APIRouter, Depends, HTTPException, Query, Header, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
@@ -27,25 +28,31 @@ router = APIRouter(prefix="/user", tags=["User Data"])
 async def get_layout(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    response: Response,
 ):
-    return await user_data_service.get_user_layout(db, current_user.id)
+    layout = await user_data_service.get_user_layout(db, current_user.id)
+    response.headers["ETag"] = f'"{layout.revision}"'
+    return layout
 
 
-@router.put("/layout", response_model=MessageResponse)
+@router.put("/layout")
 async def save_layout(
     payload: LayoutPayload,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    if_match: Annotated[str | None, Header()] = None,
 ):
-    await user_data_service.save_user_layout(db, current_user.id, payload)
-    return MessageResponse(ok=True)
+    if if_match is not None and if_match != f'"{payload.revision}"':
+        raise HTTPException(409, "Layout revision mismatch")
+    revision = await user_data_service.save_user_layout(db, current_user.id, payload)
+    return {"ok": True, "revision": revision}
 
 
 # --- WIDGET STATE ENDPOINTS ---
 
 @router.get("/widgets/{widget_id}/state", response_model=WidgetStatePayload)
 async def get_widget_state(
-    widget_id: str,
+    widget_id: ResourceId,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -57,7 +64,7 @@ async def get_widget_state(
 
 @router.put("/widgets/{widget_id}/state", response_model=MessageResponse)
 async def save_widget_state(
-    widget_id: str,
+    widget_id: ResourceId,
     payload: WidgetStatePayload,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -78,7 +85,7 @@ async def list_watchlists(
 
 @router.post("/watchlists/{list_id}", response_model=WatchlistSchema)
 async def save_watchlist(
-    list_id: str,
+    list_id: ResourceId,
     payload: WatchlistSavePayload,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -88,7 +95,7 @@ async def save_watchlist(
 
 @router.delete("/watchlists/{list_id}", response_model=MessageResponse)
 async def delete_watchlist(
-    list_id: str,
+    list_id: ResourceId,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -132,9 +139,9 @@ async def save_settings(
 async def get_table_pref(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    scope_type: str = Query(...),
-    scope_id: str = Query(...),
-    table_id: str = Query(...),
+    scope_type: Literal["widget", "page"] = Query(...),
+    scope_id: str = Query(..., min_length=1, max_length=100),
+    table_id: str = Query(..., min_length=1, max_length=100),
 ):
     pref = await user_data_service.get_table_pref(
         db, current_user.id, scope_type, scope_id, table_id

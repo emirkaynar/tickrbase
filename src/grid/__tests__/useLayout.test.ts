@@ -65,6 +65,7 @@ vi.mock("../../hooks/useDebounce", () => ({
 }));
 
 const payload: BackendLayoutPayload = {
+  revision: 0,
   screens: [
     { id: "first", name: "First", order: 0, createdAt: 0 },
     { id: "second", name: "Second", order: 1, createdAt: 0 },
@@ -98,7 +99,11 @@ const payload: BackendLayoutPayload = {
   ],
 };
 
-function render(authenticated = true, userId = 1, flushEffects = true) {
+function render(
+  authenticated = true,
+  userId = "4a15c70e-8c4a-4052-83e4-19d3fa01e9cb",
+  flushEffects = true,
+) {
   harness.index = 0;
   const layout = useLayout(authenticated, userId);
   if (flushEffects) for (const effect of harness.effects.splice(0)) effect();
@@ -130,10 +135,35 @@ describe("layout-owned widget cache lifetime", () => {
     vi.mocked(api.get).mockImplementation(async (path) =>
       path === "/user/layout" ? payload : { symbol: "TEST" },
     );
-    vi.mocked(api.put).mockResolvedValue(undefined);
+    vi.mocked(api.put).mockResolvedValue({ revision: 1 });
   });
   afterEach(() => {
     for (const slot of harness.slots) slot.cleanup?.();
+  });
+
+  it("serializes saves and uses the revision returned by the previous save", async () => {
+    const layout = await loaded();
+    const firstSave = deferred<{ revision: number }>();
+    vi.mocked(api.put).mockReturnValueOnce(firstSave.promise);
+    void layout.renameScreen("first", "Renamed");
+    void layout.setActiveScreen("second");
+    await settle();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(api.put).mock.calls[0][1]).toMatchObject({ revision: 0 });
+    firstSave.resolve({ revision: 1 });
+    await settle();
+    expect(api.put).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(api.put).mock.calls[1][1]).toMatchObject({ revision: 1 });
+  });
+
+  it("reloads after a conflict and discards already queued stale saves", async () => {
+    const layout = await loaded();
+    vi.mocked(api.put).mockRejectedValueOnce(new Error("Conflict"));
+    void layout.renameScreen("first", "Stale rename");
+    void layout.setActiveScreen("second");
+    await settle();
+    expect(api.put).toHaveBeenCalledTimes(1);
+    expect(render().screens).toEqual(payload.screens);
   });
 
   it("evicts a removed widget from every registered cache", async () => {
@@ -198,17 +228,17 @@ describe("layout-owned widget cache lifetime", () => {
     await loaded();
     const previousToken = getWidgetCacheToken("first-chart");
     const oldSignal = vi.mocked(api.get).mock.calls[0][1]!;
-    render(true, 2);
+    render(true, "08a9175e-8d74-4325-a5dc-55110948e23a");
     expect(oldSignal.aborted).toBe(true);
     expect(getWidgetCacheToken("first-chart")).toBeUndefined();
     await settle();
     expect(getWidgetCacheToken("first-chart")).not.toBe(previousToken);
-    expect(render(true, 2).ready).toBe(true);
+    expect(render(true, "08a9175e-8d74-4325-a5dc-55110948e23a").ready).toBe(true);
   });
 
   it("hides the previous user's layout before passive effects run", async () => {
     await loaded();
-    const changedUser = render(true, 2, false);
+    const changedUser = render(true, "08a9175e-8d74-4325-a5dc-55110948e23a", false);
     expect(changedUser.widgets).toEqual([]);
     expect(changedUser.screens).toEqual([]);
     expect(changedUser.activeScreenId).toBe("");
@@ -224,7 +254,9 @@ describe("layout-owned widget cache lifetime", () => {
     await settle();
     expect(getWidgetCacheToken("first-chart")).toBeUndefined();
     expect(api.get).toHaveBeenCalledTimes(1);
-    expect(render(false, 1, false).widgets).toEqual([]);
+    expect(
+      render(false, "4a15c70e-8c4a-4052-83e4-19d3fa01e9cb", false).widgets,
+    ).toEqual([]);
   });
 
   it("does not let a late prefetch recreate a removed widget's state", async () => {

@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from uuid import uuid4
 from sqlalchemy import (
     BigInteger,
     Column,
     DateTime,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     PrimaryKeyConstraint,
     String,
     Text,
     UniqueConstraint,
+    Uuid,
+    text,
 )
 from sqlalchemy.orm import relationship
 
@@ -25,8 +29,15 @@ def utc_now() -> datetime:
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("public_id", name="uq_users_public_id"),)
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    public_id = Column(
+        Uuid(as_uuid=True),
+        nullable=False,
+        default=uuid4,
+        server_default=text("gen_random_uuid()"),
+    )
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     tier = Column(String(50), nullable=False, default="free")
@@ -38,8 +49,15 @@ class User(Base):
     settings = relationship("UserSetting", back_populates="user", cascade="all, delete-orphan")
 
 
+class UserLayout(Base):
+    __tablename__ = "user_layouts"
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    revision = Column(Integer, nullable=False, default=0, server_default="0")
+
+
 class UserScreen(Base):
     __tablename__ = "user_screens"
+    __table_args__ = (UniqueConstraint("user_id", "id", name="uq_screen_owner_id"),)
 
     id = Column(String(100), primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -53,10 +71,12 @@ class UserScreen(Base):
 
 class UserWidget(Base):
     __tablename__ = "user_widgets"
+    __table_args__ = (UniqueConstraint("user_id", "id", name="uq_widget_owner_id"),
+        ForeignKeyConstraint(["user_id", "screen_id"], ["user_screens.user_id", "user_screens.id"], ondelete="CASCADE", name="fk_widget_owned_screen"),)
 
     id = Column(String(100), primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    screen_id = Column(String(100), ForeignKey("user_screens.id", ondelete="CASCADE"), nullable=False, index=True)
+    screen_id = Column(String(100), nullable=False, index=True)
     type = Column(String(100), nullable=False)
     x = Column(Integer, nullable=False)
     y = Column(Integer, nullable=False)
@@ -72,8 +92,9 @@ class UserWidget(Base):
 
 class UserWidgetState(Base):
     __tablename__ = "user_widget_states"
+    __table_args__ = (ForeignKeyConstraint(["user_id", "widget_id"], ["user_widgets.user_id", "user_widgets.id"], ondelete="CASCADE", name="fk_state_owned_widget"),)
 
-    widget_id = Column(String(100), ForeignKey("user_widgets.id", ondelete="CASCADE"), primary_key=True)
+    widget_id = Column(String(100), primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     symbol = Column(String(50), nullable=True)
     interval = Column(String(20), nullable=True)
@@ -114,6 +135,7 @@ class UserSetting(Base):
 
 class UserTablePref(Base):
     __tablename__ = "user_table_prefs"
+    __table_args__ = (UniqueConstraint("user_id", "scope_type", "scope_id", "table_id", name="uq_table_pref_scope"),)
 
     id = Column(String(100), primary_key=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

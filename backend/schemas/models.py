@@ -1,21 +1,22 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 from pydantic import BaseModel, EmailStr, Field
 
 
 class UserCreate(BaseModel):
-    email: EmailStr
-    password: str
+    email: EmailStr = Field(max_length=255)
+    password: str = Field(min_length=12, max_length=128)
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
-    password: str
+    email: EmailStr = Field(max_length=255)
+    password: str = Field(min_length=1, max_length=128)
 
 
 class UserMeResponse(BaseModel):
-    id: int
+    id: UUID
     email: str
     tier: str
     created_at: datetime
@@ -192,66 +193,6 @@ class ErrorResponse(BaseModel):
     message: str
 
 
-# Layout Schemas
-class WidgetSchema(BaseModel):
-    id: str
-    screenId: str
-    type: str
-    x: int
-    y: int
-    w: int
-    h: int
-    minW: int = 1
-    minH: int = 1
-    createdAt: int
-
-
-class ScreenSchema(BaseModel):
-    id: str
-    name: str
-    order: int = 0
-    createdAt: int
-
-
-class LayoutPayload(BaseModel):
-    screens: list[ScreenSchema]
-    activeScreenId: str
-    widgets: list[WidgetSchema]
-
-
-class WidgetStatePayload(BaseModel):
-    symbol: str | None = None
-    interval: str | None = None
-    state: dict | None = None
-
-
-# Watchlist Schemas
-class WatchlistSchema(BaseModel):
-    id: str
-    name: str
-    order: int = 0
-    items: list[str] = []
-    rowState: dict | None = None
-    createdAt: int
-    updatedAt: int
-
-
-class WatchlistSavePayload(BaseModel):
-    name: str
-    order: int = 0
-    items: list[str] = []
-    rowState: dict | None = None
-
-
-# Settings Schemas
-class SettingsPayload(BaseModel):
-    settings: dict[str, object]
-
-
-# Table Preferences Schemas
-class TablePrefPayload(BaseModel):
-    scopeType: str
-    scopeId: str
-    tableId: str
-    prefs: dict[str, object]
-
+# Non-portfolio state contracts live separately from auth and market schemas.
+from .user_state import (WidgetSchema, ScreenSchema, LayoutPayload, WidgetStatePayload,
+                         WatchlistSchema, WatchlistSavePayload, SettingsPayload, TablePrefPayload)

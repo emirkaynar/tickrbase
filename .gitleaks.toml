@@ -1,0 +1,13 @@
+title = "Current-source secret scan"
+[extend]
+useDefault = true
+[allowlist]
+description = "Documented non-secret test fixtures and development examples"
+paths = [
+  '''backend/tests/''',
+  '''\.github/workflows/backend-active\.yml''',
+  '''backend/\.env\.example''',
+  '''node_modules/''',
+  '''\.venv/''',
+  '''\.git/''',
+]

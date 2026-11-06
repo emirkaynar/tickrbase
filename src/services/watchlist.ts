@@ -26,7 +26,7 @@ const DEFAULT_LIST_ID = "list:default";
 // const DEFAULT_LIST_NAME = "Watchlist";
 
 function createListId(): string {
-  return `list:${Date.now()}-${Math.floor(Math.random() * 100_000)}`;
+  return crypto.randomUUID();
 }
 
 function normalizeTicker(ticker: string): string {

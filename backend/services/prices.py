@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from datetime import datetime, timezone
@@ -8,6 +9,9 @@ import redis.asyncio as aioredis
 from ..core.config import PRICE_TTL_SECONDS
 from ..providers.base import DataProvider
 from ..providers.yahoo import normalize_ticker
+from .cache_control import optional_get, optional_set, single_flight
+
+PRICE_PROVIDER_TIMEOUT_SECONDS = 12
 
 
 def iso_timestamp(ts: int) -> str:
@@ -18,15 +22,15 @@ def iso_timestamp(ts: int) -> str:
     )
 
 
-async def get_price(
+async def _get_price(
     provider: DataProvider,
     redis: aioredis.Redis,
     ticker: str,
 ) -> tuple[float, bool, int]:
     normalized = normalize_ticker(ticker)
-    cache_key = f"price:{normalized}"
+    cache_key = f"price:{provider.source_id}:{normalized}"
 
-    cached_str = await redis.get(cache_key)
+    cached_str = await optional_get(redis, cache_key)
     now = int(time.time())
 
     stale_fallback: float | None = None
@@ -42,13 +46,15 @@ async def get_price(
                 return price, False, fetched_at
             stale_fallback = price
             stale_fetched_at = fetched_at
-        except (json.JSONDecodeError, KeyError, ValueError):
+        except (json.JSONDecodeError, KeyError, ValueError, TypeError):
             pass
 
     try:
-        price, fetched_at = await provider.get_price_async(normalized)
+        price, fetched_at = await asyncio.wait_for(
+            provider.get_price_async(normalized), timeout=PRICE_PROVIDER_TIMEOUT_SECONDS
+        )
         payload = json.dumps({"price": price, "fetched_at": fetched_at})
-        await redis.set(cache_key, payload, ex=PRICE_TTL_SECONDS * 2)
+        await optional_set(redis, cache_key, payload, ex=PRICE_TTL_SECONDS * 10)
         return price, False, fetched_at
     except Exception:
         if stale_fallback is not None and stale_fetched_at is not None:
@@ -67,3 +73,12 @@ def to_price_payload(ticker: str, price: float, stale: bool, fetched_at: int) ->
         "stale": stale,
         "last_updated": iso_str,
     }
+
+
+async def get_price(provider, redis, ticker):
+    key = f"price:{provider.source_id}:{normalize_ticker(ticker)}"
+    return await single_flight(
+        key, lambda: _get_price(provider, redis, ticker),
+        # Leave time for optional cache I/O and stale fallback after provider timeout.
+        timeout=PRICE_PROVIDER_TIMEOUT_SECONDS + 3,
+    )

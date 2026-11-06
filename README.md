@@ -29,6 +29,10 @@ docker compose -f docker-compose.dev.yml up -d
 # Install Python dependencies
 pip install -r backend/requirements.txt
 
+# Copy backend/.env.example to backend/.env.dev and set JWT_SECRET to a
+# locally generated value: python -c "import secrets; print(secrets.token_urlsafe(48))"
+# Optional logo credentials belong only in this ignored local file.
+
 # Run database migrations
 python -m alembic -c backend/alembic.ini upgrade head
 
@@ -36,14 +40,49 @@ python -m alembic -c backend/alembic.ini upgrade head
 python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
+### Public account IDs
+
+Apply all current migrations with the command above before running this backend.
+Registration, login, and `/auth/me` return a public UUID string in `id`; browser
+cookies contain opaque, revocable session tokens. Internal integer user keys and
+foreign keys are preserved. Old JWT cookies require login again. Screen, widget,
+and watchlist IDs are opaque and server writes validate ownership. See
+[backend operations](docs/backend-operations.md) for budgets, runtime roles,
+health checks, dependency verification, and failure behavior.
+
+The focused identity checks can also exercise a local PostgreSQL server. They
+create and clean up generated test schemas without resetting the application DB:
+
+```powershell
+$env:RUN_DATABASE_TESTS = '1'
+.\backend\.venv\Scripts\python.exe -B -m pytest backend/tests/test_public_identity.py backend/tests/test_public_identity_database.py -q -p no:cacheprovider
+```
+
 ### 3. Frontend Setup
 
 ```bash
-npm install
+npm ci --ignore-scripts
 npm run dev
 ```
 
 Open http://localhost:5173 in your browser.
+
+`ENV` is selected from the process environment (defaults to `dev`). Only local
+`dev`, `development`, and `local` modes load `backend/.env.dev`; process variables
+take precedence. A random `JWT_SECRET` of at least 32 bytes is required in every
+environment. There is no built-in signing key. The key also protects identity
+keys in distributed authentication limits; keep it consistent across processes.
+
+Outside local mode, provide `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, and exact
+HTTPS `CORS_ORIGINS` through the deployment environment. Secure cookies default
+on and cannot be disabled there. Local HTTP defaults to `COOKIE_SECURE=false`
+with `SameSite=lax`; `SameSite=none` requires secure cookies in every environment.
+Do not reuse the local Docker credentials for a shared deployment.
+
+Previously committed credentials remain in Git history. Revoke/reissue any active
+provider token in its provider account, update only the ignored local environment
+or deployment secret store, and restart the backend. Removing tracking does not
+revoke a provider credential. Never paste credentials into logs or commit them.
 
 ## Stack
 

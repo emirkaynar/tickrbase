@@ -1,4 +1,7 @@
 # Custom
+.env
+.env.*
+!.env.example
 backend/data/lima.db
 backend/testing.py
 __pycache__/
@@ -35,3 +38,6 @@ GEMINI.md
 skills-lock.json
 conductor/
 docs/research
+
+# Local Python test caches
+.pytest_cache/

@@ -1,0 +1,5 @@
+-r requirements.txt
+-c requirements.lock.txt
+-c requirements-dev.lock.txt
+pytest==9.1.1
+pytest-asyncio==1.4.0

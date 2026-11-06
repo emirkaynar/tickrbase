@@ -49,6 +49,10 @@ def get_redis_client() -> aioredis.Redis:
             REDIS_URL,
             encoding="utf-8",
             decode_responses=True,
+            max_connections=40,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+            retry_on_timeout=False,
         )
         if ENABLE_REDIS_LOGGING:
             _redis_pool = LoggingRedisProxy(client)  # type: ignore

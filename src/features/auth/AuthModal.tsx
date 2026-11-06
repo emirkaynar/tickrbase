@@ -89,6 +89,7 @@ export function AuthModal({
             <label class={styles.label}>Email Address</label>
             <input
               type="email"
+              maxLength={255}
               class={styles.input}
               placeholder="name@example.com"
               value={email}
@@ -101,12 +102,16 @@ export function AuthModal({
             <label class={styles.label}>Password</label>
             <input
               type="password"
+              minLength={mode === "register" ? 12 : 1}
+              maxLength={128}
+              autoComplete={mode === "register" ? "new-password" : "current-password"}
               class={styles.input}
               placeholder="••••••••"
               value={password}
               onInput={(e) => setPassword((e.target as HTMLInputElement).value)}
               required
             />
+            {mode === "register" && <span>Use 12–128 characters.</span>}
           </div>
 
           <button type="submit" class={styles.submitBtn} disabled={loading}>

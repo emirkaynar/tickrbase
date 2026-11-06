@@ -5,13 +5,14 @@ import time
 import redis.asyncio as aioredis
 
 from ..core.config import FALLBACK_SYMBOLS, SYMBOLS_TTL_SECONDS
+from .cache_control import optional_get, optional_set
 
 
 async def get_symbol_items(redis: aioredis.Redis) -> tuple[list[dict], bool, int]:
     now = int(time.time())
     cache_key = "symbols:bist"
 
-    cached_str = await redis.get(cache_key)
+    cached_str = await optional_get(redis, cache_key)
     if cached_str:
         try:
             data = json.loads(cached_str)
@@ -26,6 +27,6 @@ async def get_symbol_items(redis: aioredis.Redis) -> tuple[list[dict], bool, int
 
     items = FALLBACK_SYMBOLS
     payload = json.dumps({"items": items, "fetched_at": now})
-    await redis.set(cache_key, payload, ex=SYMBOLS_TTL_SECONDS)
+    await optional_set(redis, cache_key, payload, ex=SYMBOLS_TTL_SECONDS)
 
     return items, False, now

@@ -2,14 +2,43 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 
-# Load .env.dev if present locally
+ENV_NAME = os.getenv("ENV", "dev").strip().lower()
+DEV_MODE = ENV_NAME in ("dev", "development", "local")
+if ENV_NAME not in ("dev", "development", "local", "test", "testing", "staging", "prod", "production"):
+    raise ValueError("ENV must name a supported environment")
+
+# The process selects the environment before any local file is read.
 env_dev = BASE_DIR / ".env.dev"
-if env_dev.exists():
-    load_dotenv(dotenv_path=env_dev)
+if DEV_MODE and env_dev.exists():
+    load_dotenv(dotenv_path=env_dev, override=False)
+
+
+def _boolean(name: str, default: bool) -> bool:
+    value = os.getenv(name, str(default)).strip().lower()
+    if value not in ("true", "false", "1", "0", "t", "f"):
+        raise ValueError(f"{name} must be a boolean")
+    return value in ("true", "1", "t")
+
+
+def _positive_integer(name: str, default: int) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except ValueError:
+        raise ValueError(f"{name} must be a positive integer") from None
+    if value <= 0:
+        raise ValueError(f"{name} must be a positive integer")
+    return value
+
+
+if not DEV_MODE:
+    for name in ("DATABASE_URL", "REDIS_URL", "CORS_ORIGINS"):
+        if not os.getenv(name, "").strip():
+            raise ValueError(f"{name} must be explicitly configured outside local development")
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
@@ -17,17 +46,25 @@ DATABASE_URL = os.getenv(
 )
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
-JWT_SECRET = os.getenv("JWT_SECRET", "dev_secret_key_change_in_production_987654321_tickrbase")
+JWT_SECRET = os.getenv("JWT_SECRET", "")
+if len(JWT_SECRET.strip().encode("utf-8")) < 32 or any(
+    marker in JWT_SECRET.lower() for marker in ("dev_secret", "change_me", "change_in_production", "replace_me")
+):
+    raise ValueError("JWT_SECRET must be an explicit random secret of at least 32 bytes")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+if JWT_ALGORITHM not in ("HS256", "HS384", "HS512"):
+    raise ValueError("JWT_ALGORITHM must be HS256, HS384, or HS512")
+ACCESS_TOKEN_EXPIRE_MINUTES = _positive_integer("ACCESS_TOKEN_EXPIRE_MINUTES", 1440)
 
-COOKIE_SECURE = os.getenv("COOKIE_SECURE", "False").lower() in ("true", "1", "t")
-COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax")
+COOKIE_SECURE = _boolean("COOKIE_SECURE", not DEV_MODE)
+COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "lax").strip().lower()
+if COOKIE_SAMESITE not in ("lax", "strict", "none"):
+    raise ValueError("COOKIE_SAMESITE must be lax, strict, or none")
+if not COOKIE_SECURE and (not DEV_MODE or COOKIE_SAMESITE == "none"):
+    raise ValueError("COOKIE_SECURE is required outside local development and for SameSite=None")
 
-ENV_NAME = os.getenv("ENV", "dev").lower()
-DEV_MODE = ENV_NAME in ("dev", "development", "local", "true", "1")
-ENABLE_DB_LOGGING = os.getenv("ENABLE_DB_LOGGING", str(DEV_MODE)).lower() in ("true", "1", "t")
-ENABLE_REDIS_LOGGING = os.getenv("ENABLE_REDIS_LOGGING", str(DEV_MODE)).lower() in ("true", "1", "t")
+ENABLE_DB_LOGGING = _boolean("ENABLE_DB_LOGGING", DEV_MODE)
+ENABLE_REDIS_LOGGING = _boolean("ENABLE_REDIS_LOGGING", DEV_MODE)
 
 cors_env = os.getenv("CORS_ORIGINS")
 if cors_env:
@@ -37,6 +74,21 @@ else:
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
+
+if not CORS_ORIGINS:
+    raise ValueError("CORS_ORIGINS must contain at least one exact origin")
+for origin in CORS_ORIGINS:
+    parsed = urlsplit(origin)
+    try:
+        parsed.port
+    except ValueError:
+        raise ValueError("CORS_ORIGINS contains an invalid port") from None
+    if (
+        not parsed.hostname or parsed.username or parsed.password
+        or parsed.path or parsed.query or parsed.fragment
+        or parsed.scheme not in (("http", "https") if DEV_MODE else ("https",))
+    ):
+        raise ValueError("CORS_ORIGINS must contain exact origins (HTTPS outside local development)")
 
 PRICE_TTL_SECONDS = 60
 QUOTES_TTL_SECONDS = 20
@@ -50,7 +102,7 @@ LOOKUP_MIN_QUERY_LENGTH = 2
 LOOKUP_MAX_RESULTS = 25
 
 LOGO_DEV_TOKEN = os.getenv("LOGO_DEV_TOKEN", "")
-LOGO_DEV_MONTHLY_LIMIT = int(os.getenv("LOGO_DEV_MONTHLY_LIMIT", "500000"))
+LOGO_DEV_MONTHLY_LIMIT = _positive_integer("LOGO_DEV_MONTHLY_LIMIT", 500000)
 LOGO_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 days
 LOGO_NEGATIVE_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30  # 30 days
 

@@ -6,7 +6,7 @@ export function useAuth() {
   const [user, setUser] = useState<UserMe | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const currentUserId = useRef<number | null>(null);
+  const currentUserId = useRef<string | null>(null);
   const updateUser = useCallback((next: UserMe | null) => {
     const nextId = next?.id ?? null;
     if (currentUserId.current !== nextId) clearWidgetCaches();
@@ -88,14 +88,18 @@ export function useAuth() {
     }
   };
 
-  const logout = async () => {
+  const logout = async (): Promise<boolean> => {
     setLoading(true);
+    setError(null);
     try {
       await api.post("/auth/logout");
-    } catch {
-      // Ignore logout errors
-    } finally {
       updateUser(null);
+      return true;
+    } catch {
+      setError("Sign out failed. Your session may still be active. Please try again.");
+      return false;
+    } finally {
+      clearWidgetCaches();
       setLoading(false);
     }
   };

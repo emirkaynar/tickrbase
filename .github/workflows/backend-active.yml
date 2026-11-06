@@ -1,0 +1,71 @@
+name: Active backend security
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  active-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tickrbase
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: tickrbase
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U tickrbase -d tickrbase"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      ENV: test
+      JWT_SECRET: ci-only-signing-secret-at-least-thirty-two-bytes
+      DATABASE_URL: postgresql+asyncpg://tickrbase:ci-only-password@localhost:5432/tickrbase
+      REDIS_URL: redis://localhost:6379/0
+      CORS_ORIGINS: https://app.example.com
+      RUN_DATABASE_TESTS: '1'
+      ENABLE_DB_LOGGING: 'false'
+      ENABLE_REDIS_LOGGING: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: 'backend/requirements*.txt'
+      - run: python -m pip install -r backend/requirements-dev.txt
+      - run: python -m pip check
+      - run: python -m alembic -c backend/alembic.ini upgrade head
+      - name: Verify independent runtime role
+        env:
+          PGPASSWORD: ci-only-password
+        run: |
+          psql -h localhost -U tickrbase -d tickrbase -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE tickrbase_runtime LOGIN PASSWORD 'ci-only-runtime-password';
+          REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+          GRANT USAGE ON SCHEMA public TO tickrbase_runtime;
+          GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO tickrbase_runtime;
+          GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tickrbase_runtime;
+          SQL
+          DATABASE_URL=postgresql+asyncpg://tickrbase_runtime:ci-only-runtime-password@localhost:5432/tickrbase python -m scripts.check_runtime_role
+      - name: Non-portfolio regressions and real Postgres/Redis isolation
+        run: python -B -m pytest backend/tests --ignore=backend/tests/test_snapshots.py -q -p no:cacheprovider
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: npm install --global npm@11.19.0 --ignore-scripts
+      - run: npm ci --ignore-scripts
+      - run: npm test -- src/services/__tests__/api.test.ts src/grid/__tests__/useLayout.test.ts src/hooks/__tests__/useAuth.test.ts
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Scan current source without printing secrets
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.30.0 dir /repo --config /repo/.gitleaks.toml --redact --no-banner
+      - name: Audit resolved Python runtime dependencies
+        run: |
+          python -m pip install pip-audit==2.9.0
+          python -m pip_audit -r backend/requirements.lock.txt --progress-spinner off --disable-pip --no-deps

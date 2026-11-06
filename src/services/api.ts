@@ -6,21 +6,39 @@ export const API_BASE =
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly headers: Headers;
+  readonly code?: string;
+  readonly requestId?: string;
+  readonly fields?: { field: string; code: string }[];
+  constructor(status: number, message: string, headers = new Headers(), payload?: ErrorPayload) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.headers = headers;
+    this.code = payload?.code;
+    this.requestId = payload?.request_id ?? headers.get("x-request-id") ?? undefined;
+    this.fields = payload?.fields;
   }
 }
 
-type ErrorPayload = { error?: boolean; message?: string };
+type ErrorPayload = { error?: boolean; message?: string; code?: string; request_id?: string; fields?: { field: string; code: string }[] };
 
 async function parseResponse<T>(res: Response): Promise<T> {
-  const data = (await res.json()) as T & ErrorPayload;
-  if (!res.ok || data.error) {
+  const text = await res.text();
+  let data: (T & ErrorPayload) | undefined;
+  if (text) {
+    try {
+      data = JSON.parse(text) as T & ErrorPayload;
+    } catch {
+      throw new ApiError(res.status, res.ok ? "Invalid server response" : `Request failed: ${res.status}`, res.headers);
+    }
+  }
+  if (!res.ok || data?.error) {
     throw new ApiError(
       res.status,
-      data.message ?? `Request failed: ${res.status}`,
+      typeof data?.message === "string" ? data.message : `Request failed: ${res.status}`,
+      res.headers,
+      data,
     );
   }
   return data as T;
@@ -49,7 +67,7 @@ async function withRetry<T>(
 }
 
 export type UserMe = {
-  id: number;
+  id: string;
   email: string;
   tier: string;
   created_at: string;

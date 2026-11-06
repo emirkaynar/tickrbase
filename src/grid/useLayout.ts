@@ -35,6 +35,7 @@ export type BackendLayoutPayload = {
   screens: ScreenItem[];
   activeScreenId: string;
   widgets: WidgetInstance[];
+  revision: number;
 };
 
 const ALL_HANDLES: LayoutItem["resizeHandles"] = [
@@ -63,8 +64,11 @@ function defaultScreenNameFrom(records: { name: string }[]): string {
   return `Screen ${max + 1}`;
 }
 
-export function useLayout(isAuthenticated: boolean = true, userId?: number) {
+export function useLayout(isAuthenticated: boolean = true, userId?: string) {
   const owner = isAuthenticated ? (userId ?? "authenticated") : null;
+  const revision = useRef(0);
+  const saveGeneration = useRef(0);
+  const saveQueue = useRef(Promise.resolve());
   const loadedOwner = useRef<typeof owner>(null);
   const [screens, setScreens] = useState<ScreenItem[]>([]);
   const [activeScreenId, setActiveScreenId] = useState("");
@@ -77,7 +81,7 @@ export function useLayout(isAuthenticated: boolean = true, userId?: number) {
 
   // Initial load from backend API
   const loadLayout = useCallback(
-    async (signal: AbortSignal, owner: number | "authenticated") => {
+    async (signal: AbortSignal, owner: string) => {
       const session = getWidgetCacheSessionToken();
       const active = () =>
         !signal.aborted && isWidgetCacheSessionCurrent(session);
@@ -87,6 +91,7 @@ export function useLayout(isAuthenticated: boolean = true, userId?: number) {
           signal,
         );
         if (!active()) return;
+        revision.current = data.revision ?? 0;
         loadedOwner.current = owner;
         setScreens(data.screens || []);
         setActiveScreenId(
@@ -160,17 +165,29 @@ export function useLayout(isAuthenticated: boolean = true, userId?: number) {
       nextActiveId: string,
       nextWidgets: WidgetInstance[],
     ) => {
-      try {
-        await api.put("/user/layout", {
-          screens: nextScreens,
-          activeScreenId: nextActiveId,
-          widgets: nextWidgets,
-        });
-      } catch (err) {
-        console.error("Failed to save layout to backend:", err);
-      }
+      const session = getWidgetCacheSessionToken();
+      const savingOwner = loadedOwner.current;
+      const generation = saveGeneration.current;
+      const run = async () => {
+        if (!savingOwner || generation !== saveGeneration.current || !isWidgetCacheSessionCurrent(session)) return;
+        try {
+          const result = await api.put<{ revision: number }>("/user/layout", {
+            screens: nextScreens, activeScreenId: nextActiveId,
+            widgets: nextWidgets, revision: revision.current,
+          });
+          if (isWidgetCacheSessionCurrent(session)) revision.current = result.revision;
+        } catch (err) {
+          console.error("Failed to save layout to backend:", err);
+          if (isWidgetCacheSessionCurrent(session)) {
+            saveGeneration.current += 1;
+            await loadLayout(new AbortController().signal, savingOwner);
+          }
+        }
+      };
+      saveQueue.current = saveQueue.current.then(run);
+      await saveQueue.current;
     },
-    [],
+    [loadLayout],
   );
 
   const debouncedSave = useDebounce(saveLayoutToBackend, 600);
@@ -236,7 +253,7 @@ export function useLayout(isAuthenticated: boolean = true, userId?: number) {
     async (name?: string) => {
       const resolved = name?.trim() || defaultScreenNameFrom(screens);
       const now = Date.now();
-      const screenId = `screen-${now}`;
+      const screenId = crypto.randomUUID();
       const newScreen: ScreenItem = {
         id: screenId,
         name: resolved,
