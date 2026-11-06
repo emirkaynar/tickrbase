@@ -77,6 +77,16 @@ export function App() {
     openPalette("add-widget");
   }
 
+  async function handleLogout() {
+    if (!(await auth.logout())) {
+      toast.error({
+        title: "Sign out failed",
+        description: "Your session may still be active. Check your connection and try again.",
+        action: { label: "Retry", onClick: () => void handleLogout() },
+      });
+    }
+  }
+
   function manageScreens() {
     openPalette("manage-screens");
   }
@@ -125,7 +135,7 @@ export function App() {
       theme={theme}
       onToggleTheme={toggleTheme}
       user={auth.user}
-      onLogout={auth.logout}
+      onLogout={() => void handleLogout()}
       portfolioState={portfolioState}
     />
   );

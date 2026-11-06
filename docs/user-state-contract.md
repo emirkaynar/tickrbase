@@ -24,9 +24,9 @@ structured `(owner, scope type, scope ID, table ID)` unique key.
 
 Run migrations with the migrator role before startup. Development state using
 old owner-prefixed IDs is unsupported; no compatibility or old-data migration
-is provided. Use a fresh development database for this contract. Local migration reconciliation adopted matching precreated tables and backed up
-four older duplicate table-preference rows before retaining the newest per scope.
-Portfolio tables and portfolio feature contracts remain unchanged.
+is provided. Use a fresh development database for this contract. Development data is disposable. Reset incompatible local state instead of adding
+legacy compatibility or data-preservation migrations. Portfolio feature contracts
+remain outside this roadmap.
 
 Verification: `RUN_DATABASE_TESTS=1 python -m pytest
 backend/tests/test_user_state_security.py` uses generated disposable PostgreSQL

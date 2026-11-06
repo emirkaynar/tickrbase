@@ -28,6 +28,7 @@ from ..providers.yahoo import normalize_ticker
 
 logger = logging.getLogger(__name__)
 WS_SEND_TIMEOUT_SECONDS = 5
+WS_UPSTREAM_CLOSE_TIMEOUT_SECONDS = 2
 
 
 def _now_ms() -> int:
@@ -249,7 +250,8 @@ class LivePriceStreamHub:
         new_symbols_needed = sum(
             1 for s in added if self._symbol_ref_counts.get(s, 0) == 0
         )
-        if current_global_count + new_symbols_needed > WS_MAX_GLOBAL_SYMBOLS:
+        freed_symbols = sum(1 for s in removed if self._symbol_ref_counts.get(s, 0) == 1)
+        if current_global_count - freed_symbols + new_symbols_needed > WS_MAX_GLOBAL_SYMBOLS:
             return False, f"max_global_symbols_exceeded_{WS_MAX_GLOBAL_SYMBOLS}", set()
 
         for s in removed:
@@ -373,6 +375,10 @@ class LivePriceStreamHub:
                 backoff = WS_RECONNECT_BACKOFF_MIN_SECONDS
 
                 while not self._stop_event.is_set():
+                    if listen_task.done():
+                        # Surface upstream termination to the reconnect path.
+                        await listen_task
+                        raise ConnectionError("Upstream listener stopped")
                     current_symbols = set(self._symbol_ref_counts.keys())
                     if set(active_symbols) != current_symbols:
                         break
@@ -395,10 +401,10 @@ class LivePriceStreamHub:
                 if listen_task:
                     listen_task.cancel()
                     try:
-                        await listen_task
-                    except asyncio.CancelledError:
-                        pass
+                        await asyncio.wait_for(asyncio.gather(listen_task, return_exceptions=True), timeout=WS_UPSTREAM_CLOSE_TIMEOUT_SECONDS)
+                    except asyncio.TimeoutError:
+                        logger.warning("live_stream_listener_close_timeout")
                 try:
-                    await ws.close()
+                    await asyncio.wait_for(ws.close(), timeout=WS_UPSTREAM_CLOSE_TIMEOUT_SECONDS)
                 except Exception:
                     pass

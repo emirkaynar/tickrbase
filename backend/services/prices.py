@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from datetime import datetime, timezone
@@ -9,6 +10,8 @@ from ..core.config import PRICE_TTL_SECONDS
 from ..providers.base import DataProvider
 from ..providers.yahoo import normalize_ticker
 from .cache_control import optional_get, optional_set, single_flight
+
+PRICE_PROVIDER_TIMEOUT_SECONDS = 12
 
 
 def iso_timestamp(ts: int) -> str:
@@ -47,7 +50,9 @@ async def _get_price(
             pass
 
     try:
-        price, fetched_at = await provider.get_price_async(normalized)
+        price, fetched_at = await asyncio.wait_for(
+            provider.get_price_async(normalized), timeout=PRICE_PROVIDER_TIMEOUT_SECONDS
+        )
         payload = json.dumps({"price": price, "fetched_at": fetched_at})
         await optional_set(redis, cache_key, payload, ex=PRICE_TTL_SECONDS * 10)
         return price, False, fetched_at
@@ -72,4 +77,8 @@ def to_price_payload(ticker: str, price: float, stale: bool, fetched_at: int) ->
 
 async def get_price(provider, redis, ticker):
     key = f"price:{provider.source_id}:{normalize_ticker(ticker)}"
-    return await single_flight(key, lambda: _get_price(provider, redis, ticker))
+    return await single_flight(
+        key, lambda: _get_price(provider, redis, ticker),
+        # Leave time for optional cache I/O and stale fallback after provider timeout.
+        timeout=PRICE_PROVIDER_TIMEOUT_SECONDS + 3,
+    )

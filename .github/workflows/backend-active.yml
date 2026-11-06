@@ -64,7 +64,7 @@ jobs:
       - run: npm test -- src/services/__tests__/api.test.ts src/grid/__tests__/useLayout.test.ts src/hooks/__tests__/useAuth.test.ts
       - run: npm audit --omit=dev --audit-level=high
       - name: Scan current source without printing secrets
-        run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.30.0 dir /repo --redact --no-banner
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.30.0 dir /repo --config /repo/.gitleaks.toml --redact --no-banner
       - name: Audit resolved Python runtime dependencies
         run: |
           python -m pip install pip-audit==2.9.0

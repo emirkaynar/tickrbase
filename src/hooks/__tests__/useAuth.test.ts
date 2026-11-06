@@ -7,8 +7,13 @@ import {
 } from "../../widgets/widgetCache";
 import { useAuth } from "../useAuth";
 
+const stateSetters = vi.hoisted(() => [] as ReturnType<typeof vi.fn>[]);
 vi.mock("preact/hooks", () => ({
-  useState: (initial: unknown) => [initial, vi.fn()],
+  useState: (initial: unknown) => {
+    const setter = vi.fn();
+    stateSetters.push(setter);
+    return [initial, setter];
+  },
   useRef: (initial: unknown) => ({ current: initial }),
   useCallback: (callback: unknown) => callback,
   useEffect: vi.fn(),
@@ -31,6 +36,7 @@ const secondUser = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  stateSetters.length = 0;
   clearWidgetCaches();
 });
 
@@ -51,8 +57,21 @@ describe("authentication-owned cache invalidation", () => {
     await auth.login("first@example.test", "test");
     activateWidgetCache("chart");
     vi.mocked(api.post).mockRejectedValueOnce(new Error("offline"));
-    await auth.logout();
+    expect(await auth.logout()).toBe(false);
     expect(getWidgetCacheToken("chart")).toBeUndefined();
+    expect(stateSetters[0]).toHaveBeenCalledTimes(1);
+    expect(stateSetters[0]).toHaveBeenLastCalledWith(firstUser);
+    expect(stateSetters[2]).toHaveBeenLastCalledWith("Sign out failed. Your session may still be active. Please try again.");
+  });
+
+  it("clears the authenticated principal only after confirmed logout", async () => {
+    const auth = useAuth();
+    vi.mocked(api.post).mockResolvedValueOnce(firstUser);
+    await auth.login("first@example.test", "test");
+    vi.mocked(api.post).mockResolvedValueOnce({ ok: true });
+    expect(await auth.logout()).toBe(true);
+    expect(stateSetters[0]).toHaveBeenLastCalledWith(null);
+    expect(stateSetters[2]).toHaveBeenLastCalledWith(null);
   });
 
   it("preserves caches when authentication refresh returns the same user", async () => {

@@ -38,7 +38,7 @@ async def optional_set(redis, key, value, **kwargs):
         return None
 
 
-async def single_flight(key: str, factory: Callable[[], Awaitable[Any]]):
+async def single_flight(key: str, factory: Callable[[], Awaitable[Any]], *, timeout: float | None = None):
     flight_key = (asyncio.get_running_loop(), key)
     task = _flights.get(flight_key)
     if task is None:
@@ -47,7 +47,7 @@ async def single_flight(key: str, factory: Callable[[], Awaitable[Any]]):
             raise RuntimeError('Market provider capacity exhausted')
         async def run():
             try:
-                return await asyncio.wait_for(factory(), PROVIDER_DEADLINE_SECONDS)
+                return await asyncio.wait_for(factory(), PROVIDER_DEADLINE_SECONDS if timeout is None else timeout)
             finally:
                 _flights.pop(flight_key, None)
         task = asyncio.create_task(run())

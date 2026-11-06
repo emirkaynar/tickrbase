@@ -258,6 +258,9 @@ async def get_widget_state(db: AsyncSession, user_id: int, widget_id: str) -> Wi
 async def save_widget_state(
     db: AsyncSession, user_id: int, widget_id: str, payload: WidgetStatePayload
 ) -> None:
+    # State inserts also lock the owner through their foreign key. Take this
+    # first to match layout writes and prevent an owner/widget lock cycle.
+    await db.execute(select(User.id).where(User.id == user_id).with_for_update())
     await _owned_widget(db, user_id, widget_id)
 
     state_json = json.dumps(payload.state) if payload.state is not None else None
@@ -405,10 +408,19 @@ async def save_user_settings(db: AsyncSession, user_id: int, settings: dict[str,
     from ..schemas.models import SettingsPayload
     SettingsPayload(settings=settings)
     await db.execute(select(User.id).where(User.id == user_id).with_for_update())
-    existing_keys = set((await db.execute(select(UserSetting.key).where(UserSetting.user_id == user_id))).scalars())
+    stored = (await db.execute(select(UserSetting.key, UserSetting.value_json).where(UserSetting.user_id == user_id))).all()
+    existing_keys = {row.key for row in stored}
     # Reserve the layout's internal key even before the first layout is loaded.
     if len(existing_keys | set(settings) | {"activeScreenId"}) > MAX_SETTINGS_PER_USER:
         raise HTTPException(409, "Settings limit reached")
+    merged = {row.key: json.loads(row.value_json) for row in stored if row.key != "activeScreenId"}
+    merged.update(settings)
+    try:
+        # The entire persisted document must remain valid for GET /user/settings,
+        # even when it was built by several individually bounded updates.
+        SettingsPayload(settings=merged)
+    except ValueError:
+        raise HTTPException(409, "Settings size limit reached") from None
     now = int(time.time() * 1000)
     for key, value in settings.items():
         stmt = insert(UserSetting).values(

@@ -4,12 +4,12 @@ from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import func, insert, select
+from sqlalchemy import func, insert, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core import models_db as models
-from backend.schemas.models import LayoutPayload, TablePrefPayload, WatchlistSavePayload
+from backend.schemas.models import LayoutPayload, SettingsPayload, TablePrefPayload, WatchlistSavePayload, WidgetStatePayload
 from backend.services import user_data as service
 from backend.tests.test_public_identity_database import isolated_database
 from backend.tests.test_user_state_security import layout
@@ -139,4 +139,66 @@ def test_layout_removal_reclaims_only_owned_widget_preferences():
                 await service.save_user_layout(db, user_id, payload.model_copy(update={"widgets": [], "revision": 1}))
                 prefs = (await db.execute(select(models.UserTablePref))).scalars().all()
                 assert len(prefs) == 1 and prefs[0].scope_type == "page"
+    asyncio.run(run())
+
+
+def test_widget_state_waits_for_owner_before_locking_widget():
+    """A concurrent layout holds owner then widget; state must use that order."""
+    async def run():
+        async with isolated_database() as engine:
+            async with engine.begin() as conn:
+                for model in [models.User, models.UserScreen, models.UserWidget, models.UserWidgetState]:
+                    await conn.run_sync(model.__table__.create)
+            async with AsyncSession(engine) as seed:
+                user = models.User(email="lock-order@example.com", hashed_password="unused")
+                seed.add(user)
+                await seed.flush()
+                owner = user.id
+                screen, widget = str(uuid4()), str(uuid4())
+                await seed.execute(insert(models.UserScreen).values(id=screen, user_id=owner, name="Screen", order=0, created_at=1))
+                await seed.execute(insert(models.UserWidget).values(id=widget, user_id=owner, screen_id=screen, type="basic-chart", x=0, y=0, w=6, h=6, min_w=1, min_h=1, created_at=1))
+                await seed.commit()
+            async with AsyncSession(engine) as blocker, AsyncSession(engine) as writer, AsyncSession(engine) as observer:
+                await blocker.execute(select(models.User.id).where(models.User.id == owner).with_for_update())
+                pid = (await writer.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+                task = asyncio.create_task(service.save_widget_state(writer, owner, widget, WidgetStatePayload(symbol="AAPL")))
+                try:
+                    for _ in range(200):
+                        waiting = (await observer.execute(text("SELECT wait_event_type FROM pg_stat_activity WHERE pid=:pid"), {"pid": pid})).scalar_one()
+                        if waiting == "Lock":
+                            break
+                        # pg_stat_activity snapshots are transaction-scoped.
+                        await observer.rollback()
+                        await asyncio.sleep(0.01)
+                    assert waiting == "Lock", "State writer did not reach the owner lock"
+                    # This is available only if state has not locked widget first.
+                    await observer.execute(select(models.UserWidget.id).where(models.UserWidget.id == widget).with_for_update(nowait=True))
+                    await observer.rollback()
+                finally:
+                    await observer.rollback()
+                    await blocker.rollback()
+                    await asyncio.wait_for(task, timeout=3)
+    asyncio.run(run())
+
+
+def test_cumulative_settings_size_cannot_break_read_contract():
+    async def run():
+        async with isolated_database() as engine:
+            async with engine.begin() as conn:
+                await conn.run_sync(models.User.__table__.create)
+                await conn.run_sync(models.UserSetting.__table__.create)
+            async with AsyncSession(engine, expire_on_commit=False) as db:
+                user = models.User(email="settings-size@example.com", hashed_password="unused")
+                db.add(user)
+                await db.commit()
+                owner = user.id
+                # These values retain the existing generic portfolio setting contract.
+                original = {"portfolio.customA": "x" * 40_000}
+                await service.save_user_settings(db, owner, original)
+                with pytest.raises(HTTPException) as error:
+                    await service.save_user_settings(db, owner, {"portfolio.customB": "y" * 40_000})
+                assert error.value.status_code == 409
+                await db.rollback()
+                current = await service.get_user_settings(db, owner)
+                assert SettingsPayload(settings=current).settings == original
     asyncio.run(run())

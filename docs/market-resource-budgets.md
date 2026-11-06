@@ -30,7 +30,9 @@ through the optional market-cache helpers.
   forcibly stop a blocked synchronous provider, so a persistently hung provider
   exhausts these fixed slots and rejects further work instead of spawning threads.
 - Price/quote/lookup/overview miss coalescing: at most 64 in-flight keys per process,
-  twelve-second deadlines, shared tasks survive one disconnected waiter.
+  twelve-second deadlines (prices allow fifteen seconds overall, including a
+  twelve-second provider deadline and cache I/O), shared tasks survive one
+  disconnected waiter.
 - Quotes: 25 symbols per HTTP request, one batched Redis read and pipelined writes.
 - History: supported intervals, bounded period syntax and timestamps, newest 20,000
   stored points returned chronologically. Explicit periods longer than 100 years

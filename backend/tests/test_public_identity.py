@@ -1,10 +1,12 @@
 import asyncio
+import base64
+import hmac
+import json
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 from unittest.mock import AsyncMock, Mock
 
 import httpx
-import jwt
 import pytest
 from fastapi import FastAPI, HTTPException
 
@@ -29,7 +31,13 @@ def test_auth_response_serializes_public_uuid():
 
 def test_legacy_jwt_is_rejected_without_database_lookup():
     now = datetime.now(timezone.utc)
-    token = jwt.encode({"sub": str(PUBLIC_ID), "exp": now + timedelta(minutes=1)}, JWT_SECRET, algorithm=JWT_ALGORITHM)
+    def encoded(value):
+        return base64.urlsafe_b64encode(value).rstrip(b'=')
+    header = encoded(json.dumps({'alg': JWT_ALGORITHM, 'typ': 'JWT'}).encode())
+    payload = encoded(json.dumps({'sub': str(PUBLIC_ID), 'exp': int((now + timedelta(minutes=1)).timestamp())}).encode())
+    signed = header + b'.' + payload
+    signature = hmac.digest(JWT_SECRET.encode(), signed, 'sha' + JWT_ALGORITHM[2:])
+    token = (signed + b'.' + encoded(signature)).decode()
     db = AsyncMock()
     with pytest.raises(HTTPException):
         asyncio.run(get_current_user(db, access_token=token))

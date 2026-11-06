@@ -88,14 +88,18 @@ export function useAuth() {
     }
   };
 
-  const logout = async () => {
+  const logout = async (): Promise<boolean> => {
     setLoading(true);
+    setError(null);
     try {
       await api.post("/auth/logout");
-    } catch {
-      // Ignore logout errors
-    } finally {
       updateUser(null);
+      return true;
+    } catch {
+      setError("Sign out failed. Your session may still be active. Please try again.");
+      return false;
+    } finally {
+      clearWidgetCaches();
       setLoading(false);
     }
   };

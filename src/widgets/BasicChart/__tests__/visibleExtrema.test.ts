@@ -162,6 +162,7 @@ function attach(
     chart: f.chartApi,
     series: f.seriesApi,
     requestUpdate: f.requestUpdate,
+    horzScaleBehavior: {} as SeriesAttachedParameter<Time>["horzScaleBehavior"],
   } as SeriesAttachedParameter<Time>);
   return primitive;
 }

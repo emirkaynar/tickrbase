@@ -11,7 +11,8 @@ frontend lockfile is `package-lock.json`; `.npmrc` disables install scripts. Run
 `npm ci --ignore-scripts`. The installed esbuild platform binary runs without
 blanket-enabling lifecycle scripts. Runtime Python dependencies have exact direct
 pins and resolved constraints: `pip install -r backend/requirements.txt`. Use
-`backend/requirements-dev.txt` for tests. Linux uvloop has an explicit platform pin.
+`backend/requirements-dev.txt` for tests, with test-only transitive versions in
+`backend/requirements-dev.lock.txt`. Linux uvloop has an explicit platform pin.
 Hashes and container image digests are not yet locked.
 
 Run `python -m alembic -c backend/alembic.ini upgrade head` with a dedicated
@@ -93,5 +94,18 @@ vulnerabilities for production and development dependencies, and pip-audit repor
 zero for pinned runtime constraints on 2026-11-04. Fixed npm Vite/source-map-js and
 Vitest/mocker/tinypool findings, updated certifi/dnspython/urllib3, and removed unused
 PyJWT after switching auth to opaque sessions. Audit output is a point-in-time
-advisory check, not proof of absence of vulnerabilities. Full frontend baseline
-has unrelated chart/UI failures and a known visibleExtrema test typecheck error.
+advisory check, not proof of absence of vulnerabilities. Current frontend build
+and regression results are recorded in [the roadmap](../tasks/todo.md).
+
+Verification on 2026-11-06 also used a fresh Python 3.13 virtual environment under
+the operating-system temp directory: constrained installation and `pip check`
+succeeded, then all 106 active-scope backend tests passed, including real local
+PostgreSQL/Redis checks. An empty generated schema ran the complete migration
+chain; a generated runtime role passed revision/privilege checks and table reads/
+writes while `CREATE TABLE` failed with PostgreSQL insufficient-privilege code
+42501. Generated schema and role were removed afterward. The checksum-verified
+official gitleaks 8.30.0 binary scanned a temp copy of current tracked source
+(1.59 MB) with the repository config and redaction enabled: no leaks found.
+The CI container explicitly loads that config from its read-only repository mount.
+The runtime advisory audit was refreshed with pip-audit 2.9.0 on 2026-11-06 and
+again reported no known vulnerabilities across all pinned runtime constraints.

@@ -213,3 +213,55 @@ def test_history_upstream_is_bounded_before_io_and_shared_without_shared_db(monk
         assert write.await_count == 2
         assert {call.args[0] for call in write.call_args_list} == {first_db, second_db}
     asyncio.run(run())
+
+
+def test_symbol_replacement_can_swap_at_global_capacity(monkeypatch):
+    from backend.services import streaming
+    async def run():
+        monkeypatch.setattr(streaming, 'WS_MAX_GLOBAL_SYMBOLS', 1)
+        hub = streaming.LivePriceStreamHub()
+        socket = SimpleNamespace(send_json=AsyncMock(), close=AsyncMock())
+        client_id = await hub.register_client(socket, 'user')
+        assert (await hub.replace_symbols(client_id, ['AAPL']))[0]
+        ok, _, symbols = await hub.replace_symbols(client_id, ['MSFT'])
+        assert ok and symbols == {'MSFT'}
+        assert hub.active_symbol_count == 1
+        await hub.unregister_client(client_id)
+    asyncio.run(run())
+
+
+def test_failed_upstream_listener_reconnects_and_cleans_up(monkeypatch):
+    import yfinance
+    from backend.services import streaming
+    async def run():
+        hub = streaming.LivePriceStreamHub()
+        hub._symbol_ref_counts['AAPL'] = 1
+        instances = []
+        class BrokenUpstream:
+            def __init__(self, **kwargs):
+                self.close = AsyncMock()
+                instances.append(self)
+            async def subscribe(self, symbols):
+                if len(instances) == 2:
+                    hub._stop_event.set()
+            async def listen(self, handler):
+                raise ConnectionError('upstream ended')
+        monkeypatch.setattr(yfinance, 'AsyncWebSocket', BrokenUpstream)
+        monkeypatch.setattr(streaming, 'WS_RECONNECT_BACKOFF_MIN_SECONDS', .001)
+        await asyncio.wait_for(hub._stream_loop(), timeout=2.5)
+        assert len(instances) == 2
+        assert all(instance.close.await_count == 1 for instance in instances)
+    asyncio.run(run())
+
+
+def test_hung_price_provider_returns_stale_before_whole_flight_deadline(monkeypatch):
+    async def run():
+        async def fetch(_):
+            await asyncio.Event().wait()
+        monkeypatch.setattr(prices, 'PRICE_PROVIDER_TIMEOUT_SECONDS', .01, raising=False)
+        cached = json.dumps({'price': 9, 'fetched_at': int(time.time()) - 120})
+        redis = SimpleNamespace(get=AsyncMock(return_value=cached), set=AsyncMock())
+        provider = SimpleNamespace(source_id='test', get_price_async=fetch)
+        price, stale, _ = await asyncio.wait_for(prices.get_price(provider, redis, 'AAPL'), timeout=.1)
+        assert price == 9 and stale
+    asyncio.run(run())

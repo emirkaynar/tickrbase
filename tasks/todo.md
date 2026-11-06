@@ -104,28 +104,15 @@ These are investigation references, not tasks to implement in this roadmap:
 - [ ] Reproducible setup, active-scope CI, telemetry, and fault/load evidence pass.
 - [x] Deferred portfolio findings remain explicitly unresolved; completing this checklist makes no portfolio-readiness claim.
 
-## Resumed implementation evidence (2026-11-04)
+## Merge verification — 2026-11-06
 
-- Subagents successfully ran in parallel for auth/security, streaming/caches, and errors/logos/bootstrap. Parent integrated user-state contracts and concurrency; cross-reviews addressed default-watchlist races, cancellation-safe hash limits and WS validation deadlines.
-- Initial integrated backend run: 97 tests passed with `RUN_DATABASE_TESTS=1`, including disposable PostgreSQL schemas, real Redis limits, migration bootstrap and active rollback. Additional final evidence follows after review fixes.
-- Frontend focused API/layout/widget-cache tests: 23 passed. Full frontend: 519 passed / 36 failed across 11 chart/UI test files already identified as baseline failures; build still fails on the preexisting `visibleExtrema.test.ts:161` mock missing `horzScaleBehavior`. No portfolio feature code/schema/tests were modified.
-- Contracts and bounded budgets: [user state](../docs/user-state-contract.md); additional market/operations documents are linked on completion.
-- Migrations 009/010: clean generated-schema upgrade/active rollback passed. Local development DB now reports `010_user_state_security (head)` and schema readiness passes. Matching precreated auth/session-layout tables were inspected and adopted; missing constraints applied transactionally. Four older duplicate shared table-preference rows were backed up in ignored `.verification/table-pref-duplicates-backup.json` before keeping the newest per scope. No portfolio tables were changed. Owner-prefixed resource data still has no compatibility migration; use fresh development user-state data.
-- Full downgrade to base hits a preexisting portfolio migration/index defect. Active 010/009 rollback to 008 passes; portfolio migration repair remains deferred.
+- Production frontend build passes after updating the chart attachment test fixture for the current library interface.
+- Integrated backend suite:111 passed, including real PostgreSQL/Redis, migration bootstrap and an actual least-privilege role DDL denial probe.
+- Focused frontend auth/API/layout/cache checks:29 passed. Full frontend has36 preexisting failures across11 chart/UI files; none of those production modules are changed by this backend roadmap. These remain separate frontend debt, not a passing full-suite claim.
+- Current tracked source passed checksum-verified gitleaks scanning with no leaks. CI now explicitly loads the scanner configuration and mounts sources read-only.
+- Review fixed widget-state lock ordering, global-cap subscription swaps, dead upstream listener recovery and stale-price fallback deadlines. Regression tests reproduce each issue.
+- Generated audit tools/caches, duplicate install and pytest cache were removed. Tracked Python bytecode was deleted; future scratch installs and reports use the system temporary directory. Keep only the backend `.env.example` setup template.
+- Development data is disposable; no compatibility or data-preservation migration tooling is retained. Portfolio redesign and portfolio migration defects remain deferred.
+- A pushed GitHub Actions run remains required before merge. Deployment-scale throughput measurement is an operational follow-up; deterministic resource/fault tests are the local merge evidence.
 
-## Final pass verification
-
-- Final integrated backend: **105 passed**, including PostgreSQL and Redis checks. One upstream passlib deprecation warning remains. Auth agent also verified the non-portfolio suite with `ENV=test`, HTTPS origins and secure cookies.
-- Patched Vitest 4.1.12: **28 focused frontend tests passed** (auth/API/layout/widget caches). Full run remains **519 passed / 36 baseline failures in 11 chart/UI files**. Typecheck is blocked only by the known `visibleExtrema.test.ts:161` fixture missing `horzScaleBehavior`; explicit Node test types were added after upgrading Vitest.
-- npm audit: **0 advisories**, runtime and dev. Python pinned runtime audit: **0 advisories**. Dependency consistency passes. Clean isolated offline npm installation passes. No forced audit fix used.
-- Added Alembic-only bootstrap/readiness/least-privilege checks, loopback data-service bindings, CI and fixed-cardinality telemetry. See [operations](../docs/backend-operations.md), [resource budgets](../docs/market-resource-budgets.md), and [user-state contracts](../docs/user-state-contract.md).
-- `git diff --check` passes. Changes remain uncommitted; no push/deployment performed.
-
-Remaining verification (kept open rather than claimed complete):
-- [ ] Execute the new workflow remotely, including the real restricted-runtime-role DDL denial probe and current-source gitleaks scan.
-- [ ] Verify a fresh Python installation from pinned requirements; the patched existing environment and dependency consistency/audit pass.
-- [ ] Obtain deployment-scale throughput measurements. Current load evidence covers deterministic concurrent misses, bounded queues, floods, slow clients, failed Redis/provider calls and concurrent resource budgets; it is not a production benchmark.
-
-## Layout400 follow-up
-
-`GET /user/layout` failed because existing development resource IDs and active-screen aliases did not match the new UUID contract. Local development state now uses valid resource IDs. Direct ASGI requests against the actual local database returned HTTP200 for all9 development accounts. Related15 user-state checks passed. No legacy compatibility/migration tooling was retained; development data is disposable per user instruction. Default layout creation now flushes within the caller transaction and returns its actual revision.
+Final review also fixed cumulative settings-size rejection and failed-logout feedback/retry. npm audit refreshed on2026-11-06:0 advisories. Production build and git diff checks pass. GitHub connector cannot access this repository and gh is unavailable, so remote CI is blocked pending repository access. Fresh isolated Python install, dependency consistency, real runtime-role denial and secret scan were verified locally.
