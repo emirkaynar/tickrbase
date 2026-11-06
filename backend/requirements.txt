@@ -1,7 +1,7 @@
 -c requirements.lock.txt
 fastapi==0.139.2
 python-dotenv==1.2.2
-uvicorn[standard]==0.51.0
+uvicorn[standard]==0.54.0
 sqlalchemy[asyncio]==2.0.51
 asyncpg==0.31.0
 alembic==1.18.5
