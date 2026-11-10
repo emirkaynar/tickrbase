@@ -1,7 +1,7 @@
 # Resolved runtime constraints for Python 3.13; install with requirements.txt.
 alembic==1.18.5
 annotated-doc==0.0.4
-annotated-types==0.7.0
+annotated-types==0.8.0
 anyio==4.14.2
 apscheduler==3.11.3
 argon2-cffi==25.1.0
