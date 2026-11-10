@@ -8,7 +8,7 @@ alembic==1.18.5
 redis==8.0.1
 passlib[argon2]==1.7.4
 argon2-cffi==25.1.0
-pydantic[email]==2.13.4
+pydantic[email]==2.14.3
 email-validator==2.3.0
 yfinance==1.5.1
 apscheduler==3.11.3
